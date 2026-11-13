@@ -23,6 +23,7 @@ from dataclasses import dataclass, field, replace
 from typing import Any
 
 from ... import _state
+from ..._errors import InvalidArgumentError
 from ..._ir.intervention import FireResult
 from ..._ir.op_record import amend_module_exit_intervention
 from ..._ir.predicate import RecordContext
@@ -35,8 +36,9 @@ from ..._ir.selector_eval import (
 from ..._postprocess._selective_save import _STATIC_INTERVENTION_SELECTOR_KINDS
 from ..._selection import selectors as _selectors
 from ...intervention._types import Edit, InterventionDecision
-from ...intervention.hooks import make_hook_context, normalize_hook
+from ...intervention.hooks import EDIT_SIGNAL_MISMATCH_REMEDY, make_hook_context, normalize_hook
 from ..registry import BackendUnsupportedError
+from ._mlx_helpers import mlx_helper_apply
 from ._tap_observers import _replace_mlx_array_leaves
 
 #: Refusal code for gradient-universe sites (registered in `_protocols.mlx`).
@@ -59,10 +61,11 @@ _MLX_LIVE_SELECTOR_KINDS = MLX_STATIC_INTERVENTION_SELECTOR_KINDS | frozenset({"
 #: rewritten (mirrors the torch capture-path alias retry).
 _ALIAS_RETRY_KINDS = ("label", "contains", "regex")
 
-#: Helper specs with an MLX-native application. The torch factories build
-#: hooks over ``torch.*`` calls that reject MLX arrays, so the curated
-#: appliers below are the genuine mechanism — anything outside this table
-#: refuses typed rather than half-working.
+#: Helper specs with an MLX-native application (``_mlx_helpers`` holds each
+#: one; this literal is the closed table the stochastic-family check reads and
+#: must list the same names). The torch factories build hooks over ``torch.*``
+#: calls that reject MLX arrays, so anything outside this table refuses typed
+#: rather than half-working.
 _MLX_SUPPORTED_HELPER_NAMES = (
     "zero_ablate",
     "scale",
@@ -70,6 +73,10 @@ _MLX_SUPPORTED_HELPER_NAMES = (
     "clamp",
     "mean_ablate",
     "replace_with",
+    "steer",
+    "project_onto",
+    "project_out",
+    "clip_norm",
 )
 
 
@@ -96,13 +103,26 @@ class MLXInterventionPlan:
     Parameters
     ----------
     selector:
-        Static-label site selector from the ``tl.when`` predicate.
+        Static-label site selector from the ``tl.when`` predicate; for a
+        ``tl.grad(...)`` site, the forward site whose output gradient it names.
     applier:
         MLX-native hook application for matched output leaves.
+    gradient:
+        Whether the site is a ``tl.grad(...)`` address: the forward is left
+        unchanged and the action edits the derived gradients.
+    grad_site_labels:
+        Raw labels the gradient site matched during the forward, filled by
+        ``_match_live_sites`` and read by the derived-gradient replay.
+    module_exit:
+        Whether the site is a ``tl.module(...)`` address, edited at the
+        module's exit outside any wrapped MLX call.
     """
 
     selector: _selectors.BaseSelector
     applier: MLXHookApplier
+    gradient: bool = False
+    grad_site_labels: list[str] = field(default_factory=list)
+    module_exit: bool = False
 
 
 def selector_matches_capture_context(selector: _selectors.BaseSelector, ctx: Any) -> bool:
@@ -161,28 +181,8 @@ def resolve_mlx_intervention_plan(
         For any shape outside the supported static-label contract.
     """
 
-    plan: MLXInterventionPlan | None = None
+    plan = None if intervene is None else _resolve_intervene_plan(intervene, mx)
     halt_selector: _selectors.BaseSelector | None = None
-    if intervene is not None:
-        selector = _as_selector(getattr(intervene, "selector", None))
-        decision = getattr(intervene, "decision", None)
-        if not isinstance(selector, _selectors.BaseSelector) or not isinstance(
-            decision, InterventionDecision
-        ):
-            raise BackendUnsupportedError(
-                "MLX backend supports trace(intervene=...) only as a one-rule "
-                "tl.when(condition, action), where the condition is a selector "
-                "(tl.func, tl.label, tl.module, tl.in_module, tl.where and their "
-                "&, |, ~ composites) or a callable taking the op context. Use "
-                "that shape or the PyTorch backend."
-            )
-        _reject_gradient_site(selector)
-        _reject_non_static_selector(selector, surface="intervene")
-        _validate_module_selector(selector)
-        plan = MLXInterventionPlan(
-            selector=selector,
-            applier=_resolve_decision_applier(decision, mx),
-        )
     if halt is not None:
         halt_selector = _as_selector(halt)
         if not isinstance(halt_selector, _selectors.BaseSelector):
@@ -194,6 +194,38 @@ def resolve_mlx_intervention_plan(
             )
         _reject_non_static_selector(halt_selector, surface="halt")
     return plan, halt_selector
+
+
+def _resolve_intervene_plan(intervene: Any, mx: Any) -> MLXInterventionPlan:
+    """Resolve the one ``tl.when`` rule of ``trace(intervene=...)`` to a plan.
+
+    Raises
+    ------
+    BackendUnsupportedError
+        For any shape outside the supported static-label contract.
+    """
+
+    selector = _as_selector(getattr(intervene, "selector", None))
+    decision = getattr(intervene, "decision", None)
+    if not isinstance(selector, _selectors.BaseSelector) or not isinstance(
+        decision, InterventionDecision
+    ):
+        raise BackendUnsupportedError(
+            "MLX backend supports trace(intervene=...) only as a one-rule "
+            "tl.when(condition, action), where the condition is a selector "
+            "(tl.func, tl.label, tl.module, tl.in_module, tl.where and their "
+            "&, |, ~ composites) or a callable taking the op context. Use "
+            "that shape or the PyTorch backend."
+        )
+    gradient, selector = _gradient_site_view(selector)
+    _reject_non_static_selector(selector, surface="intervene")
+    _validate_module_selector(selector)
+    return MLXInterventionPlan(
+        selector=selector,
+        applier=_resolve_decision_applier(decision, mx, gradient=gradient),
+        gradient=gradient,
+        module_exit=module_union_addresses(selector) is not None,
+    )
 
 
 def _as_selector(condition: Any) -> Any:
@@ -210,18 +242,42 @@ def _as_selector(condition: Any) -> Any:
     return condition
 
 
-def _reject_gradient_site(selector: _selectors.BaseSelector) -> None:
-    """Refuse a site outside the activation universe: MLX has no backward capture."""
+def _gradient_site_view(selector: _selectors.BaseSelector) -> tuple[bool, Any]:
+    """Return whether the site is a ``tl.grad`` address, and the forward site to match.
 
-    from ...intervention.hooks import split_site_branches
+    A ``tl.grad(s)`` site (or a union of them) names the gradient arriving at
+    the output of each forward op ``s`` matches; on MLX the action edits that
+    gradient in the derived-gradient run (``_edit_replay``). A site mixing
+    universes, an autograd-node site and a backward-pass qualifier refuse.
+    """
 
-    if any(universe != "activation" for universe, _branch in split_site_branches(selector)):
+    from ...intervention.hooks import gradient_inners, split_site_branches
+
+    universes = {universe for universe, _branch in split_site_branches(selector)}
+    if universes == {"activation"}:
+        return False, selector
+    if universes != {"gradient"} or selector_contains_kind(selector, "backward_pass"):
         raise BackendUnsupportedError(
-            "MLX backend supports forward interventions only; the site "
-            f"{selector!r} addresses a gradient, which needs backward capture "
-            "that MLX does not declare. Use the PyTorch backend for gradient edits.",
+            f"MLX backend supports tl.grad(...) sites and forward sites, one kind per "
+            f"rule; the site {selector!r} mixes them, names an autograd node or "
+            "qualifies a backward pass (MLX derives one gradient per capture).",
             code=_MLX_REFUSAL_BACKWARD,
         )
+    inners = [
+        _selectors.label(inner) if isinstance(inner, str) else inner
+        for inner in gradient_inners(selector)
+    ]
+    forward_site = inners[0]
+    for inner in inners[1:]:
+        forward_site = forward_site | inner
+    if selector_contains_kind(forward_site, "module"):
+        raise BackendUnsupportedError(
+            "MLX backend tl.grad(...) sites take op-level forward sites (tl.func, "
+            "tl.label, tl.in_module, tl.where); a tl.module(...) gradient site is not "
+            "supported on MLX.",
+            code=_MLX_REFUSAL_BACKWARD,
+        )
+    return True, forward_site
 
 
 def _reject_non_static_selector(selector: _selectors.BaseSelector, *, surface: str) -> None:
@@ -246,7 +302,9 @@ def _reject_non_static_selector(selector: _selectors.BaseSelector, *, surface: s
     )
 
 
-def _resolve_decision_applier(decision: InterventionDecision, mx: Any) -> MLXHookApplier:
+def _resolve_decision_applier(
+    decision: InterventionDecision, mx: Any, *, gradient: bool = False
+) -> MLXHookApplier:
     """Resolve one intervention decision to an MLX-native applier.
 
     Parameters
@@ -255,6 +313,9 @@ def _resolve_decision_applier(decision: InterventionDecision, mx: Any) -> MLXHoo
         Normalized predicate-time decision from ``tl.when``.
     mx:
         Imported ``mlx.core`` module.
+    gradient:
+        Whether the action edits a gradient (its callable hook then gets a
+        backward-signal context, as torch's gradient hooks do).
 
     Returns
     -------
@@ -267,8 +328,6 @@ def _resolve_decision_applier(decision: InterventionDecision, mx: Any) -> MLXHoo
         For actions, flags, or helpers outside the MLX contract.
     """
 
-    # Gradient sites (tl.grad(...)) are outside the static selector kinds the
-    # caller admits, so every decision reaching here edits an activation.
     if decision.keep_grad or decision.isolate:
         raise BackendUnsupportedError(
             "MLX backend interventions do not support keep_grad or isolate; "
@@ -286,8 +345,35 @@ def _resolve_decision_applier(decision: InterventionDecision, mx: Any) -> MLXHoo
             "declares no replacement to apply."
         )
     if isinstance(hook, Edit):
+        if gradient:
+            _refuse_forward_signal_edit(hook)
         return _resolve_helper_applier(hook, mx)
-    return _resolve_callable_applier(hook)
+    return _resolve_callable_applier(hook, signal="backward" if gradient else "forward")
+
+
+def _refuse_forward_signal_edit(spec: Edit) -> None:
+    """Refuse an edit that reads recorded forward state at a ``tl.grad(...)`` site.
+
+    The same check and message torch runs at attach time: a neutral edit
+    (``Edit.signal is None``) is a function of one tensor and edits a gradient;
+    ``mean_ablate`` and other forward-signal edits have no meaning there.
+
+    Raises
+    ------
+    InvalidArgumentError
+        ``edit_signal_mismatch``.
+    """
+
+    if spec.signal != "forward":
+        return
+    raise InvalidArgumentError(
+        f"{spec.name} reads recorded forward activations and cannot edit the gradient "
+        f"at a tl.grad(...) site. Nothing was attached. Remedy: {EDIT_SIGNAL_MISMATCH_REMEDY}",
+        code="edit_signal_mismatch",
+        remedy=EDIT_SIGNAL_MISMATCH_REMEDY,
+        argument="value_or_hook",
+        verb=spec.name,
+    )
 
 
 def _resolve_helper_applier(spec: Edit, mx: Any) -> MLXHookApplier:
@@ -303,65 +389,24 @@ def _resolve_helper_applier(spec: Edit, mx: Any) -> MLXHookApplier:
     Returns
     -------
     MLXHookApplier
-        Curated MLX application of the helper.
+        Curated MLX application of the helper (``_mlx_helpers``).
     """
 
-    name = spec.name
-    kwargs = dict(spec.kwargs)
-    identity = f"helper:{name}"
-    if name == "zero_ablate":
-        return MLXHookApplier(identity, lambda out: mx.zeros_like(out))
-    if name == "scale":
-        factor = spec.args[0]
-        return MLXHookApplier(identity, lambda out: out * factor)
-    if name == "add":
-        delta = spec.args[0]
-        if not isinstance(delta, (int, float)) and not isinstance(delta, getattr(mx, "array", ())):
-            raise BackendUnsupportedError(
-                "MLX backend tl.add(...) interventions accept a Python scalar or "
-                f"mx.array delta; got {type(delta).__name__}. Torch tensors cannot "
-                "be added to MLX arrays."
-            )
-        return MLXHookApplier(identity, lambda out: out + delta)
-    if name == "clamp":
-        low = kwargs.get("low")
-        high = kwargs.get("high")
-        return MLXHookApplier(identity, lambda out: mx.clip(out, low, high))
-    if name == "mean_ablate":
-        source = spec.args[0] if spec.args else None
-        if source is not None or kwargs.get("dim") is not None or "population_identity" in kwargs:
-            raise BackendUnsupportedError(
-                "MLX backend tl.mean_ablate(...) interventions support the "
-                "self form with dim=None only; tensor and population sources and "
-                "axis-aware means are torch-side semantics."
-            )
-        return MLXHookApplier(identity, lambda out: mx.zeros_like(out) + mx.mean(out))
-    if name == "replace_with":
-        value = spec.args[0]
-
-        def _replace(out: Any) -> Any:
-            """Return the replacement value, resolving a zero-arg callable at apply time."""
-
-            del out
-            return value() if callable(value) else value
-
-        return MLXHookApplier(identity, _replace)
-    raise BackendUnsupportedError(
-        f"MLX backend has no native application for intervention helper {name!r}; "
-        f"supported helpers are {', '.join(_MLX_SUPPORTED_HELPER_NAMES)}, plus callable "
-        "transforms written against mx.array. The torch helper factories build "
-        "torch-only hooks that reject MLX arrays, so admitting them would silently "
-        "fail; use a callable transform instead."
-    )
+    return MLXHookApplier(f"helper:{spec.name}", mlx_helper_apply(spec, mx))
 
 
-def _resolve_callable_applier(hook: Callable[..., Any]) -> MLXHookApplier:
+def _resolve_callable_applier(
+    hook: Callable[..., Any], *, signal: Any = "forward"
+) -> MLXHookApplier:
     """Resolve a user callable transform to an applier.
 
     Parameters
     ----------
     hook:
         User callable with the standard ``fn(out, *, ctx)`` hook signature.
+    signal:
+        Hook-context signal: ``"forward"`` for an activation edit,
+        ``"backward"`` for a ``tl.grad`` site.
 
     Returns
     -------
@@ -378,7 +423,7 @@ def _resolve_callable_applier(hook: Callable[..., Any]) -> MLXHookApplier:
         context = make_hook_context(
             name=identity,
             timing="post",
-            signal="forward",
+            signal=signal,
         )
         return normalized(out, ctx=context)
 
@@ -637,12 +682,7 @@ def _match_live_sites(
         if with_values:
             record_ctx = _value_record_context(record_ctx)
         if plan is not None and selector_matches_capture_context(plan.selector, record_ctx):
-            replacement, fire_result = _apply_edit(backend, plan, leaf, entry)
-            trace._mlx_intervene_fired = True
-            found.replacements[id(leaf)] = replacement
-            found.fire_results_by_site[index] = (fire_result,)
-            found.slots.append((index, plan.applier.identity))
-            found.appliers.append((index, plan.applier.apply))
+            _record_site_match(backend, trace, plan, found, index, leaf, entry)
         if (
             halt_selector is not None
             and found.halt_label is None
@@ -650,6 +690,30 @@ def _match_live_sites(
         ):
             found.halt_label = entry.label_raw
     return found
+
+
+def _record_site_match(
+    backend: Any,
+    trace: Any,
+    plan: Any,
+    found: _LiveSiteMatches,
+    index: int,
+    leaf: Any,
+    entry: Any,
+) -> None:
+    """Apply the edit at one matched leaf, or note a ``tl.grad`` site for the replay."""
+
+    trace._mlx_intervene_fired = True
+    if plan.gradient:
+        # A tl.grad site leaves the forward unchanged; the derived-gradient
+        # replay (_edit_replay) edits the gradient arriving at this output.
+        plan.grad_site_labels.append(entry.label_raw)
+        return
+    replacement, fire_result = _apply_edit(backend, plan, leaf, entry)
+    found.replacements[id(leaf)] = replacement
+    found.fire_results_by_site[index] = (fire_result,)
+    found.slots.append((index, plan.applier.identity))
+    found.appliers.append((index, plan.applier.apply))
 
 
 def _apply_edit(backend: Any, plan: Any, leaf: Any, entry: Any) -> tuple[Any, FireResult]:
