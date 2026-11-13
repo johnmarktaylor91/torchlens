@@ -81,10 +81,6 @@ _TAG = "$jax"
 _MAP_TAG = "$map"
 
 
-class _Unencodable(ValueError):
-    """A capture value has no data-only encoding (callable, sharding, effect)."""
-
-
 # --- op and capture resolution ----------------------------------------------
 
 
@@ -378,7 +374,7 @@ def recipe_or_reason(trace: Any, op: Any) -> OpRecipe | str:
 
     try:
         return _build_recipe(trace, op)
-    except (_Unencodable, ValueError) as exc:
+    except (ReplayRefusal, ValueError) as exc:
         return str(exc)
 
 
@@ -393,7 +389,7 @@ def _op_identity(capture: Any) -> str:
     kind = capture.kind
     identity = f"jax.primitive.{capture.primitive}" if kind == "primitive" else f"jax.{kind}"
     if identity not in ALLOWLIST:
-        raise _Unencodable(f"op identity {identity!r} is outside the closed allowlist")
+        raise ReplayRefusal("unknown_op", f"op identity {identity!r} is outside the allowlist")
     return identity
 
 
@@ -463,7 +459,7 @@ def _refs(plan: _Plan, read: Any) -> tuple[tuple[tuple[str | int, ...], str], ..
 
 
 def _encode(value: Any) -> Any:
-    """Encode one capture value as recipe data, or raise :class:`_Unencodable`."""
+    """Encode one capture value as recipe data, or raise :class:`ReplayRefusal`."""
 
     if value is None or type(value) in (bool, int, float, complex, str):
         return value
@@ -489,21 +485,24 @@ def _encode_framework_value(value: Any) -> Any:
         return {_TAG: ("dtype", _dtype_name(value))}
     if isinstance(value, np.generic | np.ndarray | jax.Array):
         return _encode_array(value)
+    label = str(getattr(value, "name", ""))
     if isinstance(value, enum.Enum):
-        return {_TAG: ("enum", _lax_type_name(value, _ENUM_TYPE_NAMES), value.name)}
-    if isinstance(value, jax.extend.core.ClosedJaxpr):
-        return {_TAG: ("closed_jaxpr", _encode_closed_jaxpr(value))}
-    if type(value).__name__ == "PRNGImpl" and _prng_registry().get(value.name) is value:
-        return {_TAG: ("prng_impl", str(value.name))}
-    name = _lax_type_name(value, _STRUCT_TYPE_NAMES)
-    return {_TAG: ("struct", name, {f: _encode(v) for f, v in _struct_fields(value)})}
+        tagged: tuple[Any, ...] = ("enum", _lax_type_name(value, _ENUM_TYPE_NAMES), label)
+    elif isinstance(value, jax.extend.core.ClosedJaxpr):
+        tagged = ("closed_jaxpr", _encode_closed_jaxpr(value))
+    elif type(value).__name__ == "PRNGImpl" and _prng_registry().get(label) is value:
+        tagged = ("prng_impl", label)
+    else:
+        name = _lax_type_name(value, _STRUCT_TYPE_NAMES)
+        tagged = ("struct", name, {f: _encode(v) for f, v in _struct_fields(value)})
+    return {_TAG: tagged}
 
 
 def _dtype_name(dtype: Any) -> str:
     import jax
 
     if jax.dtypes.issubdtype(dtype, jax.dtypes.extended):
-        raise _Unencodable(f"extended dtype {dtype} (PRNG key data) has no data encoding")
+        raise ReplayRefusal("type", f"extended dtype {dtype} (PRNG key data) has no data encoding")
     return str(dtype)
 
 
@@ -522,7 +521,7 @@ def _lax_type_name(value: Any, names: Sequence[str]) -> str:
     for name in names:
         if type(value) is getattr(jax.lax, name, None):
             return name
-    raise _Unencodable(f"{type(value).__module__}.{type(value).__qualname__} has no data encoding")
+    raise ReplayRefusal("type", f"{type(value).__qualname__} has no data encoding")
 
 
 def _struct_fields(value: Any) -> tuple[tuple[str, Any], ...]:
@@ -551,13 +550,13 @@ class _VarTable:
             return ("lit", _encode(atom.val))
         if atom in self.ids:
             return ("var", self.ids[atom])
-        raise _Unencodable("nested program reads an undefined variable")
+        raise ReplayRefusal("type", "nested program reads an undefined variable")
 
 
 def _encode_eqn(eqn: Any, table: _VarTable) -> tuple[Any, ...]:
     name = eqn.primitive.name
     if f"jax.primitive.{name}" not in ALLOWLIST:
-        raise _Unencodable(f"nested primitive {name!r} is outside the closed allowlist")
+        raise ReplayRefusal("unknown_op", f"nested primitive {name!r} is outside the allowlist")
     reads = tuple(table.ref(a) for a in eqn.invars)
     params = {_MAP_TAG: {str(k): _encode(v) for k, v in eqn.params.items()}}
     return (name, reads, params, tuple(table.define(v) for v in eqn.outvars))
@@ -568,7 +567,7 @@ def _encode_closed_jaxpr(closed: Any) -> dict[str, Any]:
 
     jaxpr = closed.jaxpr
     if jaxpr.effects:
-        raise _Unencodable("nested program has effects")
+        raise ReplayRefusal("type", "nested program has effects")
     table = _VarTable()
     constvars = tuple(table.define(v) for v in jaxpr.constvars)
     invars = tuple(table.define(v) for v in jaxpr.invars)
