@@ -37,6 +37,8 @@ from ..._ir.semantics import BackendSemantics, CapturePolicy
 from ..._output_slot import returned
 from ..._postprocess._materialize import materialize_from_events
 from ..._postprocess._selective_save import (
+    _is_static_label_selector,
+    apply_save_keep_set,
     apply_static_label_save_policy,
     pop_static_label_save_predicate,
 )
@@ -108,6 +110,7 @@ from ._module_tree import (
 from ._observer import _observe_tensor_ops
 from ._raw_labels import _final_to_raw_labels
 from ._realize_once import RealizedCapture, live_tensor_uops, recorded_values
+from ._retention import replay_captures, sparse_status_counts
 from ._rules import (
     CONSTANT_KIND_ANNOTATION,
     CONSTANT_UNREALIZABLE_CODE,
@@ -229,6 +232,7 @@ class TinygradBackend:
     _source_lines: SourceLineRecorder | None = None
     _edit_session: TinygradEditSession | None = None
     _capture_session: hooks.TinygradCaptureSession | None = None
+    _save_policy = (_is_static_label_selector, apply_save_keep_set)  # retention test, filter
     _warn_zero_fire = staticmethod(settle_capture_zero_fire)
 
     def capture_trace(
@@ -458,7 +462,7 @@ class TinygradBackend:
         )
         self._assert_runtime_supported()
         self._assert_tinygrad_inputs(args)
-        hooks.arm_backward(self._capture_session, backward_ready, grad_options)
+        hooks.arm_backward(self._capture_session, backward_ready, grad_options, save_predicate)
         trace = self._new_trace(
             model=model,
             keep_orphans=cast(bool, keep_orphans),
@@ -494,8 +498,8 @@ class TinygradBackend:
         )
         self._mark_output_events(trace, outputs, uop_labels, captures, realized.output_uops)
         _stamp_param_logs(trace, module_tree if use_object_module else None)
-        self._finish_trace(trace, module_tree if use_object_module else None)
         trace.tinygrad_uop_captures = captures
+        self._finish_trace(trace, module_tree if use_object_module else None)
         trace.tinygrad_payload_policy = REALIZE_ONCE_PAYLOAD_POLICY
         apply_static_label_save_policy(trace, save_predicate, backend_name="tinygrad")
         if grad_options is not None:
@@ -614,11 +618,9 @@ class TinygradBackend:
                 num_replayed=0,
             )
             status_result = self._validation_status_from_counts(trace, verdict=verdict)
-        setattr(
-            trace,
-            "_validation_replay_status",
-            status_result,
-        )
+        setattr(trace, "_validation_replay_status", status_result)
+        if kwargs.get("verbose") and not verdict.passed:
+            print(f"tinygrad validation failed: {verdict.message()}")
         return status_result if status_result.state == "unverified" else verdict.passed
 
     def _validation_status_from_counts(
@@ -645,6 +647,8 @@ class TinygradBackend:
             present, and passed status otherwise.
         """
 
+        if (sparse := sparse_status_counts(trace, verdict)) is not None:
+            return ValidationStatus.from_replay_counts(**sparse)
         source: ValidationReplaySource = (
             "loaded" if getattr(trace, "_loaded_from_bundle", False) else "live"
         )
@@ -1448,13 +1452,7 @@ class TinygradBackend:
             )
         ops_by_raw_label = {getattr(op, "_label_raw", ""): op for op in trace._layer_list}
         hidden_outputs_by_label = dict(getattr(trace, "_selective_save_hidden_payloads", {}))
-        for index, capture in enumerate(captures):
-            failure = self._uop_capture_failure(
-                index, capture, ops_by_raw_label, hidden_outputs_by_label
-            )
-            if failure is not None:
-                return failure
-        return ReplayVerdict.ok(len(captures))
+        return replay_captures(self, captures, ops_by_raw_label, hidden_outputs_by_label)
 
     def _uop_capture_failure(
         self,

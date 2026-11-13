@@ -53,7 +53,10 @@ def begin_capture(
     """
 
     backend._call_kwargs = MappingProxyType(dict(input_kwargs or {}))
-    backend._capture_session = TinygradCaptureSession()
+    is_static_selector, apply_keep_set = backend._save_policy
+    backend._capture_session = TinygradCaptureSession(
+        is_static_selector=is_static_selector, apply_keep_set=apply_keep_set
+    )
     backend._source_lines = SourceLineRecorder(
         type(backend)._run_observed_forward.__code__,
         cast(int, num_context_lines),

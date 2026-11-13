@@ -30,6 +30,7 @@ from typing import Any, cast
 from .._protocols.tinygrad import TinygradProtocol
 from ._captures import TinygradCaptureSession, after_realize, extra_realize_targets
 from ._execution_guard import _reject_mid_capture_execution
+from ._retention import defer_realize, may_defer
 from ._rules import (
     CONSTANT_UNREALIZABLE_CODE,
     RNG_STATE_IN_GRAPH_CODE,
@@ -340,7 +341,9 @@ def realize_capture(
         ``id(replacement UOp) -> replaced result UOp`` of an edited capture.
     session
         The capture's hook session: gradient tensors a backward scope builds
-        join the same single realize, and logged draws resolve after it.
+        join the same single realize, and logged draws resolve after it. With
+        a static ``save=`` selector the realize is deferred (:mod:`._retention`):
+        the values are the lazy targets and nothing is realized here.
 
     Returns
     -------
@@ -356,6 +359,11 @@ def realize_capture(
     plan = plan_capture(outputs, source_uops, preexisting_uops, edit_sites)
     with _reject_mid_capture_execution():
         extra = extra_realize_targets(session, plan, source_uops)
+    if may_defer(session, plan):
+        # A static save= selector: emit lazy payloads, realize the kept ones later.
+        targets, owned = _realization_targets(plan, source_uops)
+        if defer_realize(session, targets, owned, (*extra, *outputs)):
+            return RealizedCapture(plan, targets, owned, input_leaves, output_uops)
     realized, owned = realize_recorded_values(plan, source_uops, (*extra, *outputs))
     after_realize(session)
     return RealizedCapture(plan, realized, owned, input_leaves, output_uops)

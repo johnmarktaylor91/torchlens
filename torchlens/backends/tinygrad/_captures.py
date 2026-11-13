@@ -13,6 +13,7 @@ from types import ModuleType
 from typing import Any
 
 from ..._ir.refs import DtypeRef
+from ._retention import RETENTION_FULL, realize_retained
 
 
 @dataclass(frozen=True)
@@ -37,6 +38,10 @@ class TinygradUOpCapture:
         For an op a ``trace(intervene=...)`` edit replaced, the edit's lazy
         ``tensor -> tensor`` application: ``uop`` is the unedited op and the
         payload is the edit applied to its value. ``None`` for every other op.
+    retention
+        ``"full"`` for a capture that realized every value; in a capture whose
+        ``save=`` selector decided retention (:mod:`._retention`), ``"kept"``
+        or ``"dropped"`` (no payload).
     """
 
     label_raw: str
@@ -46,6 +51,7 @@ class TinygradUOpCapture:
     parent_arg_positions: tuple[tuple[int, str], ...]
     payload_snapshot: Any
     edit: Callable[[Any], Any] | None = None
+    retention: str = RETENTION_FULL
 
 
 @dataclass(frozen=True)
@@ -94,6 +100,15 @@ class TinygradCaptureSession:
         ``id(uop) -> parameter address`` of an object-module capture.
     tinygrad_backward
         The backward scope the native backward module set, or ``None``.
+    save_predicate
+        The capture's ``save=`` predicate, or ``None``.
+    is_static_selector
+        Whether a predicate is a static-label selector (the save-policy test).
+    apply_keep_set
+        The save-policy filter that hides every payload outside a keep set.
+    deferred
+        The pending single realize of a capture whose selector decides
+        retention after emission (:class:`._retention.DeferredRealize`).
     """
 
     backward_ready: bool = False
@@ -102,14 +117,22 @@ class TinygradCaptureSession:
     uop_labels: dict[int, str] = field(default_factory=dict)
     param_addresses: Mapping[int, str] = field(default_factory=dict)
     tinygrad_backward: Any = None
+    save_predicate: Any = None
+    is_static_selector: Callable[[Any], bool] = lambda _predicate: False
+    apply_keep_set: Callable[..., None] | None = None
+    deferred: Any = None
 
 
 def arm_backward(
-    session: TinygradCaptureSession | None, backward_ready: object, grad_options: Any
+    session: TinygradCaptureSession | None,
+    backward_ready: object,
+    grad_options: Any,
+    save_predicate: Any = None,
 ) -> None:
-    """Record whether the capture prepares a backward pass, and for which loss."""
+    """Record the backward pass (and its loss) and the ``save=`` predicate of the capture."""
 
     if session is not None:
+        session.save_predicate = save_predicate
         session.backward_ready = bool(backward_ready)
         session.loss_fn = getattr(grad_options, "loss_fn", None) if backward_ready else None
 
@@ -179,14 +202,15 @@ def fresh_label_map(session: TinygradCaptureSession | None) -> dict[int, str]:
 
 
 def retain_hook_state(trace: Any, session: TinygradCaptureSession | None, module_tree: Any) -> None:
-    """Hand the finished trace to the native backward module and drop the forward refs.
+    """Realize a deferred capture's kept values, hand the trace to the backward module.
 
-    ``module_tree`` is the object-module tree (its ``param_address_by_uop_id``)
+    The forward refs are dropped afterwards. ``module_tree`` is the object-module tree (its ``param_address_by_uop_id``)
     or ``None`` for a function-root capture.
     """
 
     if session is None:
         return
+    realize_retained(trace, session, after_realize)
     addresses = getattr(module_tree, "param_address_by_uop_id", None) or {}
     session.param_addresses = dict(addresses)
     native = hook_module("_backward_native.tinygrad") if session.tinygrad_backward else None
