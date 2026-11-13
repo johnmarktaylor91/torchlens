@@ -180,7 +180,9 @@ def check_twin_matches_torch(kit: Kit) -> None:
         batch_axis = _engine_batch_axis(kit.trace, target)
         for unit in OUTPUT_UNITS:
             ours = gradient_for_unit(target, unit, source=source.label)
-            theirs = gradient_for_unit(twin_target, unit, source=twin_source.label)
+            theirs = gradient_for_unit(
+                twin_target, unit, source=twin_source.label, retain_graph=True
+            )
             _close(_np(ours.signed_grad), _np(theirs.signed_grad), f"receptive {unit} vs torch")
             _close(_np(ours.grad), _np(theirs.grad), f"receptive magnitude {unit} vs torch")
             assert torch.equal(ours.support_mask, theirs.support_mask), unit
