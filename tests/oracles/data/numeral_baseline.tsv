@@ -3553,7 +3553,7 @@ docs-md	docs/maintainers/where.md	178
 docs-md	docs/maintainers/where.md	179
 docs-md	docs/maintainers/where.md	18
 docs-md	docs/maintainers/where.md	180
-docs-md	docs/maintainers/where.md	1800
+docs-md	docs/maintainers/where.md	1807
 docs-md	docs/maintainers/where.md	181
 docs-md	docs/maintainers/where.md	182
 docs-md	docs/maintainers/where.md	1825
@@ -3654,12 +3654,12 @@ docs-md	docs/maintainers/where.md	239
 docs-md	docs/maintainers/where.md	24
 docs-md	docs/maintainers/where.md	241
 docs-md	docs/maintainers/where.md	24112
+docs-md	docs/maintainers/where.md	2417
 docs-md	docs/maintainers/where.md	242
 docs-md	docs/maintainers/where.md	243
 docs-md	docs/maintainers/where.md	244
 docs-md	docs/maintainers/where.md	245
 docs-md	docs/maintainers/where.md	246
-docs-md	docs/maintainers/where.md	2467
 docs-md	docs/maintainers/where.md	247
 docs-md	docs/maintainers/where.md	248
 docs-md	docs/maintainers/where.md	2486
@@ -4093,15 +4093,14 @@ docs-md	docs/maintainers/where.md	705
 docs-md	docs/maintainers/where.md	707
 docs-md	docs/maintainers/where.md	71
 docs-md	docs/maintainers/where.md	712
-docs-md	docs/maintainers/where.md	713910
 docs-md	docs/maintainers/where.md	714
 docs-md	docs/maintainers/where.md	715
+docs-md	docs/maintainers/where.md	715690
 docs-md	docs/maintainers/where.md	716
 docs-md	docs/maintainers/where.md	717
 docs-md	docs/maintainers/where.md	72
 docs-md	docs/maintainers/where.md	721
 docs-md	docs/maintainers/where.md	723
-docs-md	docs/maintainers/where.md	7242
 docs-md	docs/maintainers/where.md	7246
 docs-md	docs/maintainers/where.md	725
 docs-md	docs/maintainers/where.md	73
@@ -4136,7 +4135,6 @@ docs-md	docs/maintainers/where.md	77
 docs-md	docs/maintainers/where.md	771
 docs-md	docs/maintainers/where.md	772
 docs-md	docs/maintainers/where.md	773
-docs-md	docs/maintainers/where.md	7731
 docs-md	docs/maintainers/where.md	774
 docs-md	docs/maintainers/where.md	775
 docs-md	docs/maintainers/where.md	776
@@ -4166,6 +4164,7 @@ docs-md	docs/maintainers/where.md	811
 docs-md	docs/maintainers/where.md	812
 docs-md	docs/maintainers/where.md	815
 docs-md	docs/maintainers/where.md	816
+docs-md	docs/maintainers/where.md	8180
 docs-md	docs/maintainers/where.md	819
 docs-md	docs/maintainers/where.md	82
 docs-md	docs/maintainers/where.md	820
@@ -4184,6 +4183,7 @@ docs-md	docs/maintainers/where.md	841
 docs-md	docs/maintainers/where.md	85
 docs-md	docs/maintainers/where.md	855
 docs-md	docs/maintainers/where.md	857
+docs-md	docs/maintainers/where.md	8573
 docs-md	docs/maintainers/where.md	86
 docs-md	docs/maintainers/where.md	860
 docs-md	docs/maintainers/where.md	866
@@ -7349,6 +7349,8 @@ package-docstrings	torchlens/backends/_validation_shared.py	64
 package-docstrings	torchlens/backends/jax/backend.py	1_1_
 package-docstrings	torchlens/backends/jax/backend.py	256
 package-docstrings	torchlens/backends/jax/jaxpr.py	32
+package-docstrings	torchlens/backends/mlx/_record.py	16
+package-docstrings	torchlens/backends/mlx/_record.py	32,
 package-docstrings	torchlens/backends/mlx/backend.py	1.1
 package-docstrings	torchlens/backends/paddle/_capture_helpers.py	1_2
 package-docstrings	torchlens/backends/paddle/validation.py	16
@@ -7922,6 +7924,7 @@ package-docstrings	torchlens/receptive_field/_types.py	1_1
 package-docstrings	torchlens/receptive_field/_types.py	2_3
 package-docstrings	torchlens/receptive_field/_view.py	2_3
 package-docstrings	torchlens/receptive_field/_viz.py	2_3
+package-docstrings	torchlens/recording/_backend_options.py	11
 package-docstrings	torchlens/recording/_exceptions.py	65
 package-docstrings	torchlens/recording/_generation_options.py	20
 package-docstrings	torchlens/recording/_generation_options.py	512
@@ -10711,6 +10714,7 @@ test-names	tests/test_onebackward_edgeplumbing.py	10_
 test-names	tests/test_onebackward_realmodel.py	18
 test-names	tests/test_output_decode_read_time.py	1000_
 test-names	tests/test_paddle_payload_codec.py	16_
+test-names	tests/test_parity_b_mlx_cap_retention.py	16_
 test-names	tests/test_preview_compare.py	16_
 test-names	tests/test_preview_grad_tolerance_tripwires.py	16
 test-names	tests/test_preview_grad_tolerance_tripwires.py	16_
