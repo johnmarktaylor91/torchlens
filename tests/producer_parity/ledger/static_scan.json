@@ -5841,6 +5841,110 @@
  },
  {
   "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/backends/_replay_adapters/_mlx_recipes.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "params",
+  "file": "torchlens/backends/_replay_adapters/_mlx_recipes.py",
+  "has_default": false,
+  "sites": 4,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/backends/_replay_adapters/jax.py",
+  "has_default": false,
+  "sites": 5,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "params",
+  "file": "torchlens/backends/_replay_adapters/jax.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/backends/_replay_adapters/jax.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "label_raw",
+  "file": "torchlens/backends/_replay_adapters/paddle.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "label_raw",
+  "file": "torchlens/backends/_replay_adapters/paddle.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/backends/_replay_adapters/tf.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "label_raw",
+  "file": "torchlens/backends/_replay_adapters/tf.py",
+  "has_default": false,
+  "sites": 7,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "label_raw",
+  "file": "torchlens/backends/_replay_adapters/tf.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "label_raw",
+  "file": "torchlens/backends/_replay_adapters/tinygrad.py",
+  "has_default": false,
+  "sites": 5,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "parent_arg_positions",
+  "file": "torchlens/backends/_replay_adapters/tinygrad.py",
+  "has_default": false,
+  "sites": 3,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/backends/_replay_adapters/tinygrad.py",
+  "has_default": true,
+  "sites": 3,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
   "field": "parents",
   "file": "torchlens/backends/_reverse_engine.py",
   "has_default": false,
@@ -8654,6 +8758,22 @@
   "has_default": true,
   "sites": 1,
   "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/intervention/_grad_site_neutral.py",
+  "has_default": false,
+  "sites": 3,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "pass_index",
+  "file": "torchlens/intervention/_grad_site_neutral.py",
+  "has_default": false,
+  "sites": 3,
+  "via_getattr": false
  },
  {
   "ambiguous": true,
