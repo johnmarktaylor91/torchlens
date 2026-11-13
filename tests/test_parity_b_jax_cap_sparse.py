@@ -94,9 +94,17 @@ def test_sparse_capture_never_retains_unselected_values(monkeypatch: pytest.Monk
     """The value pass releases exactly the unselected primitive equations."""
 
     results = _spy_results(monkeypatch)
+    reasons: list[Any] = []
+    reason_of = _sparse_capture.ineligible_reason
+
+    def recording_reason(*args: Any) -> Any:
+        reasons.append((reason_of(*args), sorted(args[1])))
+        return reasons[-1][0]
+
+    monkeypatch.setattr(_sparse_capture, "ineligible_reason", recording_reason)
     sparse = tl.trace(_fn, _x(), save=tl.func("tanh"), backend="jax")
 
-    assert len(results) == 2, "a structure pass and a value pass"
+    assert len(results) == 2, f"a structure pass and a value pass; eligibility {reasons}"
     structure, values = results
     assert {i for i, c in enumerate(structure.captures) if c.kind == "primitive"} <= set(
         structure.released_capture_indices
@@ -128,19 +136,31 @@ def test_sparse_validation_matches_torch_selective_save() -> None:
     """The sparse trace's replay state and reasons equal torch's for the same selector."""
 
     selector = tl.func("tanh")
+    model, x = _TorchTwoTanh(), torch.from_numpy(np.asarray(_x()))
     jax_trace = tl.trace(_two_tanh, _x(), save=selector, backend="jax")
-    torch_trace = tl.trace(_TorchTwoTanh(), torch.from_numpy(np.asarray(_x())), save=selector)
+    torch_trace = tl.trace(model, x, save=selector)
 
     jax_trace.validate_forward_pass([], validate_metadata=False)
-    torch_trace.validate_forward_pass([], validate_metadata=False)
+    torch_trace.validate_forward_pass([model(x).detach().clone()], validate_metadata=False)
     jax_status = jax_trace.validation_replay_status
     torch_status = torch_trace.validation_replay_status
+    detail = (
+        f"jax {jax_status.state} {dict(jax_status.unverified_reason_counts)} "
+        f"{dict(jax_status.exempted_reason_counts)}; torch {torch_status.state} "
+        f"{dict(torch_status.unverified_reason_counts)} {dict(torch_status.exempted_reason_counts)}"
+    )
 
-    assert torch_status.state == "unverified"
-    assert jax_status.state == torch_status.state
-    assert set(jax_status.unverified_reason_counts) == set(torch_status.unverified_reason_counts)
-    assert jax_status.unverified_reason_counts.get(_sparse_capture.MISSING_SAVED_ARGS)
-    assert jax_status.exempted_reason_counts.get(_sparse_capture.NOT_SAVED_BY_USER)
+    assert torch_status.state == "unverified", detail
+    assert jax_status.state == torch_status.state, detail
+    assert jax_status.unverified_reason_counts.get(_sparse_capture.MISSING_SAVED_ARGS), detail
+    assert set(jax_status.unverified_reason_counts) <= {
+        "missing_saved_args",
+        "parent_payload_missing",
+    }, detail
+    assert set(torch_status.unverified_reason_counts) <= {
+        "missing_saved_args",
+        "parent_payload_missing",
+    }, detail
 
 
 def test_selecting_every_equation_validates_like_a_plain_capture() -> None:

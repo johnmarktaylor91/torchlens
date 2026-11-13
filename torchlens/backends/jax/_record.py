@@ -113,7 +113,7 @@ class JaxRecordProducer:
         from .backend import _reject_transformed_callable
 
         _reject_transformed_callable(model)
-        tree = discover_equinox_module_tree(model)
+        tree: Any = discover_equinox_module_tree(model)
         if tree is None:
             tree = discover_nnx_module_tree(model)
         return _Prepared(model=model, module_tree=tree)
@@ -215,7 +215,7 @@ class _EventEmitter:
         reserved = self.labels.reserve_label(layer_type)
         if isinstance(value, tuple):
             value = value[0] if len(value) == 1 else value
-        frames = jax_event_module_frames(*stacks)[1] if stacks else ()
+        frames: Any = jax_event_module_frames(*stacks)[1] if stacks else ()
         shape = getattr(value, "shape", None)
         event = BackendOpEvent(
             raw_label=reserved.label_raw,

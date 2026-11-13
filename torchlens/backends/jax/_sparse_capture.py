@@ -77,7 +77,7 @@ def _wrap_capture(
     def capture(
         self: Any, model: Any, input_args: Any, input_kwargs: Any = None, **options: Any
     ) -> Any:
-        selector = options.get("save")
+        selector: Any = options.get("save")
         if not _eligible(selector, options, accepted, is_static):
             return capture_trace(self, model, input_args, input_kwargs, **options)
         with pending_retention(KEEP_NONE):
@@ -109,22 +109,53 @@ def _eligible(
 ) -> bool:
     """Return whether a capture can decide retention from a structure pass."""
 
-    if not is_static(selector):
-        return False
-    if any(name not in accepted and value is not None for name, value in options.items()):
-        return False
+    return ineligible_reason(selector, options, accepted, is_static) is None
+
+
+def ineligible_reason(
+    selector: Any,
+    options: Mapping[str, Any],
+    accepted: frozenset[str],
+    is_static: Callable[[Any], bool],
+) -> str | None:
+    """Return why a capture keeps the full capture, or ``None`` when it can run sparse.
+
+    Parameters
+    ----------
+    selector
+        The ``save=`` value.
+    options
+        Keyword options of the capture call.
+    accepted
+        Option names the capture method declares.
+    is_static
+        Whether ``selector`` is a static-label selector.
+
+    Returns
+    -------
+    str | None
+        A short reason, or ``None`` when the two-pass capture applies.
+    """
+
+    if selector is None or not is_static(selector):
+        return "save= is not a static-label selector"
+    unknown = sorted(n for n, v in options.items() if n not in accepted and _is_set(v))
+    if unknown:
+        return f"options outside the capture signature: {unknown}"
+    if _is_set(options.get("lookback")):
+        return "lookback keeps payloads of unselected predecessors"
     grouped = options.get("capture")
     for name in _NEEDS_EVERY_VALUE:
         for value in (options.get(name), getattr(grouped, name, None)):
             if _is_set(value):
-                return False
-    return True
+                return f"{name} reads every equation value"
+    return None
 
 
 def _is_set(value: Any) -> bool:
-    """Return whether an option value asks for a feature (``MISSING``, ``None``, ``False`` do not)."""
+    """Return whether an option value asks for a feature (``MISSING``, ``None``, ``False``, ``0`` do not)."""
 
-    if value is None or value is False:
+    if value is None or value is False or (type(value) is int and value == 0):
         return False
     return type(value).__name__ != "MissingType"
 
