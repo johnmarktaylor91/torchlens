@@ -55,6 +55,8 @@ from ..paddle.wrappers import (
 from ._contract import InputOccurrence, OpRecipe, ReplayRefusal
 
 BACKEND = "paddle"
+PARAM_PAYLOADS_ATTR = "_replay_param_payloads"
+"""Trace attribute a loader sets to ``{parameter address: array}`` for :func:`bind_recipes`."""
 
 _REASON_NO_CAPTURE = "graph-only entry: no Paddle capture record for this op"
 _REASON_INPUT = "graph-only entry: model input"
@@ -627,13 +629,35 @@ def _rebuild_node(
 
 
 def _param_value(trace: Any, address: str) -> Any | None:
-    """The trace's recorded value of parameter ``address``, if it has one."""
+    """Parameter ``address``'s value: a loader-supplied payload, else the live parameter."""
+    payloads = getattr(trace, PARAM_PAYLOADS_ATTR, None) or {}
+    if address in payloads:
+        import paddle
+
+        with _state.pause_logging():
+            return paddle.to_tensor(np.asarray(payloads[address]))
     logs = getattr(trace, "_param_logs", None)
     try:
         param = logs[address] if logs is not None else None
     except (KeyError, IndexError, TypeError):
         return None
     return getattr(param, "value", None) if param is not None else None
+
+
+def live_param_payloads(trace: Any) -> dict[str, Any]:
+    """``{parameter address: host array}`` for every parameter the live captures read.
+
+    The values a saver persists and a loader hands back through
+    ``trace._replay_param_payloads`` (a loaded trace keeps no parameter bytes).
+    """
+    payloads: dict[str, Any] = {}
+    for capture in getattr(trace, "_paddle_op_captures", ()) or ():
+        values = getattr(capture, "param_inputs", None) or {}
+        for leaf in getattr(capture, "tensor_inputs", ()):
+            address = getattr(leaf, "param_address", None)
+            if address is not None and leaf.path in values and address not in payloads:
+                payloads[address] = to_host(values[leaf.path])
+    return payloads
 
 
 def _bind_one(trace: Any, item: OpRecipe) -> Any:
@@ -722,11 +746,13 @@ def bind_recipes(trace: Any, recipes: Mapping[str, OpRecipe]) -> None:
 __all__ = [
     "ALLOWLIST",
     "BACKEND",
+    "PARAM_PAYLOADS_ATTR",
     "add",
     "bind_recipes",
     "can_replay",
     "close",
     "forward",
+    "live_param_payloads",
     "recipe",
     "recipe_refusal",
     "to_host",

@@ -19,6 +19,7 @@ paddle = pytest.importorskip("paddle")
 
 import torchlens as tl  # noqa: E402
 from tests.conformance._rosters import paddle as paddle_roster  # noqa: E402
+from torchlens._data_classes.param import Param  # noqa: E402
 from torchlens.backends._replay_adapters import (  # noqa: E402
     ReplayRefusal,
     decode_recipe,
@@ -207,3 +208,22 @@ def test_allowlist_is_the_captured_surface() -> None:
     assert "constant" in adapter.ALLOWLIST
     for denied in ("randn", "tensor.__setitem__", "tensor.numpy", "save", "tensor.add_"):
         assert denied not in adapter.ALLOWLIST
+
+
+@pytest.mark.parametrize("family", ["mod_mlp", "mod_cnn", "mod_shared_twice"])
+def test_bind_reads_parameters_from_loader_payloads(family: str, monkeypatch: Any) -> None:
+    """With no live parameter (as after load), binding reads the loader's payloads."""
+
+    trace = _trace(family)
+    recipes, _refused = _recipes(trace)
+    payloads = adapter.live_param_payloads(trace)
+    assert payloads and all(isinstance(v, np.ndarray) for v in payloads.values()), family
+    assert {a for r in recipes.values() for _p, a in r.param_refs} == set(payloads), family
+    monkeypatch.setattr(Param, "value", property(lambda _self: None))
+    trace._paddle_op_captures = []
+    adapter.bind_recipes(trace, recipes)
+    assert _validate(trace).state == "failed", family
+    setattr(trace, adapter.PARAM_PAYLOADS_ATTR, payloads)
+    adapter.bind_recipes(trace, recipes)
+    status = _validate(trace)
+    assert status.state == "passed", f"{family}: {status.message}"
