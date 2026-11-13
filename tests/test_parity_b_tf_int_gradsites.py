@@ -21,9 +21,13 @@ keras = pytest.importorskip("keras")
 
 import torchlens as tl  # noqa: E402
 from torchlens.backends.tf import GradOptions  # noqa: E402
+from torchlens.backends.tf._grad_sites import arm_tf_grad_sites  # noqa: E402
 from torchlens.backends.tf.derived_grads import attach_tf_derived_grads  # noqa: E402
 from torchlens.errors import BackendUnsupportedError  # noqa: E402
-from torchlens.intervention._grad_site_neutral import armed_grad_sites  # noqa: E402
+from torchlens.intervention._grad_site_neutral import (  # noqa: E402
+    armed_grad_sites,
+    clear_grad_sites,
+)
 
 pytestmark = [pytest.mark.tf_backend, pytest.mark.rare]
 
@@ -196,3 +200,32 @@ def test_entry_grad_site_edit_equals_the_hand_split(name: str) -> None:
             pytest.skip("the tf capture entry does not yet pass edits to the gradient replay")
         raise
     _assert_grads(_grads(trace), expected)
+
+
+def test_arming_at_capture_then_attaching_grads_arms_each_site_once() -> None:
+    """A capture that arms its clauses, then the derived-gradient replay, arm one edit per site."""
+
+    model, x = _DenseRelu(), tf.constant(_X)
+    output, expected = _by_hand(model, x, lambda g: g * 0.25)
+    clause = _clause(lambda: tl.scale(0.25))
+    trace = tl.trace(model, x, backend="tf", intervene=clause)
+    relu = next(op for op in trace._layer_list if str(op.func_name).lower() == "relu")
+    arm_tf_grad_sites(trace, tf)
+    arm_tf_grad_sites(trace, tf)
+    assert [edit.label for edit in armed_grad_sites(trace)] == [relu.label]
+    attach_tf_derived_grads(
+        tf=tf,
+        trace=trace,
+        callable_obj=model,
+        args=(x,),
+        kwargs={},
+        captured_output=output,
+        grad_options=GradOptions(loss_fn=_loss),
+        module_tree=None,
+        intervene=clause,
+    )
+    assert [edit.label for edit in armed_grad_sites(trace)] == [relu.label]
+    _assert_grads(_grads(trace), expected)
+    clear_grad_sites(trace)
+    arm_tf_grad_sites(trace, tf)
+    assert [edit.label for edit in armed_grad_sites(trace)] == [relu.label], "re-arms after a clear"

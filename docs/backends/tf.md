@@ -134,6 +134,9 @@ print(status.state)
   because parameter reads (`ReadVariableOp`) count as unverified regions.
 - `tf.reduce_any` (`Any`) is not classified by replay validation yet, so a trace that
   uses it fails validation at that op, edited or not.
+- An edit that replaces a value only Python control flow reads (a branch flag
+  edited with `tl.zero_ablate()`) leaves its replacement op (`Fill`) with no
+  consuming op, so replay validation fails at that op.
 - Ops TensorFlow runs from C++ without returning through a python wrapper
   (`tf.raw_ops.*` calls, `tf.function` bodies, fused kernels' internals) cannot be
   edited live; see the writable-layer note above.

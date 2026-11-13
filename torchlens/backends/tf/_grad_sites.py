@@ -23,6 +23,7 @@ from typing import Any
 
 from ...intervention._grad_site_neutral import (
     arm_grad_sites,
+    armed_grad_sites,
     build_grad_site_edits,
     grad_site_targets,
 )
@@ -30,6 +31,8 @@ from ._helper_hooks import tf_helper_hook
 
 _STAGED = "_tf_grad_site_clauses"
 """Trace attribute holding the capture's ``tl.grad`` clauses, in clause order."""
+_ARMED_KEYS = "_tf_grad_sites_armed"
+"""Trace attribute holding ``(clause, (label, pass_index))`` for each site already armed."""
 
 
 def stage_tf_grad_clauses(trace: Any, clauses: Sequence[Any]) -> None:
@@ -69,21 +72,29 @@ def arm_tf_grad_sites(trace: Any, tf: Any) -> None:
     """Arm the trace's staged ``tl.grad`` clauses in the shared grad-site store.
 
     Labels are the finished trace's op labels (the TensorFlow replay adapter's
-    output-slot labels). Call it on a finalized trace.
+    output-slot labels). Call it on a finalized trace. Idempotent per trace and
+    site: a clause already armed on a label (and pass) is not armed again, so a
+    capture that arms its clauses and a later derived-gradient replay that
+    stages the same clauses arm each site once. After ``clear_grad_sites`` the
+    clauses arm afresh.
     """
 
+    armed = list(trace.__dict__.get(_ARMED_KEYS, ())) if armed_grad_sites(trace) else []
     edits: list[Any] = []
     for index, clause in enumerate(staged_tf_grad_clauses(trace)):
-        apply = tf_grad_apply(clause.decision.hook, tf)
-        edits.extend(
-            build_grad_site_edits(
-                clause.selector,
-                apply,
-                lambda inner: resolve_forward_labels(trace, inner),
-                operands=selector_operands,
-                name=f"tf_grad_{index}",
-            )
-        )
+        for edit in build_grad_site_edits(
+            clause.selector,
+            tf_grad_apply(clause.decision.hook, tf),
+            lambda inner: resolve_forward_labels(trace, inner),
+            operands=selector_operands,
+            name=f"tf_grad_{index}",
+        ):
+            key = (edit.label, edit.pass_index)
+            if any(done is clause and done_key == key for done, done_key in armed):
+                continue
+            armed.append((clause, key))
+            edits.append(edit)
+    trace.__dict__[_ARMED_KEYS] = tuple(armed)
     if edits:
         arm_grad_sites(trace, tuple(edits))
 
