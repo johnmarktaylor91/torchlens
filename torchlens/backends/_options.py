@@ -199,7 +199,7 @@ class ExtraKwargPolicy:
 
 @dataclass(frozen=True)
 class PreviewTraceOptionPolicy:
-    """Declarative unsupported-option policy for preview capture backends.
+    """Declarative unsupported-option policy for non-PyTorch capture backends.
 
     Parameters
     ----------
@@ -242,7 +242,7 @@ JAX_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
         }
     ),
     runtime_message=(
-        "JAX backend preview does not support stop-early or storage "
+        "The JAX backend does not support stop-early or storage "
         "options: {names}. Static-label save= selectors are supported as "
         "post-finalization payload filters and trace(intervene=...) edits equation "
         "outputs at capture time, but trace(stop_after=...) needs partial-capture "
@@ -251,11 +251,11 @@ JAX_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
         "PyTorch backend for stop_after, storage, and streaming."
     ),
     fallback_message=(
-        "JAX backend preview does not support: {names}. "
+        "The JAX backend does not support: {names}. "
         "Use full-save JAX trace capture or the PyTorch backend for this surface."
     ),
 )
-"""Extra public-kwarg rejection policy for the JAX preview backend."""
+"""Extra public-kwarg rejection policy for the JAX backend."""
 
 
 TINYGRAD_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
@@ -270,15 +270,15 @@ TINYGRAD_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
     fallback_message="",
     always_runtime=True,
 )
-"""Extra public-kwarg rejection policy for the tinygrad preview backend."""
+"""Extra public-kwarg rejection policy for the tinygrad backend."""
 
 
 PADDLE_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
     runtime_option_names=frozenset(),
     runtime_message=(
-        "paddle backend preview does not support these options: {names}. "
+        "The Paddle backend does not support these options: {names}. "
         "Live trace(intervene=...), trace(stop_after=...), facets=, and static-label "
-        "save= selectors are supported on the eager Paddle preview; "
+        "save= selectors are supported on eager Paddle; "
         "storage=, and the remaining torch-only runtime options are not. Use "
         "the PyTorch backend for storage= and stop-early capture shaping."
     ),
@@ -300,7 +300,7 @@ PADDLE_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
         "chunk_paths": None,
     },
 )
-"""Extra public-kwarg rejection policy for the Paddle preview backend.
+"""Extra public-kwarg rejection policy for the Paddle backend.
 
 ``intervene`` and ``halt`` are absent because the Paddle capture path pops
 and dispatches them before extra-kwarg rejection runs (the ``interventions``
@@ -312,7 +312,7 @@ under the backend-neutral ``facet_recipes`` record.
 MLX_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
     runtime_option_names=frozenset(),
     runtime_message=(
-        "MLX backend preview does not support: {names}. Static-label save= "
+        "The MLX backend does not support: {names}. Static-label save= "
         "selectors, static-label trace(intervene=tl.when(...)), and static-label "
         "trace(stop_after=...) are supported; storage= and value-dependent "
         "predicates need predicate-time concrete values or replay semantics that "
@@ -349,7 +349,7 @@ MLX_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
         "reconstruction_ready": False,
     },
 )
-"""Extra public-kwarg rejection policy for the MLX preview backend."""
+"""Extra public-kwarg rejection policy for the MLX backend."""
 
 
 TF_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
@@ -359,14 +359,14 @@ TF_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
             "streaming",
         }
     ),
-    runtime_message=("tf backend preview does not support runtime-mutation options: {names}."),
-    fallback_message="tf backend preview does not support: {names}.",
+    runtime_message=("The tf backend does not support runtime-mutation options: {names}."),
+    fallback_message="The tf backend does not support: {names}.",
     inert_values={
         "lookback": 0,
         "lookback_payload_policy": "metadata_only",
     },
 )
-"""Extra public-kwarg rejection policy for the TensorFlow preview backend.
+"""Extra public-kwarg rejection policy for the TensorFlow backend.
 
 ``intervene=`` and ``stop_after=`` (``halt``) are not in this table: both run live
 in the tf eager capture path and are popped before this policy runs, as is
@@ -375,57 +375,55 @@ in the tf eager capture path and are popped before this policy runs, as is
 
 JAX_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
     backend_name="JAX",
-    full_save_message="JAX backend preview is full-save only; save shaping is unsupported.",
+    full_save_message="The JAX backend is full-save only; save shaping is unsupported.",
     rejected_truthy_messages={
         "activation_transform": (
-            "JAX backend preview does not support activation_transform; full-save forward "
+            "The JAX backend does not support activation_transform; full-save forward "
             "capture only. Use full-save JAX trace capture or the PyTorch backend."
         ),
         "detach_saved_activations": (
-            "JAX backend preview does not support detach_saved_activations; full-save forward "
+            "The JAX backend does not support detach_saved_activations; full-save forward "
             "capture only. Use full-save JAX trace capture or the PyTorch backend."
         ),
         "save_grads": (
-            "JAX backend preview does not support save_grads; full-save forward capture only. "
+            "The JAX backend does not support save_grads; full-save forward capture only. "
             "Use tl.backends.jax.GradOptions for derived gradients."
         ),
         "save_args": (
-            "JAX backend preview does not support save_args; full-save forward capture "
+            "The JAX backend does not support save_args; full-save forward capture "
             "only. Use full-save JAX trace capture or the PyTorch backend."
         ),
         "backward_ready": (
-            "JAX backend preview does not support backward_ready; full-save forward capture "
+            "The JAX backend does not support backward_ready; full-save forward capture "
             "only. Use tl.backends.jax.GradOptions for derived gradients."
         ),
         "transform": (
-            "JAX backend preview does not support transform; full-save forward capture only. "
+            "The JAX backend does not support transform; full-save forward capture only. "
             "Use full-save JAX trace capture or the PyTorch backend."
         ),
         "layer_visualizers": (
-            "JAX backend preview does not support layer_visualizers; full-save forward capture "
+            "The JAX backend does not support layer_visualizers; full-save forward capture "
             "only. Use full-save JAX trace capture or the PyTorch backend."
         ),
         "save_visualizations": (
-            "JAX backend preview does not support save_visualizations; full-save forward "
+            "The JAX backend does not support save_visualizations; full-save forward "
             "capture only. Use full-save JAX trace capture or the PyTorch backend."
         ),
     },
-    output_device_message="JAX backend preview only supports output_device='same'.",
+    output_device_message="The JAX backend only supports output_device='same'.",
     save_raw_activations_false_message=(
-        "JAX backend preview is full-save only; save_raw_activations=False is unsupported."
+        "The JAX backend is full-save only; save_raw_activations=False is unsupported."
     ),
-    save_window_message=(
-        "JAX backend preview is full-save only; save-window shaping is unsupported."
-    ),
+    save_window_message=("The JAX backend is full-save only; save-window shaping is unsupported."),
 )
-"""Unsupported public trace-option policy for the JAX preview backend."""
+"""Unsupported public trace-option policy for the JAX backend."""
 
 
 TINYGRAD_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
     backend_name="tinygrad",
-    full_save_message="tinygrad backend preview is full-save only; save shaping is unsupported.",
+    full_save_message="The tinygrad backend is full-save only; save shaping is unsupported.",
     rejected_truthy_messages={
-        name: (f"tinygrad backend preview does not support {name}; full-save forward capture only.")
+        name: (f"The tinygrad backend does not support {name}; full-save forward capture only.")
         for name in (
             "activation_transform",
             "detach_saved_activations",
@@ -438,22 +436,22 @@ TINYGRAD_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
             "save_visualizations",
         )
     },
-    output_device_message="tinygrad backend preview only supports output_device='same'.",
+    output_device_message="The tinygrad backend only supports output_device='same'.",
     save_raw_activations_false_message=(
-        "tinygrad backend preview is full-save only; save_raw_activations=False is unsupported."
+        "The tinygrad backend is full-save only; save_raw_activations=False is unsupported."
     ),
     save_window_message=(
-        "tinygrad backend preview is full-save only; save-window shaping is unsupported."
+        "The tinygrad backend is full-save only; save-window shaping is unsupported."
     ),
 )
-"""Unsupported public trace-option policy for the tinygrad preview backend."""
+"""Unsupported public trace-option policy for the tinygrad backend."""
 
 
 PADDLE_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
     backend_name="paddle",
-    full_save_message="paddle backend preview is full-save only; save shaping is unsupported.",
+    full_save_message="The Paddle backend is full-save only; save shaping is unsupported.",
     rejected_truthy_messages={
-        name: (f"paddle backend preview does not support {name}; full-save forward capture only.")
+        name: (f"The Paddle backend does not support {name}; full-save forward capture only.")
         for name in (
             "activation_transform",
             "detach_saved_activations",
@@ -466,28 +464,28 @@ PADDLE_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
             "save_visualizations",
         )
     },
-    output_device_message="paddle backend preview only supports output_device='same'.",
+    output_device_message="The Paddle backend only supports output_device='same'.",
     save_raw_activations_false_message=(
-        "paddle backend preview is full-save only; save_raw_activations=False is unsupported."
+        "The Paddle backend is full-save only; save_raw_activations=False is unsupported."
     ),
     save_window_message=(
-        "paddle backend preview is full-save only; save-window shaping is unsupported."
+        "The Paddle backend is full-save only; save-window shaping is unsupported."
     ),
 )
-"""Unsupported public trace-option policy for the Paddle preview backend."""
+"""Unsupported public trace-option policy for the Paddle backend."""
 
 
 MLX_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
     backend_name="MLX",
     full_save_message=(
-        "MLX backend preview capture_trace takes only save='all'; pass static save= "
+        "MLX capture_trace takes only save='all'; pass static save= "
         "selectors through tl.trace instead."
     ),
     rejected_truthy_messages={
-        "save_grads": "MLX backend preview does not support save_grads; backward capture is unavailable.",
+        "save_grads": "The MLX backend does not support save_grads; backward capture is unavailable.",
     }
     | {
-        name: f"MLX backend preview does not support {name}; forward capture only."
+        name: f"The MLX backend does not support {name}; forward capture only."
         for name in (
             "activation_transform",
             "detach_saved_activations",
@@ -499,12 +497,12 @@ MLX_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
             "save_visualizations",
         )
     },
-    output_device_message="MLX backend only supports output_device='same' in technical preview.",
+    output_device_message="The MLX backend only supports output_device='same'.",
     # DECLARED CAPABILITY (not an omission): MLX honors
     # ``save_raw_activations=False`` at its capture-policy seam (payloads
     # dropped, shape/dtype metadata preserved), so it carries no
     # ``save_raw_activations_false_message`` while the four full-save-only
-    # previews refuse. Pinned by tests/test_mlx_option_policy.py.
+    # backends refuse. Pinned by tests/test_mlx_option_policy.py.
     save_raw_activations_false_message=None,
 )
 """Unsupported public trace-option policy for the MLX backend object entry."""
@@ -512,9 +510,9 @@ MLX_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
 
 TF_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
     backend_name="tf",
-    full_save_message="tf backend preview is full-save only.",
+    full_save_message="The tf backend is full-save only.",
     rejected_truthy_messages={
-        name: f"tf backend preview does not support {name}; full-save forward capture only."
+        name: f"The tf backend does not support {name}; full-save forward capture only."
         for name in (
             "activation_transform",
             "detach_saved_activations",
@@ -527,10 +525,10 @@ TF_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
             "save_visualizations",
         )
     },
-    output_device_message="tf backend preview only supports output_device='same'.",
-    save_raw_activations_false_message="tf backend preview is full-save only.",
+    output_device_message="The tf backend only supports output_device='same'.",
+    save_raw_activations_false_message="The tf backend is full-save only.",
 )
-"""Unsupported public trace-option policy for the TensorFlow preview backend."""
+"""Unsupported public trace-option policy for the TensorFlow backend."""
 
 
 def is_missing(value: object) -> bool:
@@ -572,7 +570,7 @@ def default_if_missing(value: Any, default: Any) -> Any:
 def resolve_optional_capture_field(capture: Any, field_name: str, flat_value: Any) -> Any:
     """Resolve one ``capture=`` field whose backend-local flat kwarg defaults to ``None``.
 
-    Some preview backend ``capture_trace`` parameters predate ``CaptureOptions``
+    Some non-PyTorch backend ``capture_trace`` parameters predate ``CaptureOptions``
     and still spell a handful of optional fields (e.g. ``save_grads``,
     ``transform``) with a concrete ``None`` default instead
     of the ``MissingType`` sentinel, so ``is_missing()`` cannot tell "the
@@ -753,10 +751,10 @@ def reject_unsupported_trace_options(
 
 
 def pop_stop_directive(options: dict[str, Any]) -> Any:
-    """Pop ``halt`` and ``stop_after``; return the selector a preview backend halts on.
+    """Pop ``halt`` and ``stop_after``; return the selector a non-PyTorch backend halts on.
 
     ``stop_after=`` is the one public stop directive and the trace door passes
-    ``halt=None``, so a preview backend that halts on a selector receives
+    ``halt=None``, so a non-PyTorch backend that halts on a selector receives
     ``stop_after`` in that role. ``MISSING`` reads as absent.
     """
 
