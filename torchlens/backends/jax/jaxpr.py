@@ -25,19 +25,6 @@ from ._module_stacks import (
 )
 from ._source_path_components import _normalize_jax_source_path_component
 
-SAFE_JIT_NAMES = frozenset(
-    {
-        "_bernoulli",
-        "_normal",
-        "_normal_real",
-        "_one_hot",
-        "_randint",
-        "_uniform",
-        "_where",
-        "clip",
-        "relu",
-    }
-)
 REJECTED_NESTED_PRIMITIVES = frozenset(
     {
         "cond",
