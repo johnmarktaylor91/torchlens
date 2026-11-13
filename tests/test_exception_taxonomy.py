@@ -1240,6 +1240,10 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
     "torchlens.recording._halt.StopSignal": (
         "internal control-flow stop signal (BaseException); converted to recording status"
     ),
+    "torchlens.backends.tf._halt.CallbackAbort": (
+        "internal carrier (BaseException) that moves an observer's typed error out of a TF op "
+        "callback past Keras exception rewriting; the capture entry re-raises the original error"
+    ),
     "torchlens._extract_fast._StopForward": (
         "internal control-flow stop signal (BaseException) a stop_after hook raises to end "
         "the plain forward of tl.pluck's hooked fast path; caught by _hooked_forward, never escapes"
@@ -1326,8 +1330,8 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "capture-entry _tl attribute-collision guard; plain AttributeError outside the "
         "taxonomy — flagged for future taxonomy adoption"
     ),
-    "torchlens.backends.tf.interventions.TFInterventionSiteUnreachableError": (
-        "TF preview refusal catchable via its registered parent BackendUnsupportedError"
+    "torchlens.backends.tf._intervention_plan.TFInterventionSiteUnreachableError": (
+        "TF refusal catchable via its registered parent BackendUnsupportedError"
     ),
     # -- Post-tour sprint (2026-08-19). All five ARE user-facing refusals from
     # newly shipped features, so registering them on torchlens.errors is the

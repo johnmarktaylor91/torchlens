@@ -126,7 +126,7 @@ JAX_MUTANTS: dict[str, Mutant] = {
     "J05": _rep(
         _JAX_BACKEND,
         "_validate_one_jax_equation",
-        "if not _parent_perturbations_change_output(capture, op, inputs, saved_outputs):",
+        "if not _parent_perturbations_change_output(capture, op, inputs, reference):",
         "if False:",
         "skipped perturbation: parent sensitivity is never checked",
     ),
