@@ -35,6 +35,7 @@ from typing import Any
 
 from ..._utils._record_group_table import record_member
 from ..tinygrad._captures import TinygradUOpCapture
+from ..tinygrad._helper_edits import apply_helper as _apply_helper
 from ..tinygrad._raw_labels import _final_to_raw_labels
 from ..tinygrad._rules import CONSTANT_KIND_ANNOTATION, RNG_UOP_NAMES
 from ..tinygrad._uop_graph import _uop_name
@@ -313,6 +314,12 @@ def to_host(value: Any) -> Any:
     import numpy as np
 
     return np.asarray(value.numpy())
+
+
+def apply_helper(trace: Any, helper: Any, value: Any) -> Any:
+    """A built-in edit helper on a tinygrad value (the live edit table, ``_helper_edits``)."""
+
+    return _apply_helper(trace, helper, value)
 
 
 def close(expected: Any, actual: Any) -> bool:
