@@ -158,7 +158,7 @@ def _close(expected: Any, actual: Any) -> bool:
 
 
 def _input_label(trace: Any) -> str:
-    sources = [op for op in trace._layer_list if not op.parent_layers and _is_input(op)]
+    sources = [op for op in trace._layer_list if _is_input(op)]
     assert len(sources) == 1, [op.layer_label for op in sources]
     return str(sources[0].layer_label)
 
