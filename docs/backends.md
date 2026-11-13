@@ -20,7 +20,7 @@ reruns the Yes and Partial cells so the table cannot quietly go stale.
 | JAX | Partial (1) | Partial (2) | Partial (4) | Partial (5) | No (6) | Yes | Partial (8) | Yes | Partial (9) |
 | TensorFlow | Partial (1) | Partial (2) | Partial (4) | Partial (5) | Partial (7) | Yes | Partial (8) | Yes | Yes |
 | MLX | Partial (1) | Partial (3) | Partial (4) | Partial (5) | Partial (7) | Yes | Partial (8) | Yes | Yes |
-| PaddlePaddle | Partial (1) | Partial (3) | Partial (4) | Partial (5) | Partial (7) | Yes | Partial (8) | Yes | Yes |
+| PaddlePaddle | Partial (1) | Partial (3) | Yes | Partial (5) | Partial (7) | Yes | Partial (8) | Yes | Yes |
 | tinygrad | Partial (1) | Partial (2) | Partial (4) | Partial (5) | No (6) | Yes | Partial (8) | Yes | Yes |
 
 1. You can select operations by function, by module, or both. Selecting by influence (which
@@ -33,6 +33,9 @@ reruns the Yes and Partial cells so the table cannot quietly go stale.
 4. Each operation's values, shape, function and module are recorded, but not the line of source
    code that ran it.
 5. The forward graph draws, including the collapsed overview. There is no backward pass to draw.
+   On MLX this is a framework limit: MLX builds its backward pass inside C++, so TorchLens
+   cannot list the backward operations. Gradient values for every recorded operation are
+   available.
 6. Edits are not available yet; asking for one raises an error.
 7. Edits work during a new run, on operations chosen by function or module before the run. You
    cannot edit a finished trace or patch in activations from another run; asking for either
