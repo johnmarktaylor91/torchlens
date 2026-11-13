@@ -27,6 +27,7 @@ from ..._ir.intervention import FireResult
 from ..._ir.op_record import OpAmendment, amend_module_exit_intervention
 from .._options import is_missing
 from ..registry import BackendUnsupportedError, get_backend_spec, require_capability_implementation
+from ._edited_grads import attach_edited_derived_grads
 from ._rules import RNG_STATE_IN_GRAPH_CODE
 
 if TYPE_CHECKING:
@@ -283,12 +284,8 @@ def capture_with_edits(backend: Any, call: dict[str, Any], intervene: Any, halt:
     resolve = require_capability_implementation(spec, "can_intervene")
     plan = cast(TinygradEditPlan, cast(Any, resolve)(intervene, halt))
     grad_options = call.get("grad_options")
-    if grad_options is not None and not is_missing(grad_options):
-        raise refuse_edit(
-            "grad_options cannot be combined with trace(intervene=...); capture derived "
-            "gradients in a separate plain trace.",
-            code="intervention_with_derived_grads_unsupported",
-        )
+    grad_options = None if grad_options is None or is_missing(grad_options) else grad_options
+    original, call = call, {**call, "grad_options": None}
     planning = TinygradEditSession({}, None)
     planned = _run_session(backend, call, planning)
     sites = _planned_sites(planned, plan.selector, planning.calls)
@@ -298,11 +295,12 @@ def capture_with_edits(backend: Any, call: dict[str, Any], intervene: Any, halt:
             "the tinygrad forward; no intervention fired.",
             selector=repr(plan.selector),
         )
-        return planned
+        return planned if grad_options is None else backend.capture_trace(**original)
     _refuse_lazy_random_draws(planned)
     expected = _matched_labels(planned, plan.selector)
     del planned
-    edited = _run_session(backend, call, TinygradEditSession(sites, plan.edit, plan.selector))
+    session = TinygradEditSession(sites, plan.edit, plan.selector)
+    edited = _run_session(backend, call, session)
     edited_labels = {c.label_raw for c in edited.tinygrad_uop_captures if c.edit is not None}
     if not expected == edited_labels == _matched_labels(edited, plan.selector):
         raise refuse_edit(
@@ -310,7 +308,17 @@ def capture_with_edits(backend: Any, call: dict[str, Any], intervene: Any, halt:
             "was not applied where the selector points.",
             code=EDIT_REFUSAL,
         )
+    if grad_options is not None:
+        replay = TinygradEditSession(fired_sites(session), plan.edit)
+        attach_edited_derived_grads(backend, edited, call, session, replay, grad_options)
     return edited
+
+
+def fired_sites(session: TinygradEditSession) -> dict[int, str]:
+    """``call number -> callable name`` of the calls ``session`` edited."""
+
+    replaced = {id(site) for site in session.replaced.values()}
+    return {number: name for number, (uop, name) in enumerate(session.calls) if id(uop) in replaced}
 
 
 def _refuse_lazy_random_draws(planned: Any) -> None:
