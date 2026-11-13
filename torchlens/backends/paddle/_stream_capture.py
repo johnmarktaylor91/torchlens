@@ -344,7 +344,7 @@ class PaddleCodecWrites:
             self.abort(reason)  # type: ignore[attr-defined]
             raise ArtifactError(
                 reason,
-                code="stream_payload_unsupported",
+                code="backend_payload_unsupported",
                 remedy="capture without storage= and save the finished trace with trace.save",
             ) from exc
         self._paddle_codec_fields[blob_id] = (fields, str(encoded.logical_device))
