@@ -8203,9 +8203,9 @@
   "ambiguous": true,
   "field": "parents",
   "file": "torchlens/debug/_unit_axis_layout.py",
-  "has_default": false,
+  "has_default": true,
   "sites": 1,
-  "via_getattr": false
+  "via_getattr": true
  },
  {
   "ambiguous": true,

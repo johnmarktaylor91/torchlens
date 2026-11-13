@@ -5971,3 +5971,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 02baa86b8506e2a47df2ad5db71af3fb3d236438
 recorded: 2026-11-13T01:32:56Z
+---
+generator: scripts/regen_ledgers.py (producer static half)
+flag: none (deterministic ledger step)
+reason: pp-post-fix: hidden replay payloads, F8 multi-parent axis
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: d16082d4b10d94e98a3a026dc9cc19478ade4716
+recorded: 2026-11-13T02:05:21Z
