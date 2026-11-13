@@ -492,23 +492,28 @@ def _refs(plan: _Plan, read: Any) -> tuple[tuple[tuple[str | int, ...], str], ..
 
 
 def _encode(value: Any) -> Any:
-    """Encode one capture value as recipe data, or raise :class:`_Unencodable`.
+    """Encode one capture value as recipe data, or raise :class:`_Unencodable`."""
 
-    One branch per JAX param kind (an essential type switch).
-    """
+    if value is None or type(value) in (bool, int, float, complex, str):
+        return value
+    if type(value) is tuple or type(value) is list:
+        encoded = [_encode(v) for v in value]
+        return tuple(encoded) if type(value) is tuple else encoded
+    if type(value).__name__ in _TYPED_LITERALS and type(value).__module__ == _LITERALS_MODULE:
+        plain = _TYPED_LITERALS[type(value).__name__](value)
+        return {_TAG: ("typed", type(value).__name__, _dtype_name(value.dtype), plain)}
+    if isinstance(value, Mapping) and all(type(k) is str for k in value):
+        return {_MAP_TAG: {k: _encode(v) for k, v in value.items()}}
+    return _encode_framework_value(value)
+
+
+def _encode_framework_value(value: Any) -> Any:
+    """One branch per JAX/NumPy param type (an essential type switch)."""
 
     import jax
     import jax.extend.core
     import numpy as np
 
-    if value is None or type(value) in (bool, int, float, complex, str):
-        return value
-    if type(value).__name__ in _TYPED_LITERALS and type(value).__module__ == _LITERALS_MODULE:
-        plain = _TYPED_LITERALS[type(value).__name__](value)
-        return {_TAG: ("typed", type(value).__name__, _dtype_name(value.dtype), plain)}
-    if type(value) is tuple or type(value) is list:
-        encoded = [_encode(v) for v in value]
-        return tuple(encoded) if type(value) is tuple else encoded
     if isinstance(value, np.dtype):
         return {_TAG: ("dtype", _dtype_name(value))}
     if isinstance(value, np.generic | np.ndarray | jax.Array):
@@ -517,8 +522,6 @@ def _encode(value: Any) -> Any:
         return {_TAG: ("enum", _lax_type_name(value, _ENUM_TYPE_NAMES), value.name)}
     if isinstance(value, jax.extend.core.ClosedJaxpr):
         return {_TAG: ("closed_jaxpr", _encode_closed_jaxpr(value))}
-    if isinstance(value, Mapping) and all(type(k) is str for k in value):
-        return {_MAP_TAG: {k: _encode(v) for k, v in value.items()}}
     name = _lax_type_name(value, _STRUCT_TYPE_NAMES)
     return {_TAG: ("struct", name, {f: _encode(v) for f, v in _struct_fields(value)})}
 
@@ -560,49 +563,52 @@ def _aval(var: Any) -> tuple[Any, ...]:
     return (tuple(aval.shape), _dtype_name(aval.dtype), bool(getattr(aval, "weak_type", False)))
 
 
+class _VarTable:
+    """Numbers a nested program's variables in definition order."""
+
+    def __init__(self) -> None:
+        self.ids: dict[Any, int] = {}
+
+    def define(self, var: Any) -> tuple[Any, ...]:
+        self.ids[var] = len(self.ids)
+        return _aval(var)
+
+    def ref(self, atom: Any) -> Any:
+        if hasattr(atom, "val"):  # a Literal (unhashable), never a Var
+            return ("lit", _encode(atom.val))
+        if atom in self.ids:
+            return ("var", self.ids[atom])
+        raise _Unencodable("nested program reads an undefined variable")
+
+
 def _encode_closed_jaxpr(closed: Any) -> dict[str, Any]:
     """Nested program as data: avals, consts, equations (params recursively)."""
 
     jaxpr = closed.jaxpr
     if jaxpr.effects:
         raise _Unencodable("nested program has effects")
-    var_ids: dict[Any, int] = {}
-
-    def define(var: Any) -> tuple[Any, ...]:
-        var_ids[var] = len(var_ids)
-        return _aval(var)
-
-    def ref(atom: Any) -> Any:
-        if hasattr(atom, "val"):  # a Literal (unhashable), never a Var
-            return ("lit", _encode(atom.val))
-        if atom in var_ids:
-            return ("var", var_ids[atom])
-        raise _Unencodable("nested program reads an undefined variable")
-
-    constvars = tuple(define(v) for v in jaxpr.constvars)
-    invars = tuple(define(v) for v in jaxpr.invars)
+    table = _VarTable()
+    constvars = tuple(table.define(v) for v in jaxpr.constvars)
+    invars = tuple(table.define(v) for v in jaxpr.invars)
     eqns = []
     for eqn in jaxpr.eqns:
         name = eqn.primitive.name
         if f"jax.primitive.{name}" not in ALLOWLIST:
             raise _Unencodable(f"nested primitive {name!r} is outside the closed allowlist")
-        reads = tuple(ref(a) for a in eqn.invars)
+        reads = tuple(table.ref(a) for a in eqn.invars)
         params = {_MAP_TAG: {str(k): _encode(v) for k, v in eqn.params.items()}}
-        eqns.append((name, reads, params, tuple(define(v) for v in eqn.outvars)))
+        eqns.append((name, reads, params, tuple(table.define(v) for v in eqn.outvars)))
     return {
         "constvars": constvars,
         "consts": tuple(_encode(c) for c in closed.consts),
         "invars": invars,
         "eqns": tuple(eqns),
-        "outvars": tuple(ref(a) for a in jaxpr.outvars),
+        "outvars": tuple(table.ref(a) for a in jaxpr.outvars),
     }
 
 
 def _decode(node: Any) -> Any:
     """Inverse of :func:`_encode` (lists from a JSON round trip become tuples)."""
-
-    import jax.numpy as jnp
-    import numpy as np
 
     if node is None or type(node) in (bool, int, float, complex, str):
         return node
@@ -613,31 +619,50 @@ def _decode(node: Any) -> Any:
     if not (isinstance(node, Mapping) and set(node) == {_TAG}):
         raise ReplayRefusal("type", f"bad JAX recipe value {type(node).__name__}")
     kind, *body = node[_TAG]
-    if kind == "dtype":
-        return jnp.dtype(body[0])
-    if kind in ("np_scalar", "array"):
-        array = np.asarray(body[2], dtype=jnp.dtype(body[0])).reshape(tuple(body[1]))
-        return array.reshape(())[()] if kind == "np_scalar" else array
-    return _decode_typed(kind, body)
+    return _decode_typed(str(kind), body)
 
 
 def _decode_typed(kind: str, body: Sequence[Any]) -> Any:
-    import jax
+    """One branch per tagged kind (an essential type switch)."""
 
+    import importlib
+
+    import jax
+    import numpy as np
+
+    if kind == "dtype":
+        return np.dtype(body[0])
+    if kind in ("np_scalar", "array"):
+        array = np.asarray(body[2], dtype=np.dtype(body[0])).reshape(tuple(body[1]))
+        return array.reshape(())[()] if kind == "np_scalar" else array
+    if kind == "typed" and body[0] in _TYPED_LITERALS:
+        cls = getattr(importlib.import_module(_LITERALS_MODULE), body[0])
+        return cls(_TYPED_LITERALS[body[0]](body[2]), np.dtype(body[1]))
     if kind == "enum" and body[0] in _ENUM_TYPE_NAMES:
         return getattr(jax.lax, body[0])[body[1]]
     if kind == "struct" and body[0] in _STRUCT_TYPE_NAMES:
         return getattr(jax.lax, body[0])(**{str(k): _decode(v) for k, v in body[1].items()})
     if kind == "closed_jaxpr":
         return _decode_closed_jaxpr(body[0])
-    if kind == "typed" and body[0] in _TYPED_LITERALS:
-        import importlib
-
-        import numpy as np
-
-        cls = getattr(importlib.import_module(_LITERALS_MODULE), body[0])
-        return cls(_TYPED_LITERALS[body[0]](body[2]), np.dtype(body[1]))
     raise ReplayRefusal("type", f"unknown JAX recipe value kind {kind!r}")
+
+
+def _run_nested(data: Mapping[str, Any], values: Sequence[Any]) -> tuple[Any, ...]:
+    """Bind a decoded nested program's equations on ``values`` (consts, then args)."""
+
+    env: dict[int, Any] = dict(enumerate(values))
+
+    def read(ref: Sequence[Any]) -> Any:
+        return env[int(ref[1])] if ref[0] == "var" else _decode(ref[1])
+
+    for name, reads, params, outs in data["eqns"]:
+        primitive = _resolve_primitive(str(name))
+        result = primitive.bind(*(read(r) for r in reads), **_decode(params))
+        results = tuple(result) if primitive.multiple_results else (result,)
+        if len(results) != len(outs):
+            raise ReplayRefusal("slots", f"nested {name} output count changed")
+        env.update((len(env) + i, value) for i, value in enumerate(results))
+    return tuple(read(r) for r in data["outvars"])
 
 
 def _decode_closed_jaxpr(data: Mapping[str, Any]) -> Any:
@@ -646,28 +671,11 @@ def _decode_closed_jaxpr(data: Mapping[str, Any]) -> Any:
     import jax
 
     consts = tuple(_decode(c) for c in data["consts"])
-
-    def program(*args: Any) -> tuple[Any, ...]:
-        env: dict[int, Any] = dict(enumerate((*consts, *args)))
-
-        def read(ref: Sequence[Any]) -> Any:
-            return env[int(ref[1])] if ref[0] == "var" else _decode(ref[1])
-
-        for name, reads, params, outs in data["eqns"]:
-            primitive = _resolve_primitive(str(name))
-            result = primitive.bind(*(read(r) for r in reads), **_decode(params))
-            results = result if primitive.multiple_results else (result,)
-            for value in results:
-                env[len(env)] = value
-            if len(results) != len(outs):
-                raise ReplayRefusal("slots", f"nested {name} output count changed")
-        return tuple(read(r) for r in data["outvars"])
-
     specs = [
         jax.ShapeDtypeStruct(tuple(shape), jax.numpy.dtype(dtype), weak_type=bool(weak))
         for shape, dtype, weak in data["invars"]
     ]
-    return jax.make_jaxpr(program)(*specs)
+    return jax.make_jaxpr(lambda *args: _run_nested(data, (*consts, *args)))(*specs)
 
 
 def _resolve_primitive(name: str) -> Any:
