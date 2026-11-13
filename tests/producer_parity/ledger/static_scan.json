@@ -1601,6 +1601,30 @@
  },
  {
   "ambiguous": true,
+  "field": "params",
+  "file": "torchlens/_io/_replay_recipe_adapter.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/_io/_replay_recipe_codec.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "params",
+  "file": "torchlens/_io/_replay_recipe_codec.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "kind",
   "file": "torchlens/_io/_save_gates.py",
   "has_default": false,
