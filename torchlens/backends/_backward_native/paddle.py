@@ -146,6 +146,9 @@ def _copy(value: Any) -> Any:
 
     if value is None or not hasattr(value, "detach"):
         return None
+    initialized = getattr(value, "_is_initialized", None)
+    if callable(initialized) and not initialized():
+        return None  # Paddle's placeholder for a slot that gets no gradient
     with _state.pause_logging():
         return value.detach().clone()
 
@@ -469,6 +472,7 @@ class _Plan:
     op_nodes: dict[int, _Site] = field(default_factory=dict)
     aligned: dict[int, list[_Edge | None]] = field(default_factory=dict)
     leaf_of: dict[int, tuple[str, str]] = field(default_factory=dict)
+    input_slot: dict[tuple[int, int], int] = field(default_factory=dict)
 
 
 def _note_leaves(plan: _Plan, site: _Site, aligned: list[_Edge | None]) -> None:
@@ -490,22 +494,43 @@ def _plan(state: _Retained, root: Any) -> _Plan:
     owned = set(order)
     for ptr in order:
         site = state.sites[ptr]
-        edges, _inner = _frontier(plan.nodes[ptr], owned)
+        edges, inner = _frontier(plan.nodes[ptr], owned)
         aligned = _align(state, site, edges)
         plan.op_nodes[ptr], plan.aligned[ptr] = site, aligned
         _note_leaves(plan, site, aligned)
+        if not inner:
+            for position, edge in enumerate(aligned):
+                if edge is not None:
+                    plan.input_slot[(ptr, edge.index)] = position
     for ptr, node in plan.nodes.items():
         if _name(node) != ACCUMULATION and not _has_list_slot(plan.op_nodes.get(ptr), node):
             state.scope.hook_node(node)
     return plan
 
 
-def _slot_value(recorder: _Recorder, edge: _Edge) -> Any:
+def _slot_value(plan: _Plan, recorder: _Recorder, edge: _Edge) -> Any:
+    """The gradient ``edge.node`` sent along ``edge``, read from its post hook.
+
+    The post hook reports one entry per forward input slot, while
+    ``next_functions`` leaves out inputs Paddle never differentiates (an integer
+    index), so the two line up directly only when their lengths agree; a
+    single-node op maps its slots through its recorded inputs instead.
+    """
+
     fire = recorder.fires.get(_ptr(edge.node))
     if fire is None:
         return None
     grad_in = fire[1]
-    return grad_in[edge.index] if edge.index < len(grad_in) else None
+    width = len(_next(edge.node))
+    index = (
+        edge.index if len(grad_in) == width else plan.input_slot.get((_ptr(edge.node), edge.index))
+    )
+    if index is None or index >= len(grad_in):
+        raise _Unavailable(
+            f"{_name(edge.node)} reports {len(grad_in)} input slots to its post hook but has "
+            f"{width} next functions, so its gradient slots cannot be matched"
+        )
+    return grad_in[index]
 
 
 def _outgoing(state: _Retained, plan: _Plan, recorder: _Recorder, ptr: int) -> tuple[Any, ...]:
@@ -528,7 +553,7 @@ def _outgoing(state: _Retained, plan: _Plan, recorder: _Recorder, ptr: int) -> t
                 )
             values.append(recorder.tensor_grads.get(leaf.label))
         else:
-            values.append(_slot_value(recorder, edge))
+            values.append(_slot_value(plan, recorder, edge))
     return tuple(values)
 
 

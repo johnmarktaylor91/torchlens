@@ -36,7 +36,7 @@ from torchlens.validation._backward_neutral import (  # noqa: E402
     recorded_backward_from_trace,
 )
 
-pytestmark = [pytest.mark.backend_paddle]
+pytestmark = [pytest.mark.backend_paddle, pytest.mark.rare]
 
 F = paddle.nn.functional
 
