@@ -27,6 +27,7 @@ from torchlens._capture._recorded_tensor import (
     record_call_values,
 )
 from torchlens.backends.torch import _ops_descriptive_fields as desc_mod
+from torchlens.backends.torch.sources import CONSTANT_SOURCE
 
 # The resolvers as defined, bound before any spy: the ``spied`` fixture repoints every
 # module attribute holding them (``flops_mod`` and ``salient_mod`` included), so a test
@@ -34,6 +35,7 @@ from torchlens.backends.torch import _ops_descriptive_fields as desc_mod
 # very list being iterated and never ends.
 _RESOLVE_FLOPS = flops_mod.compute_forward_flops
 _RESOLVE_SALIENT = salient_mod.extract_salient_args
+_SOURCE_FUNC_NAMES = ("none", CONSTANT_SOURCE)
 
 
 class _Corpus(nn.Module):
@@ -164,10 +166,12 @@ def test_resolvers_on_recorded_inputs_give_the_call_time_values(spied) -> None:
     x = torch.randn(2, 3, 8, 8)
     tokens = torch.tensor([[1, 2, 3]])
     trace = tl.trace(model, (x, tokens))
+    # Source nodes (inputs, buffers, constants) are minted with zero FLOPs and no call,
+    # so no resolver produces their value: only function calls are checked.
     stored_flops = sorted(
         (op.func_name, op.cost.flops_forward)
         for op in trace._layer_list
-        if op.cost.flops_forward is not None
+        if op.cost.flops_forward is not None and op.func_name not in _SOURCE_FUNC_NAMES
     )
     # Mutate and free everything the call saw.
     model.size[0] = 99

@@ -11114,6 +11114,7 @@
       ],
       "torchlens/backends/torch/_sources_lazy.py": [
         "tests/test_conditional_integration.py",
+        "tests/test_descriptive_resolve.py",
         "tests/test_fastlog/test_dispatch_smoke.py"
       ],
       "torchlens/backends/torch/_state_bytes.py": [
