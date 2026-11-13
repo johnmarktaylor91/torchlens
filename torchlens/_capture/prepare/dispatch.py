@@ -23,6 +23,7 @@ from ..._postprocess._grouping_stamp import validate_grouping_knob
 from ..._postprocess._selective_save import (
     apply_backend_post_plan,
     apply_static_label_save_policy,
+    needs_post_save_predicate,
     reject_selector_outside_kinds,
     split_backend_post_options,
 )
@@ -48,6 +49,7 @@ from ...backends._options import (
 )
 from ...backends._trace_options import _CONTROL_FLOW
 from ...backends.mlx import MLXBackend
+from ...backends.mlx._retention import RetentionRequest, retention_scope
 from ...backends.registry import (
     BackendSpec,
     get_backend_spec,
@@ -200,44 +202,59 @@ def _trace_mlx_model(
             model_input_args = transformed_input
 
     backend = MLXBackend()
-    trace = backend.capture_trace(
-        model,
-        model_input_args,
-        model_input_kwargs,
-        save=capture_options._layers_to_save,
-        keep_orphans=capture_options.keep_orphans,
-        output_device=capture_options.output_device,
-        activation_transform=save_options.activation_transform,
-        save_raw_activations=save_options.save_raw_activations,
-        detach_saved_activations=capture_options.detach_saved_activations,
-        save_grads=capture_options.save_grads,
-        seed=capture_options.seed,
-        num_context_lines=capture_options.source_context_lines,
-        save_args=capture_options.save_args,
-        save_source_context=capture_options.save_source_context,
-        save_rng=capture_options.save_rng,
-        recurrence_detection=capture_options.recurrence_detection,
-        compute_input_output_distances=capture_options.compute_input_output_distances,
-        verbose=capture_options.verbose,
-        backward_ready=capture_options.backward_ready,
-        name=capture_options.name,
-        transform=None,
-        raw_input=raw_input,
-        save_raw_input=capture_options.save_raw_input,
-        batch_render=capture_options.batch_render,
-        output_transform=capture_options.output_transform,
-        save_transformed_output=capture_options.save_transformed_output,
-        layer_visualizers=cast(
-            "dict[Any, Callable[..., Any]] | None", capture_options.layer_visualizers
-        ),
-        save_visualizations=capture_options.save_visualizations,
-        module_identity_mode=capture_options.module_identity_mode,
-        grad_options=cast("Any", None if grad_options is MISSING else grad_options),
-        intervene=intervene,
-        halt=halt,
-    )
-    apply_static_label_save_policy(trace, save_predicate, backend_name="MLX")
+    # Static-label save= and structure-only are decided at capture: only selected
+    # values stay in memory and the rest are spilled replay witnesses.
+    retention = _mlx_retention_request(save_predicate, capture_options)
+    with retention_scope(retention):
+        trace = backend.capture_trace(
+            model,
+            model_input_args,
+            model_input_kwargs,
+            save=capture_options._layers_to_save,
+            keep_orphans=capture_options.keep_orphans,
+            output_device=capture_options.output_device,
+            activation_transform=save_options.activation_transform,
+            save_raw_activations=save_options.save_raw_activations,
+            detach_saved_activations=capture_options.detach_saved_activations,
+            save_grads=capture_options.save_grads,
+            seed=capture_options.seed,
+            num_context_lines=capture_options.source_context_lines,
+            save_args=capture_options.save_args,
+            save_source_context=capture_options.save_source_context,
+            save_rng=capture_options.save_rng,
+            recurrence_detection=capture_options.recurrence_detection,
+            compute_input_output_distances=capture_options.compute_input_output_distances,
+            verbose=capture_options.verbose,
+            backward_ready=capture_options.backward_ready,
+            name=capture_options.name,
+            transform=None,
+            raw_input=raw_input,
+            save_raw_input=capture_options.save_raw_input,
+            batch_render=capture_options.batch_render,
+            output_transform=capture_options.output_transform,
+            save_transformed_output=capture_options.save_transformed_output,
+            layer_visualizers=cast(
+                "dict[Any, Callable[..., Any]] | None", capture_options.layer_visualizers
+            ),
+            save_visualizations=capture_options.save_visualizations,
+            module_identity_mode=capture_options.module_identity_mode,
+            grad_options=cast("Any", None if grad_options is MISSING else grad_options),
+            intervene=intervene,
+            halt=halt,
+        )
+    if retention is None:
+        apply_static_label_save_policy(trace, save_predicate, backend_name="MLX")
     return trace
+
+
+def _mlx_retention_request(save_predicate: Any, capture_options: Any) -> RetentionRequest | None:
+    """The capture-time retention request for an MLX capture, if any."""
+
+    if bool(getattr(capture_options, "structure_only", False)):
+        return RetentionRequest(structure_only=True)
+    if isinstance(save_predicate, BaseSelector) and not needs_post_save_predicate(save_predicate):
+        return RetentionRequest(selector=save_predicate)
+    return None
 
 
 def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:

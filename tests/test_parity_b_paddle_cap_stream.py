@@ -197,18 +197,6 @@ def test_storage_with_save_selector_is_refused(tmp_path: Path) -> None:
     assert not path.exists()
 
 
-def test_storage_is_refused_while_the_gate_is_closed(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Without the spec gate storage= is still refused, as before this lane."""
-
-    monkeypatch.undo()
-    path = tmp_path / "closed"
-    with pytest.raises(Exception, match="storage"):
-        tl.trace(_chain, _input(), backend="paddle", storage=tl.to_disk(path))
-    assert not path.exists()
-
-
 def test_plain_capture_is_unchanged_and_saves(tmp_path: Path) -> None:
     """Without storage= payloads stay in RAM, no capture-mode state remains, and save works."""
 

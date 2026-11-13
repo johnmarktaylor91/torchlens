@@ -7,6 +7,7 @@ default specs imports no framework. ``capability_bindings(name)`` returns the
 
 from __future__ import annotations
 
+import importlib
 from collections.abc import Callable, Mapping
 from types import MappingProxyType
 
@@ -159,6 +160,40 @@ def _jax_interventions_implementation() -> object:
     return JaxEditRuntime
 
 
+def _lazy_binding(
+    module: str, attr: str | None = None, *, call: bool = False
+) -> Callable[[], object]:
+    """Return a resolver for a backend's record, retention or stream surface.
+
+    The surface is named as data and imported on first use, so binding a
+    backend's ``tl.record`` producer here imports neither that framework nor its
+    capture modules (and adds no import edge to this table).
+
+    Parameters
+    ----------
+    module
+        Absolute module path of the implementing surface.
+    attr
+        Attribute of ``module`` to return; ``None`` returns the module itself.
+    call
+        Call the attribute and return its result (a fresh producer per resolve).
+
+    Returns
+    -------
+    Callable[[], object]
+        Zero-argument resolver.
+    """
+
+    def _resolve() -> object:
+        target = importlib.import_module(module)
+        if attr is None:
+            return target
+        found = getattr(target, attr)
+        return found() if call else found
+
+    return _resolve
+
+
 def _native_backward_binding(name: str) -> Callable[[], object]:
     """Return a resolver for ``name``'s native backward surface (imports no framework)."""
 
@@ -183,18 +218,35 @@ _BINDINGS: Mapping[str, Mapping[str, Callable[[], object]]] = MappingProxyType(
         "jax": {
             "backward_capture": _native_backward_binding("jax"),
             "can_intervene": _jax_interventions_implementation,
+            "fastlog": _lazy_binding(
+                "torchlens.backends.jax._record", "jax_record_producer", call=True
+            ),
         },
         "mlx": {
             "can_intervene": _mlx_interventions_implementation,
+            "fastlog": _lazy_binding(
+                "torchlens.backends.mlx._record", "mlx_record_producer", call=True
+            ),
+            "structure_only_capture": _lazy_binding(
+                "torchlens.backends.mlx._retention", "retention_scope"
+            ),
         },
         "tinygrad": {
             "can_intervene": _tinygrad_interventions_implementation,
         },
         "paddle": {
             "can_intervene": _paddle_interventions_implementation,
+            "fastlog": _lazy_binding(
+                "torchlens.backends.paddle._record", "paddle_record_producer", call=True
+            ),
+            "structure_only_capture": _lazy_binding("torchlens.backends.paddle._stream_capture"),
+            "has_streaming": _lazy_binding("torchlens.backends.paddle._stream_capture"),
         },
         "tf": {
             "can_intervene": _tf_interventions_implementation,
+            "fastlog": _lazy_binding(
+                "torchlens.backends.tf._record", "tf_record_producer", call=True
+            ),
         },
     }
 )

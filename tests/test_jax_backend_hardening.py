@@ -1220,9 +1220,9 @@ def test_jax_capability_flags_match_preview_contract() -> None:
 
     spec = tl.backends.spec("jax")
 
-    assert spec.capabilities.backward_capture is False
+    assert spec.capabilities.backward_capture is True
     assert spec.capabilities.has_validation_replay is True
-    assert spec.capabilities.fastlog is False
+    assert spec.capabilities.fastlog is True
     assert spec.capabilities.can_intervene is True
     assert spec.capabilities.payload_materialization is True
     assert spec.capabilities.input_container_structure == "paths_only"
@@ -1230,9 +1230,9 @@ def test_jax_capability_flags_match_preview_contract() -> None:
     assert spec.capabilities.module_identity_modes == ("function_root", "pytree_module")
     assert spec.serialization_policy.payload_policy == "array_payloads"
     assert spec.serialization_policy.body_format == "safetensors"
-    assert capabilities.supports_backward_capture is False
+    assert capabilities.supports_backward_capture is True
     assert capabilities.supports_validation_replay is True
-    assert capabilities.supports_fastlog is False
+    assert capabilities.supports_fastlog is True
     assert capabilities.supports_intervention is True
     assert capabilities.supports_payload_materialization is True
     assert capabilities.input_container_structure == "paths_only"

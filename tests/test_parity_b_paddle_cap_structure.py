@@ -98,16 +98,6 @@ def test_structure_only_refuses_validation_typed() -> None:
     assert info.value.fields["code"] == "structure_only_validation_unsupported"
 
 
-def test_structure_only_is_refused_while_the_gate_is_closed(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Without the spec gate the option is still refused, as before this lane."""
-
-    monkeypatch.undo()
-    with pytest.raises(Exception, match="structure_only"):
-        tl.trace(_Branchy(), _input(2), backend="paddle", capture=_SHELL)
-
-
 def test_plain_capture_has_no_structure_only_marker() -> None:
     """A plain capture keeps every payload and no structure-only marker."""
 

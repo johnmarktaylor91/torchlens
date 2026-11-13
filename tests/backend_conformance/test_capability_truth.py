@@ -103,20 +103,23 @@ EXPECTED_GATED_CAPABILITIES: dict[str, dict[str, bool]] = {
     },
     "mlx": {
         "backward_capture": False,
-        "fastlog": False,
+        # Lifted 2026-11 (pp-b-mlx-cap): tl.record lean events (tests/test_parity_b_mlx_cap_record.py).
+        "fastlog": True,
         # Lifted 2026-08: live intervene=/halt= dispatch for real
         # (tests/test_mlx_interventions.py), with static selectors or
         # value-dependent conditions.
         "can_intervene": True,
         "rng_replay": False,
         "has_streaming": False,
-        "structure_only_capture": False,
+        # Lifted 2026-11 (pp-b-mlx-cap): graph-only capture, value validation refused.
+        "structure_only_capture": True,
     },
     "jax": {
         # Lifted 2026-11 (parity wave B): native backward capture through
         # torchlens.backends._backward_native.jax (tests/test_parity_b_bwd_jax_records.py).
         "backward_capture": True,
-        "fastlog": False,
+        # Lifted 2026-11 (pp-b-jax-cap): tl.record lean events (tests/test_parity_b_jax_cap_record.py).
+        "fastlog": True,
         # Lifted 2026-11 (pp-b-jax-int): live intervene= edits equation outputs
         # in the jaxpr interpreter (tests/test_parity_b_jax_int_flip.py);
         # stop_after= refuses typed in the backend.
@@ -135,18 +138,22 @@ EXPECTED_GATED_CAPABILITIES: dict[str, dict[str, bool]] = {
     },
     "paddle": {
         "backward_capture": False,
-        "fastlog": False,
+        # Lifted 2026-11 (pp-b-paddle-cap): tl.record lean events (tests/test_parity_b_paddle_cap_record.py).
+        "fastlog": True,
         # Lifted 2026-08: live intervene=/halt= dispatch through the eager
         # capture wrapper, forward-only (tests/test_paddle_backend_interventions.py);
         # value-dependent predicates and recipes= keep typed refusals.
         "can_intervene": True,
         "rng_replay": False,
-        "has_streaming": False,
-        "structure_only_capture": False,
+        # Lifted 2026-11 (pp-b-paddle-cap): storage= streams payloads during capture.
+        "has_streaming": True,
+        # Lifted 2026-11 (pp-b-paddle-cap): graph-only capture, value validation refused.
+        "structure_only_capture": True,
     },
     "tf": {
         "backward_capture": False,
-        "fastlog": False,
+        # Lifted 2026-11 (pp-b-tf-cap): tl.record lean eager events (tests/test_parity_b_tf_cap_record.py).
+        "fastlog": True,
         # Lifted 2026-08: intervene= and halt= for eager entries via the
         # two-level writable wrap layer (tests/backends/test_tf_interventions.py),
         # with static selectors or value-dependent conditions.
@@ -279,7 +286,9 @@ def test_record_gate_reads_the_capability_table() -> None:
 
     model = nn.Linear(2, 2)
     inputs = torch.randn(1, 2)
-    for name in _PREVIEW_NAMES:
+    closed = [name for name in _PREVIEW_NAMES if not EXPECTED_GATED_CAPABILITIES[name]["fastlog"]]
+    assert closed
+    for name in closed:
         assert not tl.backends.spec(name).capabilities.fastlog
         with pytest.raises(BackendUnsupportedError, match="torch-only"):
             tl.record(model, inputs, backend=name)

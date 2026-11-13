@@ -62,10 +62,10 @@ def test_non_torch_backend_refuses_explicit_structure_only_typed() -> None:
     from torchlens._capture.prepare.dispatch import _enforce_capability_option_gates
     from torchlens.backends.registry import BackendUnsupportedError
 
-    mlx_spec = get_backend_spec("mlx")
-    assert mlx_spec.capabilities.structure_only_capture is False
+    tinygrad_spec = get_backend_spec("tinygrad")
+    assert tinygrad_spec.capabilities.structure_only_capture is False
     with pytest.raises(BackendUnsupportedError, match="structure_only"):
-        _enforce_capability_option_gates({"structure_only": True}, mlx_spec)
+        _enforce_capability_option_gates({"structure_only": True}, tinygrad_spec)
 
 
 def test_torch_declares_and_binds_the_structure_only_capability() -> None:
