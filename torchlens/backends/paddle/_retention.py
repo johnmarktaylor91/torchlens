@@ -21,6 +21,7 @@ back in RAM, so a wrong prediction costs a reload, not a value.
 
 from __future__ import annotations
 
+import re
 import shutil
 import tempfile
 import weakref
@@ -30,16 +31,12 @@ from pathlib import Path
 from typing import Any
 
 from ... import _state
-from ..._ir.selector_eval import first_selector_kind_outside
-from ..._postprocess._selective_save import (
-    _STATIC_INTERVENTION_SELECTOR_KINDS,
-    _set_op_field,
-    apply_static_label_save_policy,
-)
-from ..._selection.selectors import BaseSelector
 
 STATE_KEY = "_paddle_retention_state"
 """Trace ``__dict__`` key holding the capture's :class:`PaddleRetention`."""
+
+STREAM_KEY = "_paddle_stream_state"
+"""Trace ``__dict__`` key holding the capture's streaming state (``_stream_capture``)."""
 
 
 @dataclass(frozen=True)
@@ -107,7 +104,7 @@ class PaddleRetention:
     Attributes
     ----------
     predicate
-        The static ``save=`` selector.
+        The static-label ``save=`` selector.
     spool
         Spool directory, created on the first spill.
     spilled
@@ -116,7 +113,7 @@ class PaddleRetention:
         Spilled payloads by raw label.
     """
 
-    predicate: BaseSelector
+    predicate: Callable[[Any], Any]
     spool: Path | None = None
     spilled: int = 0
     handles: dict[str, SpilledPayload] = field(default_factory=dict)
@@ -124,15 +121,7 @@ class PaddleRetention:
     def keeps(self, ctx: Any) -> bool:
         """Whether the selector may select the op ``ctx`` describes (True keeps it in RAM)."""
 
-        variants = (
-            ctx,
-            replace(ctx, label=f"{ctx.layer_type}_{ctx.type_index}_{ctx.raw_index}"),
-            replace(ctx, label=f"{ctx.layer_type}_{ctx.type_index}"),
-        )
-        try:
-            return any(bool(self.predicate(variant)) for variant in variants)
-        except Exception:  # noqa: BLE001 - an undecidable op stays in RAM; final labels decide
-            return True
+        return _may_select(self.predicate, ctx)
 
     def spill(self, label_raw: str, tensor: Any) -> None:
         """Write ``tensor`` to the spool under ``label_raw``."""
@@ -148,23 +137,55 @@ class PaddleRetention:
         self.handles[label_raw] = SpilledPayload(path=path, place=tensor.place)
 
 
-def start_retention(trace: Any, predicate: object, *, enabled: bool) -> None:
-    """Arm capture-time retention on ``trace`` when ``predicate`` can be decided per op.
+_FINAL_LABEL = re.compile(r"^(?P<stem>.+?_\d+)(?:_\d+)?(?::(?:\d+|last|all))?$")
+"""A final label: ``{type}_{type_index}[_{layer_index}][:{pass}]``."""
+
+
+def _may_select(selector: Any, ctx: Any) -> bool:
+    """Whether ``selector`` may select the op the capture context ``ctx`` describes.
+
+    Unions and intersections are decided child by child. A leaf is evaluated on
+    the context with the label spellings capture can predict. Capture refuses
+    final-label literals (their layer index is assigned when the trace is
+    finished), so such a ``tl.label`` leaf is decided by its type and type
+    index; any other undecidable leaf keeps the op. Only RAM placement depends
+    on the answer: the final labels decide what the trace keeps.
+    """
+
+    operator = getattr(selector, "operator", None)
+    children = getattr(selector, "selectors", None)
+    if operator in ("and", "or") and children is not None:
+        answers = (_may_select(child, ctx) for child in children)
+        return any(answers) if operator == "or" else all(answers)
+    variants = (
+        ctx,
+        replace(ctx, label=f"{ctx.layer_type}_{ctx.type_index}_{ctx.raw_index}"),
+        replace(ctx, label=f"{ctx.layer_type}_{ctx.type_index}"),
+    )
+    try:
+        return any(bool(selector(variant)) for variant in variants)
+    except Exception:  # noqa: BLE001 - undecidable at capture; final labels decide
+        match = _FINAL_LABEL.match(str(getattr(selector, "selector_value", "")))
+        if getattr(selector, "selector_kind", None) != "label" or match is None:
+            return True
+        return match["stem"] == f"{ctx.layer_type}_{ctx.type_index}"
+
+
+def start_retention(trace: Any, predicate: Callable[[Any], Any]) -> None:
+    """Arm capture-time retention on ``trace`` for a static-label ``save=`` selector.
+
+    The caller arms it only when the final keep set is ``predicate(op)`` on
+    each finished op (a static-label selector) and no option needs every
+    payload in RAM.
 
     Parameters
     ----------
     trace
         The trace under construction.
     predicate
-        The capture's static ``save=`` predicate, or ``None``.
-    enabled
-        False when another option needs every payload in RAM (derived gradients).
+        The static-label ``save=`` selector.
     """
 
-    if not enabled or not isinstance(predicate, BaseSelector):
-        return
-    if first_selector_kind_outside(predicate, allowed=_STATIC_INTERVENTION_SELECTOR_KINDS):
-        return
     trace.__dict__[STATE_KEY] = PaddleRetention(predicate)
 
 
@@ -224,10 +245,20 @@ def retained_payload(
 
 
 def saved_ref(backend: Any, session: Any, site: Any, call: Any, output: Any, policy: Any) -> Any:
-    """Build the output's tensor reference with the payload :func:`retained_payload` keeps."""
+    """Build the output's tensor reference with the payload :func:`retained_payload` keeps.
+
+    When the capture streams (``storage=``), the kept payload is handed to the
+    stream here, the one point every emitted output passes once its edges are
+    recorded; the reference then names the bundle blob and drops the payload
+    unless ``retain_in_memory``.
+    """
 
     payload = retained_payload(backend, session, site, call, output, policy)
-    return backend.tensor_ref(session, output, payload, policy)
+    ref = backend.tensor_ref(session, output, payload, policy)
+    stream = session.__dict__.get(STREAM_KEY)
+    if stream is None or payload is None or not backend.is_tensor(payload):
+        return ref
+    return stream.submit(session, ref, payload, site.label_raw)
 
 
 def _spillable(backend: Any, output: Any) -> bool:
@@ -236,7 +267,7 @@ def _spillable(backend: Any, output: Any) -> bool:
     return bool(backend.is_tensor(output)) and "bfloat16" not in str(backend._dtype(output))
 
 
-def apply_save_with_retention(trace: Any, predicate: Any, *, backend_name: str) -> None:
+def apply_save(trace: Any, predicate: Any, apply_policy: Callable[..., None]) -> None:
     """Apply ``save=`` to the finished trace, using the payloads retention spilled.
 
     Ops the selector selects on their final labels get their payload back in
@@ -249,8 +280,8 @@ def apply_save_with_retention(trace: Any, predicate: Any, *, backend_name: str) 
         The finished trace.
     predicate
         The static ``save=`` predicate, or ``None``.
-    backend_name
-        Backend name for diagnostics.
+    apply_policy
+        ``apply_static_label_save_policy``: hides the unselected payloads.
     """
 
     state = trace.__dict__.pop(STATE_KEY, None)
@@ -258,8 +289,8 @@ def apply_save_with_retention(trace: Any, predicate: Any, *, backend_name: str) 
     for op in trace._layer_list if handles else ():
         handle = handles.get(str(op._label_raw))
         if handle is not None and bool(predicate(op)):
-            _set_op_field(op, "out", handle.load())
-    apply_static_label_save_policy(trace, predicate, backend_name=backend_name)
+            _set_out(op, handle.load())
+    apply_policy(trace, predicate, backend_name="paddle")
     if not handles or state is None or state.spool is None:
         return
     hidden = dict(getattr(trace, "_selective_save_hidden_payloads", None) or {})
@@ -269,6 +300,16 @@ def apply_save_with_retention(trace: Any, predicate: Any, *, backend_name: str) 
             hidden.setdefault(str(op._label_raw), handle)
             hidden.setdefault(str(op.label), handle)
     trace._selective_save_hidden_payloads = SpilledPayloads(hidden, state.spool)
+
+
+def _set_out(op: Any, payload: Any) -> None:
+    """Set ``op.out`` without marking trace state dirty, as the save filter does."""
+
+    setter = getattr(op, "_internal_set", None)
+    if callable(setter):
+        setter("out", payload)
+    else:
+        op.out = payload
 
 
 def discard_retention(trace: Any) -> None:

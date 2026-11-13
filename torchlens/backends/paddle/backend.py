@@ -22,6 +22,7 @@ from ..._data_classes.derived_grad import (
 from ..._data_classes.param import Param, ParamAccessor
 from ..._data_classes.trace import Trace
 from ..._deprecations import MISSING, MissingType
+from ..._io.streaming import BundleStreamWriter
 from ..._ir.capture_events import CaptureEvents
 from ..._ir.events import (
     ArgTemplateRef,
@@ -38,8 +39,11 @@ from ..._ir.semantics import BackendSemantics, CapturePolicy
 from ..._output_slot import returned, stopped
 from ..._postprocess._materialize import materialize_from_events
 from ..._postprocess._selective_save import (
+    apply_static_label_save_policy,
+    needs_post_save_predicate,
     pop_static_label_save_predicate,
 )
+from ..._postprocess.finalization import _finalize_streamed_bundle
 from ..._quantities import Duration
 from ..._trace_core.relation_views import freeze_trace_relation_views
 from ..._validation_status import ValidationReplaySource, ValidationStatus
@@ -78,7 +82,7 @@ from .._protocols.paddle import (
 )
 from .._root_frames import strip_root_frames
 from .._validation_shared import replay_payload
-from . import _retention
+from . import _retention, _stream_capture
 from ._capture_helpers import (
     _alias_to_primary,
     _append_intervention_events,
@@ -410,7 +414,7 @@ class PaddleBackend:
             if intervene is not None or halt is not None
             else None
         )
-        _reject_extra_kwargs(extra_kwargs)
+        capture_mode = _reject_extra_kwargs(extra_kwargs, capture, save_predicate, grad_options)
         if random_seed is not None:
             raise BackendUnsupportedError(
                 "the paddle backend does not support random_seed; use paddle.seed(...) "
@@ -486,7 +490,7 @@ class PaddleBackend:
         trace._paddle_alias_annotations = []
         trace._paddle_capture_gap_markers = []
         trace._paddle_intervention_runtime = intervention_runtime
-        _retention.start_retention(trace, save_predicate, enabled=grad_options is None)
+        _stream_capture.start_capture_mode(trace, capture_mode, BundleStreamWriter)
         if facet_recipes is not None:
             trace.facet_functions = _paddle_facet_snapshot(facet_recipes)
         trace._provenance_backend_version = str(getattr(self.paddle, "__version__", ""))
@@ -557,7 +561,7 @@ class PaddleBackend:
             _attach_paddle_param_logs(trace, module_tree if use_object_module else None)
             self._finish_trace(trace, module_tree if use_object_module else None)
             hooks.retain(trace)
-            _retention.apply_save_with_retention(trace, save_predicate, backend_name="paddle")
+            _retention.apply_save(trace, save_predicate, apply_static_label_save_policy)
             if intervention_runtime is not None:
                 intervention_runtime.arm_gradient_sites(trace)
             if grad_options is not None:
@@ -577,7 +581,7 @@ class PaddleBackend:
             freeze_trace_relation_views(trace)
         finally:
             hooks.close()
-            _retention.discard_retention(trace)
+            _stream_capture.end_capture_mode(trace)
             self._param_address_by_id = {}
             self._param_write_guard = ParameterWriteGuard()
             self._source_leaves = PaddleSourceLeaves()
@@ -592,7 +596,7 @@ class PaddleBackend:
         # Settlement is the LAST act, after ALL teardown (the path-20 stamp
         # contract): a teardown raise escapes productless -- the object
         # derives UNATTESTED, never carrying a COMPLETE/HALTED stamp.
-        stamp_backend_finalized(trace)
+        _stream_capture.settle(trace, stamp_backend_finalized, _finalize_streamed_bundle)
         return trace
 
     def validate_entry(self, *args: Any, **kwargs: Any) -> bool:
@@ -1390,14 +1394,8 @@ class PaddleBackend:
     def _capture_policy(self, session: object) -> CapturePolicy:
         """Return the Paddle capture policy for one event."""
 
-        return CapturePolicy(
-            # Paddle preview is full-save only: entry policy refuses
-            # save_raw_activations=False, so payload saving is unconditional
-            # here (a dynamic read would be dead code implying a capability
-            # the entry gate denies).
-            save_payload=True,
-            save_grad=False,
-        )
+        # Entry policy refuses save_raw_activations=False; only structure-only drops payloads.
+        return CapturePolicy(save_payload=_stream_capture.saves_payloads(session), save_grad=False)
 
     def _build_source_event(
         self,
@@ -2272,14 +2270,20 @@ def _replace_paddle_tensors_at_paths(
     return output
 
 
-def _reject_extra_kwargs(extra_kwargs: dict[str, Any]) -> None:
-    """Reject explicit unsupported public kwargs that reach Paddle capture."""
+def _reject_extra_kwargs(
+    extra_kwargs: dict[str, Any], capture: Any, save_predicate: object, grad_options: object
+) -> _stream_capture.PaddleCaptureMode:
+    """Take the admitted payload modes (retention: static save= selectors), reject the rest."""
 
+    static = save_predicate is not None and not needs_post_save_predicate(save_predicate)
+    retained = save_predicate if static and grad_options is None else None
+    mode = _stream_capture.pop_capture_mode(capture, extra_kwargs, retained, save_predicate)
     reject_extra_trace_kwargs(
         extra_kwargs,
         PADDLE_EXTRA_KWARG_POLICY,
         spec=get_backend_spec("paddle"),
     )
+    return mode
 
 
 class _PaddleIntermediateTapObserver:
