@@ -161,7 +161,13 @@ def check_projective_matches_framework(kit: Kit) -> None:
 
 
 def check_twin_matches_torch(kit: Kit) -> None:
-    """Both directions equal the PyTorch probe on a twin model with the same weights."""
+    """Both directions equal the PyTorch probe on a twin model with the same weights.
+
+    Values, magnitudes and support masks must be equal. The batch fields come from
+    the geometry engine's batch axis, which ``_gradient.py`` reads unchanged; where
+    the engine derives no batch axis on the backend trace, the probe reports no batch
+    support, and the check pins exactly that cause instead of the twin's value.
+    """
 
     import torchlens as tl
 
@@ -171,20 +177,46 @@ def check_twin_matches_torch(kit: Kit) -> None:
     try:
         target, source = _output(kit.trace), _input(kit.trace)
         twin_target, twin_source = _output(twin), _input(twin)
+        batch_axis = _engine_batch_axis(kit.trace, target)
         for unit in OUTPUT_UNITS:
             ours = gradient_for_unit(target, unit, source=source.label)
             theirs = gradient_for_unit(twin_target, unit, source=twin_source.label)
             _close(_np(ours.signed_grad), _np(theirs.signed_grad), f"receptive {unit} vs torch")
+            _close(_np(ours.grad), _np(theirs.grad), f"receptive magnitude {unit} vs torch")
             assert torch.equal(ours.support_mask, theirs.support_mask), unit
-            assert ours.batch_support == theirs.batch_support
+            _check_batch_fields(ours, theirs, batch_axis)
         ours_column = projective_gradient_for_unit(source, kit.center, target=target.label)
         theirs_column = projective_gradient_for_unit(
             twin_source, kit.center, target=twin_target.label
         )
         _close(_np(ours_column.signed_grad), _np(theirs_column.signed_grad), "projective vs torch")
         assert torch.equal(ours_column.support_mask, theirs_column.support_mask)
+        _check_batch_fields(ours_column, theirs_column, batch_axis)
     finally:
         twin.cleanup()
+
+
+def _engine_batch_axis(trace: Any, target: Any) -> int | None:
+    """The geometry engine's batch axis for the target's model input on ``trace``."""
+
+    from torchlens.receptive_field import _engine
+    from torchlens.receptive_field._gradient import _builtin_rules_when_registry_empty
+
+    with _builtin_rules_when_registry_empty():
+        solution = _engine.solve(trace)
+    (role,) = _input_ops_by_role(trace)
+    state = solution.states.get((target.label, role))
+    return None if state is None else state.batch_axis
+
+
+def _check_batch_fields(ours: Any, theirs: Any, batch_axis: int | None) -> None:
+    """Equal batch fields, or none at all because the engine found no batch axis."""
+
+    if batch_axis is not None:
+        assert ours.batch_support == theirs.batch_support
+        assert ours.cross_batch_influence == theirs.cross_batch_influence
+        return
+    assert ours.batch_support is None and ours.cross_batch_influence is False
 
 
 def check_selection_methods(kit: Kit) -> None:
