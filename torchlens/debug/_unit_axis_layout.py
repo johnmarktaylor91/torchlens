@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import re
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
 
 from .._utils._record_group_table import record_member
@@ -195,7 +196,7 @@ def backend_unit_axis(trace: Trace, op: Op, out: Any, memo: dict[str, int]) -> i
         return None
     if ndim == 2:
         return 1
-    return _inherited_axis(trace, op, (tuple(out.shape), ndim), memo, set(), _MAX_INHERIT_HOPS)
+    return _AxisSearch(trace, (tuple(out.shape), ndim), memo, set()).axis(op, _MAX_INHERIT_HOPS)
 
 
 def _same_shape_parents(trace: Trace, op: Op, shape: tuple[int, ...]) -> list[Op]:
@@ -209,41 +210,42 @@ def _same_shape_parents(trace: Trace, op: Op, shape: tuple[int, ...]) -> list[Op
     ]
 
 
-def _inherited_axis(
-    trace: Trace,
-    op: Op,
-    geometry: tuple[tuple[int, ...], int],
-    memo: dict[str, int],
-    unknown: set[str],
-    hops: int,
-) -> int | None:
-    """Return the axis evidenced by ``op`` or by any same-shaped ancestor within ``hops``.
+@dataclass
+class _AxisSearch:
+    """One search for the axis a same-shaped ancestor evidences.
 
     Every same-shaped parent is searched, not only the first: a framework that
     lowers an elementwise op (tinygrad's relu is ``cmplt`` + ``where`` over an
     expanded constant) gives the activation several same-shaped parents, and
     only one of them may lead back to the layout-fixing op. Ancestors that
     evidence different axes leave the axis unknown rather than picking one.
-    ``unknown`` caches labels already found without evidence in this call.
+    ``unknown`` caches labels already found without evidence in this search.
     """
 
-    label = _op_label(op)
-    if label in memo:
-        return memo[label]
-    if label in unknown or hops <= 0:
-        return None
-    shape, ndim = geometry
-    spatial, axis = _own_layout_axis(trace, op, ndim)
-    unknown.add(label)  # in progress: a parent cycle back to this op proves nothing
-    if not spatial:
-        found = {
-            parent_axis
-            for parent in _same_shape_parents(trace, op, shape)
-            if (parent_axis := _inherited_axis(trace, parent, geometry, memo, unknown, hops - 1))
-            is not None
-        }
-        axis = next(iter(found)) if len(found) == 1 else None
-    if axis is not None:
-        unknown.discard(label)
-        memo[label] = axis
-    return axis
+    trace: Trace
+    geometry: tuple[tuple[int, ...], int]
+    memo: dict[str, int]
+    unknown: set[str]
+
+    def axis(self, op: Op, hops: int) -> int | None:
+        """Return the axis evidenced by ``op`` or by a same-shaped ancestor within ``hops``."""
+
+        label = _op_label(op)
+        if label in self.memo:
+            return self.memo[label]
+        if label in self.unknown or hops <= 0:
+            return None
+        shape, ndim = self.geometry
+        spatial, axis = _own_layout_axis(self.trace, op, ndim)
+        self.unknown.add(label)  # in progress: a parent cycle back to this op proves nothing
+        if not spatial:
+            found = {
+                parent_axis
+                for parent in _same_shape_parents(self.trace, op, shape)
+                if (parent_axis := self.axis(parent, hops - 1)) is not None
+            }
+            axis = next(iter(found)) if len(found) == 1 else None
+        if axis is not None:
+            self.unknown.discard(label)
+            self.memo[label] = axis
+        return axis
