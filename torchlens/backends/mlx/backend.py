@@ -9,6 +9,7 @@ from collections import defaultdict
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import AbstractContextManager, contextmanager, nullcontext
 from dataclasses import dataclass, replace
+from functools import partial
 from typing import Any, cast
 
 import numpy as np
@@ -39,10 +40,12 @@ from ..._ir.events import (
 from ..._ir.intervention import FireResult, FunctionEventInput
 from ..._ir.predicate import _DEFERRED_VALUE, RecordContext
 from ..._ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
+from ..._ir.selector_eval import first_selector_kind_outside
 from ..._ir.semantics import BackendSemantics, CapturePolicy
 from ..._ir.workspaces import RawGraphWorkspace
 from ..._output_slot import returned, stopped
 from ..._postprocess._materialize import materialize_from_events
+from ..._postprocess._selective_save import apply_save_keep_set
 from ..._quantities import Duration
 from ..._trace_core.relation_views import freeze_trace_relation_views
 from ..._validation_status import ValidationStatus  # noqa: TC001
@@ -74,7 +77,7 @@ from .._invariants import run_metadata_invariants
 from .._options import MLX_PREVIEW_TRACE_OPTION_POLICY, reject_unsupported_trace_options
 from . import capabilities
 from ._capture_disclosures import _disclose_compiled_attributes, _disclose_unfired_selectors
-from ._capture_hooks import forward_hooks, retain_backward_state
+from ._capture_hooks import MLXHookSession, forward_hooks, retain_backward_state
 from ._grad_oracle import (
     _eval_mlx_tree,
     _has_mlx_array_leaf,
@@ -100,6 +103,7 @@ from ._replay_status import (
     _name_first_failure,
     kept_or_unavailable_status,
 )
+from ._retention import LIVE_DECIDABLE_KINDS, RetentionDeps, RetentionRun, start_retention
 from ._source_frames import adopt_code_context_records, mlx_code_context
 from ._tap_observers import (
     _is_float_mlx_array,
@@ -109,7 +113,7 @@ from ._tap_observers import (
     _replace_mlx_array_leaves,
 )
 from .external_arrays import external_array_ids
-from .interventions import _match_live_sites
+from .interventions import _match_live_sites, selector_matches_capture_context
 from .model_prep import (
     MLXModuleTree,
     cleanup_model_session,
@@ -384,6 +388,16 @@ def _stamp_param_logs(trace: Trace, module_tree: MLXModuleTree | None) -> None:
         trace._provenance_param_source = "none"
 
 
+#: The capture-stack callables MLX retention runs use (``_retention`` imports none).
+_RETENTION_DEPS = RetentionDeps(
+    undecidable=lambda selector: (
+        first_selector_kind_outside(selector, allowed=LIVE_DECIDABLE_KINDS) is not None
+    ),
+    live_match=selector_matches_capture_context,
+    apply_keep_set=partial(apply_save_keep_set, backend_name="MLX"),
+)
+
+
 class MLXBackend:
     """MLX adapter for the backend-neutral capture Protocol."""
 
@@ -395,6 +409,7 @@ class MLXBackend:
 
         self.mx, self.nn = self._import_mlx()
         self.tensor_store = MLXTensorLabelStore()
+        self._retention_run: RetentionRun | None = None
 
     def wrap(self, value: object, module_tree: MLXModuleTree | None = None) -> object:
         """Install MLX wrappers and return ``value`` unchanged."""
@@ -442,13 +457,15 @@ class MLXBackend:
         return prepare_model_once(model)
 
     def prepare_model_session(self, session: object, model: object) -> object:
-        """Apply per-session MLX model preparation."""
+        """Apply per-session MLX model preparation and start any retention run."""
 
+        self._retention_run = start_retention(self.mx, _RETENTION_DEPS)
         return prepare_model_session(session, model)
 
     def cleanup_model_session(self, session: object, prepared_model: object) -> None:
-        """Clean up per-session MLX model preparation."""
+        """Clean up per-session MLX model preparation and end the retention run."""
 
+        self._retention_run = None
         cleanup_model_session(session, prepared_model)
 
     def cleanup_stopped_forward_session(self, session: object, prepared_model: object) -> None:
@@ -732,8 +749,7 @@ class MLXBackend:
             if not self.is_tensor(output):
                 continue
             self.tensor_store.set_label(output, reserved.label_raw)
-            if policy.save_payload:
-                cast(Any, session)._mlx_saved_payloads.append(output)
+            out_policy = self._payload_policy(session, policy, reserved, func_event_input, output)
             parents, parent_arg_positions, edge_uses = self._parent_edges(
                 func_event_input.args,
                 dict(func_event_input.kwargs),
@@ -748,7 +764,7 @@ class MLXBackend:
                 parents=parents,
                 parent_arg_positions=parent_arg_positions,
                 edge_uses=edge_uses,
-                policy=policy,
+                policy=out_policy,
                 is_input=False,
                 fire_results=fire_results,
             )
@@ -774,7 +790,9 @@ class MLXBackend:
         payloads = list(getattr(session, "_mlx_saved_payloads", ()))
         seen = {id(value) for value in payloads}
         payloads.extend(value for value in extra_values if id(value) not in seen)
-        if payloads:
+        if self._retention_run is not None:
+            self._retention_run.realize(tuple(payloads))
+        elif payloads:
             cast(Any, self.mx).eval(*payloads)
 
     def capture_trace(
@@ -991,7 +1009,7 @@ class MLXBackend:
                     captured_output=output,
                     grad_options=grad_options,
                 )
-            retain_backward_state(trace, hooks)
+            self._settle_capture(trace, hooks)
             if hasattr(trace, "_mlx_module_stack"):
                 delattr(trace, "_mlx_module_stack")
             freeze_trace_relation_views(trace)
@@ -1668,12 +1686,47 @@ class MLXBackend:
                 )
 
     def _capture_policy(self, session: Any) -> CapturePolicy:
-        """Return the MLX capture policy for one event."""
+        """Return the MLX capture policy for one event (none under structure-only)."""
 
+        run = self._retention_run
+        structure_only = run is not None and run.request.structure_only
         return CapturePolicy(
-            save_payload=bool(session._options_save_raw_activations),
+            save_payload=bool(session._options_save_raw_activations) and not structure_only,
             save_grad=False,
         )
+
+    def _payload_policy(
+        self,
+        session: Any,
+        policy: CapturePolicy,
+        reserved: ReservedLabel,
+        func_event_input: FunctionEventInput,
+        output: object,
+    ) -> CapturePolicy:
+        """Record one op output's payload and return the policy its event uses.
+
+        A plain capture queues the payload for the single evaluation. Under a
+        retention run the live decision keeps the payload public or makes it a
+        replay witness, whose event then carries no payload.
+        """
+
+        if not policy.save_payload:
+            return policy
+        run = self._retention_run
+        if run is None:
+            cast(Any, session)._mlx_saved_payloads.append(output)
+            return policy
+        context = partial(self.build_record_context, session, reserved, func_event_input, output)
+        if run.note(reserved.label_raw, output, context):
+            return policy
+        return replace(policy, save_payload=False)
+
+    def _settle_capture(self, trace: Trace, hooks: MLXHookSession) -> None:
+        """Hand off backward state and apply any retention run's final keep set."""
+
+        retain_backward_state(trace, hooks)
+        if self._retention_run is not None:
+            self._retention_run.settle(trace)
 
     @staticmethod
     def _input_reservation(label: str, raw_index: int) -> ReservedLabel:
