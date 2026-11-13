@@ -110,6 +110,31 @@ def test_engine_refuses_a_gradient_that_reaches_an_undescribed_op() -> None:
     assert list(leaf_only) == ["a"]
 
 
+def test_engine_refuses_a_gradient_that_reaches_a_blocked_op_by_its_raw_label() -> None:
+    """A recipe-less op whose consumer names its raw label is refused, never taken for a leaf.
+
+    MLX, Paddle and tinygrad recipes name parents by ``_label_raw``; the blocked
+    node must carry that spelling or the gradient upstream of it is dropped.
+    """
+
+    blocked = SimpleNamespace(label="o", _label_raw="o_raw", op_identity="opaque")
+    ops = [fake.FakeOp("a", "input", (), ("a",)), fake.FakeOp("loss", "neg", ("o_raw",), ("loss",))]
+    trace = fake.build_trace(ops[:1], {"a": np.ones(2)})
+    trace.ops["loss"] = ops[1]
+    trace.payloads.update({"o_raw": np.ones(2), "loss": -np.ones(2)})
+    adapter = SimpleNamespace(**{name: getattr(fake, name) for name in dir(fake)})
+    adapter.recipe = lambda tr, op: None if op is blocked else fake.recipe(tr, op)
+    adapter.can_replay = lambda tr, op: (
+        "opaque region" if op is blocked else fake.can_replay(tr, op)
+    )
+    graph = graph_from_recipes(
+        trace, adapter, [ops[0], blocked, ops[1]], trace.payloads.__getitem__
+    )
+    assert graph.node_for("o_raw").blocked == "opaque region"
+    with pytest.raises(RunCapabilityUnavailableError, match="opaque region"):
+        reverse_gradients(trace, adapter, graph, {"loss": np.ones(2)})
+
+
 def test_engine_refuses_a_replayable_op_the_adapter_rejects() -> None:
     """``can_replay`` is asked for every reached op with parents."""
 

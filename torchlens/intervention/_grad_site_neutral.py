@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import weakref
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import Any
 
 from ..backends._reverse_engine import (
@@ -360,33 +360,8 @@ def edited_gradients_for_backend(
         adapter = get_adapter(backend)
     except ReplayRefusal as exc:
         raise _grad_site_refusal(str(exc), code=_CODE) from exc
-    graph = _one_node_per_op(
-        _name_blocked_as_consumed(graph_from_recipes(trace, adapter, ops, value))
-    )
+    graph = _one_node_per_op(graph_from_recipes(trace, adapter, ops, value))
     return edited_gradients(trace, adapter, graph, backward)
-
-
-def _name_blocked_as_consumed(graph: ReplayGraph) -> ReplayGraph:
-    """Name each blocked node's output with the label its consumers use.
-
-    ``graph_from_recipes`` names a recipe-less (blocked) op by ``op.label``,
-    while MLX, Paddle and tinygrad recipes name parents by ``op._label_raw``.
-    A gradient reaching such an op would then land on a label no node owns,
-    be taken for a leaf, and the upstream gradients would come out incomplete
-    without a refusal. Renaming the blocked output to the spelling a consumer
-    lists keeps the engine's refusal in force.
-    """
-
-    consumed = {parent for node in graph.nodes for parent in node.parents}
-    nodes = []
-    for node in graph.nodes:
-        if node.blocked is not None:
-            spellings = (getattr(node.op, "_label_raw", None), *node.outputs)
-            used = next((str(name) for name in spellings if name and str(name) in consumed), None)
-            if used is not None and (used,) != node.outputs:
-                node = replace(node, outputs=(used,))
-        nodes.append(node)
-    return ReplayGraph(nodes=tuple(nodes), value=graph.value)
 
 
 def _one_node_per_op(graph: ReplayGraph) -> ReplayGraph:

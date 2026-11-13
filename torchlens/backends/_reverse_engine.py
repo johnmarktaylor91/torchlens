@@ -20,7 +20,7 @@ silently stopped there.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from ..errors import RunCapabilityUnavailableError
@@ -99,7 +99,30 @@ def graph_from_recipes(
             nodes.append(EngineNode(op=op, parents=(), outputs=(str(label),), blocked=reason))
             continue
         nodes.append(EngineNode(op=op, parents=recipe.parent_labels, outputs=recipe.output_slots))
-    return ReplayGraph(nodes=tuple(nodes), value=value)
+    return ReplayGraph(nodes=_name_blocked_as_consumed(nodes), value=value)
+
+
+def _name_blocked_as_consumed(nodes: list[EngineNode]) -> tuple[EngineNode, ...]:
+    """Name each blocked node's output with the spelling its consumers use.
+
+    A blocked node is named by ``op.label``, while the MLX, Paddle and tinygrad
+    recipes name their parents by ``op._label_raw`` (JAX and TensorFlow use the
+    public label). A gradient reaching a blocked op under the other spelling
+    would land on a label no node owns, be taken for a leaf, and leave the
+    upstream gradients incomplete without a refusal. Picking the spelling a
+    consumer lists keeps the refusal in force.
+    """
+
+    consumed = {parent for node in nodes for parent in node.parents}
+    renamed = []
+    for node in nodes:
+        if node.blocked is not None:
+            spellings = (getattr(node.op, "_label_raw", None), *node.outputs)
+            used = next((str(name) for name in spellings if name and str(name) in consumed), None)
+            if used is not None and (used,) != node.outputs:
+                node = replace(node, outputs=(used,))
+        renamed.append(node)
+    return tuple(renamed)
 
 
 def _check_forward_order(graph: ReplayGraph) -> None:
