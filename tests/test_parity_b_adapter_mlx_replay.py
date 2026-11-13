@@ -22,6 +22,7 @@ import torchlens as tl  # noqa: E402
 from tests.conformance._rosters.mlx import CONFIG_BUILT  # noqa: E402
 from torchlens.backends._replay_adapters import (  # noqa: E402
     OpRecipe,
+    ReplayPlan,
     ReplayRefusal,
     ReplaySession,
     ReplayStep,
@@ -30,6 +31,7 @@ from torchlens.backends._replay_adapters import (  # noqa: E402
     decode_recipe,
     encode_recipe,
     get_adapter,
+    merge_grads,
     mlx as adapter,
     pullback_step,
 )
@@ -112,8 +114,8 @@ def _flat_outputs(value: Any) -> list[Any]:
     return [leaf for item in value for leaf in _flat_outputs(item)]
 
 
-def _plan(trace: Any) -> tuple[list[ReplayStep], dict[str, Any]]:
-    """Replay steps for every non-input capture and the input payloads."""
+def _plan(trace: Any) -> ReplayPlan:
+    """A replay plan: every non-input capture, seeded with the input payloads."""
 
     ops = ops_by_label(trace)
     steps: list[ReplayStep] = []
@@ -126,7 +128,7 @@ def _plan(trace: Any) -> tuple[list[ReplayStep], dict[str, Any]]:
         assert rec is not None, op.func_name
         if rec.output_slots[0] == op._label_raw:
             steps.append(ReplayStep.from_recipe(op, rec))
-    return steps, initial
+    return ReplayPlan(steps=tuple(steps), initial=initial)
 
 
 @pytest.mark.parametrize("family", FAMILIES)
@@ -134,8 +136,7 @@ def test_session_replays_the_row_from_its_inputs(family: str) -> None:
     """Chained ``forward`` from the input alone reproduces every saved payload."""
 
     trace, _model, _x = _trace(family)
-    steps, initial = _plan(trace)
-    values = ReplaySession(adapter, trace, steps, initial=initial).run()
+    values = ReplaySession(adapter, trace, _plan(trace)).run()
     ops = ops_by_label(trace)
     for op in trace._layer_list:
         expected = _saved_payload(trace, ops, op._label_raw)
@@ -143,17 +144,19 @@ def test_session_replays_the_row_from_its_inputs(family: str) -> None:
 
 
 def _reverse(trace: Any, seeds: dict[str, Any]) -> dict[str, Any]:
-    """Compose the adapter's per-op ``vjp`` over the trace with ``pullback_step``."""
+    """Compose the adapter's per-op ``vjp`` over the trace (``pullback_step``, ``merge_grads``)."""
 
-    steps, initial = _plan(trace)
-    values = ReplaySession(adapter, trace, steps, initial=initial).run()
+    plan = _plan(trace)
+    values = ReplaySession(adapter, trace, plan).run()
     grads = dict(seeds)
-    for step in reversed(steps):
+    for step in reversed(plan.steps):
         cotangents = [grads.get(slot) for slot in step.output_slots]
         if all(c is None for c in cotangents):
             continue
         parents = [values[occ.parent_label] for occ in step.inputs]
-        pullback_step(adapter, trace, step, parents, cotangents, grads)
+        grads = merge_grads(
+            adapter, grads, pullback_step(adapter, trace, step, parents, cotangents)
+        )
     return grads
 
 
@@ -207,11 +210,13 @@ def test_recipe_round_trip_passes_unchanged_validator(family: str, keep_inventor
     before = validate_mlx_captures_detailed(trace)
     assert before.failed_count == 0
     recipes = _recipes(trace)
-    trace._replay_param_payloads = adapter.live_param_payloads(trace)
+    params = adapter.live_param_payloads(trace)
     trace._mlx_op_captures = []
     if not keep_inventory:
+        # The loaded-trace shape: no inventory, parameters saved as NumPy.
         trace._mlx_replay_inventory = None
-    adapter.bind_recipes(trace, recipes)
+        params = {key: adapter.to_host(value) for key, value in params.items()}
+    adapter.bind_recipes(trace, recipes, param_payloads=params)
     after = validate_mlx_captures_detailed(trace)
     assert after.failed_count == 0
     assert after.replayed_count == before.replayed_count
@@ -223,9 +228,9 @@ def test_bound_captures_still_catch_a_corrupt_payload() -> None:
 
     trace, _model, _x = _trace("mod_mlp")
     recipes = _recipes(trace)
-    trace._replay_param_payloads = adapter.live_param_payloads(trace)
+    params = adapter.live_param_payloads(trace)
     trace._mlx_op_captures = []
-    adapter.bind_recipes(trace, recipes)
+    adapter.bind_recipes(trace, recipes, param_payloads=params)
     victim = next(op for op in trace._layer_list if not op.is_input and op.out is not None)
     with pytest.warns(UserWarning):
         victim.out = victim.out + 1.0
@@ -238,9 +243,8 @@ def test_missing_parameter_payload_is_refused() -> None:
     trace, _model, _x = _trace("mod_mlp")
     recipes = _recipes(trace)
     captures = list(trace._mlx_op_captures)
-    trace._replay_param_payloads = {}
     with pytest.raises(ReplayRefusal, match="no parameter payload"):
-        adapter.bind_recipes(trace, recipes)
+        adapter.bind_recipes(trace, recipes, param_payloads={})
     assert list(trace._mlx_op_captures) == captures
 
 

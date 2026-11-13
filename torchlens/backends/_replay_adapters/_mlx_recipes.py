@@ -8,8 +8,8 @@ layer modules rebuilt from their class, data attributes and parameter
 addresses) and the emit-time leaf-label fingerprint the validator's
 coverage check compares. :func:`bind_recipes` rebuilds the capture list
 from recipes, the trace's saved op payloads and parameter payloads keyed by
-address (``trace._replay_param_payloads``); the unchanged validator then
-replays it. MLX itself is imported inside functions.
+address (the ``param_payloads`` a loader saved from
+:func:`live_param_payloads`); the unchanged validator then replays it. MLX itself is imported inside functions.
 """
 
 from __future__ import annotations
@@ -36,9 +36,6 @@ from ._mlx_ops import (
     _walk_call,
     op_allowlist,
 )
-
-PARAM_PAYLOADS_ATTR = "_replay_param_payloads"
-"""Trace attribute holding ``{parameter address: array}`` for :func:`bind_recipes`."""
 
 _DTYPE_NAMES = frozenset(
     {
@@ -328,8 +325,8 @@ def live_param_payloads(trace: Any) -> dict[str, Any]:
     """``{parameter address: array}`` for every parameter the live captures hold.
 
     A live trace's templates keep parameter values; this collects them under
-    the addresses :func:`recipe` writes, as the payloads a loader supplies
-    through ``trace._replay_param_payloads``.
+    the addresses :func:`recipe` writes, as the payloads a loader saves and
+    passes back to :func:`bind_recipes` as ``param_payloads``.
     """
 
     payloads: dict[str, Any] = {}
@@ -503,6 +500,14 @@ def _capture_from_recipe(rec: OpRecipe, params: Mapping[str, Any]) -> Any:
     )
 
 
+def _as_mlx(value: Any) -> Any:
+    """An MLX array for a saved parameter payload (NumPy values are converted)."""
+
+    import mlx.core as mx
+
+    return value if isinstance(value, mx.array) else mx.array(value)
+
+
 def _fingerprint(capture: Any) -> tuple[Any, ...]:
     """The replay-inventory row the MLX backend writes for a capture."""
 
@@ -515,11 +520,16 @@ def _fingerprint(capture: Any) -> tuple[Any, ...]:
     )
 
 
-def bind_recipes(trace: Any, recipes: Mapping[str, OpRecipe]) -> None:
+def bind_recipes(
+    trace: Any,
+    recipes: Mapping[str, OpRecipe],
+    *,
+    param_payloads: Mapping[str, Any] | None = None,
+) -> None:
     """Rebuild ``trace._mlx_op_captures`` from recipes and loaded payloads.
 
-    Parameter values come from ``trace._replay_param_payloads`` (address to
-    array); op inputs replay from the trace's saved op payloads, as in live
+    Parameter values come from ``param_payloads`` (address to MLX or NumPy
+    array; NumPy values become MLX arrays of the same dtype); op inputs replay from the trace's saved op payloads, as in live
     validation. When the trace has no replay inventory (a loaded trace), one
     is written from the rebuilt captures. Every recipe is checked before the
     capture list is replaced, so a refused recipe leaves the trace unchanged.
@@ -527,7 +537,7 @@ def bind_recipes(trace: Any, recipes: Mapping[str, OpRecipe]) -> None:
     fail validation closed (the validator's own rule).
     """
 
-    params = dict(getattr(trace, PARAM_PAYLOADS_ATTR, None) or {})
+    params = {key: _as_mlx(value) for key, value in (param_payloads or {}).items()}
     order = {
         getattr(op, "_label_raw", None): index
         for index, op in enumerate(getattr(trace, "_layer_list", ()) or ())

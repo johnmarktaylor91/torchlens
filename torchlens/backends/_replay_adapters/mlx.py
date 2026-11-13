@@ -36,11 +36,10 @@ from ._mlx_ops import (
     _ops_by_label,
     op_allowlist,
 )
-from ._mlx_recipes import PARAM_PAYLOADS_ATTR, bind_recipes, live_param_payloads, recipe
+from ._mlx_recipes import bind_recipes, live_param_payloads, recipe
 
 __all__ = (
     "ALLOWLIST",
-    "PARAM_PAYLOADS_ATTR",
     "add",
     "bind_recipes",
     "can_replay",
