@@ -333,9 +333,9 @@ def _dataflow_candidates(
         if links[frame.index] is not None or frame.op_type != op_type:
             continue
         grad_ids = frame.out_grad_ids
-        if slot < len(grad_ids) and grad_ids[slot] is not None:
-            if result_id in _reaching(grad_ids[slot], accumulations):
-                found.append(frame.index)
+        grad_id = grad_ids[slot] if slot < len(grad_ids) else None
+        if grad_id is not None and result_id in _reaching(grad_id, accumulations):
+            found.append(frame.index)
     return found
 
 
