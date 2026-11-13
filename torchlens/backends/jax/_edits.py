@@ -31,12 +31,12 @@ from ..._ir.refs import ReservedLabel
 from ..._ir.selector_eval import selector_contains_kind
 from ..._selection.selectors import BaseSelector
 from ...intervention._types import Edit, InterventionDecision
-from ...intervention.hooks import split_site_branches
 from ...recording._exceptions import PredicateError
 from .._options import pop_stop_directive
 from ..registry import BackendUnsupportedError
 from ._edit_helpers import checked_replacement, resolve_helper_applier
 from ._edited_grads import EditedProgram
+from ._grad_site_edits import gradient_identity, gradient_predicates
 from ._module_frames import jax_event_module_frames
 from ._source_lines import EquationFrames
 from .jaxpr import JaxEquationCapture
@@ -53,7 +53,7 @@ def _intervention_api() -> SimpleNamespace:
     import keeps eager upward imports out of the backend.
     """
 
-    from ...intervention import _predicates, _types, _zero_fire, hooks
+    from ...intervention import _grad_site_neutral, _predicates, _spec, _types, _zero_fire, hooks
 
     return SimpleNamespace(
         as_intervention_decision=_predicates.as_intervention_decision,
@@ -62,6 +62,10 @@ def _intervention_api() -> SimpleNamespace:
         FireRecord=_types.FireRecord,
         TargetSpec=_types.TargetSpec,
         settle_capture_zero_fire=_zero_fire.settle_capture_zero_fire,
+        split_site_branches=hooks.split_site_branches,
+        target_operands=hooks._target_operands,
+        grad_site_targets=_grad_site_neutral.grad_site_targets,
+        when=_spec.when,
     )
 
 
@@ -116,12 +120,6 @@ def _validate_intervene(intervene: Any, grad_options: Any) -> None:
     selector = getattr(intervene, "selector", None)
     if not isinstance(selector, BaseSelector):
         return
-    if any(universe != "activation" for universe, _ in split_site_branches(selector)):
-        raise _jax_edit_refusal(
-            f"JAX backend supports forward interventions only; the site {selector!r} "
-            "addresses a gradient, which needs backward capture. Use the PyTorch backend.",
-            code="backward_capture_unsupported",
-        )
     if selector_contains_kind(selector, "module"):
         raise _jax_edit_refusal(
             "JAX backend trace(intervene=...) edits equation outputs; tl.module(...) "
@@ -147,10 +145,33 @@ class JaxEditRuntime:
         _validate_intervene(intervene, grad_options)
         self.intervene = intervene
         self.fires: list[_Fire] = []
+        selector = getattr(intervene, "selector", None)
+        self.gradient_sites: tuple[Any, ...] = ()
+        self.gradient_matches = 0
+        if isinstance(selector, BaseSelector):
+            decision = getattr(intervene, "decision", None)
+            self.gradient_sites = gradient_predicates(
+                selector, getattr(decision, "hook", None), grad_options, _intervention_api()
+            )
+            if self.gradient_sites:
+                if decision is None:
+                    raise _jax_edit_refusal(
+                        "JAX backend tl.grad(...) sites need a one-clause tl.when(site, edit).",
+                        code=_OPTION,
+                    )
+                self.gradient_apply = _resolve_applier(decision).apply
+
+    def matches_gradient_site(self, ctx: Any) -> bool:
+        """Return whether one equation's output is a ``tl.grad`` site of the clause."""
+
+        short = replace(ctx, label=f"{ctx.layer_type}_{ctx.type_index}")
+        return any(site(ctx) is not None or site(short) is not None for site in self.gradient_sites)
 
     def decide(self, ctx: Any) -> InterventionDecision | None:
         """Return the normalized decision for one site, retrying the short label alias."""
 
+        if self.gradient_sites:
+            return None
         decision = self._evaluate(ctx)
         selector = getattr(self.intervene, "selector", None)
         if decision is not None or not isinstance(selector, BaseSelector):
@@ -327,6 +348,9 @@ class JaxEquationSession:
         if self.program is not None:
             self.program.note_bound(eqn)
         ctx = self._context(reserved, outputs, stacks)
+        if self.runtime.gradient_sites:
+            self._arm_gradient_site(eqn, reserved.label_raw, ctx, outputs)
+            return outputs
         outputs, fire = self.runtime.fire(ctx, outputs)
         if fire is not None:
             self.fires_by_label[reserved.label_raw] = fire.result
@@ -335,6 +359,21 @@ class JaxEquationSession:
                 if self.program is not None:
                     self.program.add(eqn, reserved.label_raw, fire.applier.apply)
         return outputs
+
+    def _arm_gradient_site(self, eqn: Any, label: str, ctx: Any, outputs: tuple[Any, ...]) -> None:
+        """Wrap one matched equation output in the gradient-editing identity."""
+
+        runtime = self.runtime
+        if runtime is None or self.program is None or not runtime.matches_gradient_site(ctx):
+            return
+        if len(outputs) != 1:
+            raise _jax_edit_refusal(
+                f"JAX backend trace(intervene=tl.grad(...)) matched {label!r}, a "
+                f"{len(outputs)}-output equation; only single-output equations are editable.",
+                code=_OPTION,
+            )
+        runtime.gradient_matches += 1
+        self.program.add(eqn, label, gradient_identity(runtime.gradient_apply, label))
 
     def _context(self, reserved: ReservedLabel, outputs: tuple[Any, ...], stacks: Any) -> Any:
         """Build the predicate context with module frames and concrete value facts."""
@@ -356,7 +395,7 @@ class JaxEquationSession:
 
         if self.runtime is None:
             return result, output
-        if not self.runtime.fires:
+        if not self.runtime.fires and not self.runtime.gradient_matches:
             _warn_zero_matches(self.runtime.intervene)
         for fire in self.runtime.fires:
             _record_fired_spec(self.trace, fire.result.site_label, fire.decision)

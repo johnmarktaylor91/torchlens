@@ -32,12 +32,12 @@ _CODE = "intervention_with_derived_grads_unsupported"
 _INLINE_CALL_PARAMS = {"pjit": "jaxpr", "jit": "jaxpr", "closed_call": "call_jaxpr"}
 
 
-def edited_grads_refusal(message: str) -> BackendUnsupportedError:
+def edited_grads_refusal(message: str, *, code: str) -> BackendUnsupportedError:
     """Return the typed refusal for an edit derived gradients cannot follow."""
 
     return BackendUnsupportedError(
         f"JAX derived gradients over an edited capture: {message}",
-        code=_CODE,
+        code=code,
         option="grad_options",
     )
 
@@ -69,7 +69,8 @@ class EditedProgram:
         if key in self.appliers:
             raise edited_grads_refusal(
                 f"site {site!r} was edited on an equation that also fired as "
-                f"{self.sites[key]!r}; the equation has no single position in the program."
+                f"{self.sites[key]!r}; the equation has no single position in the program.",
+                code=_CODE,
             )
         self.appliers[key], self.equations[key], self.sites[key] = apply, eqn, site
 
@@ -81,7 +82,8 @@ class EditedProgram:
                 raise edited_grads_refusal(
                     f"site {site!r} sits on an equation bound {self.seen[key]} times (a loop "
                     "body, an unrolled branch or a repeated helper call), so the edit has no "
-                    "single position to differentiate. Edit an equation outside control flow."
+                    "single position to differentiate. Edit an equation outside control flow.",
+                    code=_CODE,
                 )
 
 
@@ -219,7 +221,8 @@ def edited_closed_jaxpr(closed_jaxpr: Any, program: EditedProgram) -> Any:
                 raise edited_grads_refusal(
                     f"site {site!r} sits inside a control-flow region the gradient program "
                     "binds whole, so the edit cannot be re-applied there. Edit an equation "
-                    "outside control flow."
+                    "outside control flow.",
+                    code=_CODE,
                 )
         return outs
 
