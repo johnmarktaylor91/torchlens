@@ -21,6 +21,7 @@ from types import MappingProxyType
 from typing import Any
 
 from ..._utils._record_group_table import record_member
+from ..jax._edit_helpers import apply_helper as apply_helper
 from ..jax._trace_graph_helpers import (
     _data_parent_arg_positions,
     _data_parent_labels,
