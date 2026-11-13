@@ -95,6 +95,7 @@ from .._options import (
 from .._root_frames import refuse_rootless_stack, strip_op_root_frames
 from .._validation_shared import float_replay_tolerances
 from . import _module_return_probe as return_probe
+from ._capture_scopes import forward_scopes, retain_backward_state
 from ._closure_consts import _readable_closure_consts
 from ._converted_grads import DerivedGradCapture, attach_jax_derived_grads
 from ._edits import append_session_event, open_equation_session, replay_with_edits
@@ -578,16 +579,10 @@ class JAXBackend:
         intervene = kwargs.pop("intervene", None)
         self._reject_extra_kwargs(kwargs)
         _reject_transformed_callable(model)
-        # N5 fix: ``trace()`` no longer passes these as flat kwargs at all --
-        # the grouped ``capture=CaptureOptions(...)`` object is the only
-        # surviving spelling, so an explicit ``capture=`` value must reach
-        # these fields instead of being silently dropped (or, before this
-        # backend accepted ``capture`` as a named parameter, crashing the
-        # whole call with "does not support: capture"). MISSING-typed flat
-        # kwargs merge directly; the handful that default to a concrete
-        # ``None`` (merged below via ``_resolve_optional_capture_field``)
-        # cannot use ``merge_capture_options`` because ``None`` is not
-        # distinguishable from ``MISSING`` for them.
+        # N5: ``trace()`` passes the grouped ``capture=CaptureOptions(...)`` only,
+        # so an explicit ``capture=`` value must reach these fields, never be
+        # dropped. MISSING-typed flat kwargs merge directly; fields defaulting to
+        # a concrete ``None`` merge below via ``_resolve_optional_capture_field``.
         capture_options = merge_capture_options(
             capture=capture,
             keep_orphans=keep_orphans,
@@ -723,13 +718,14 @@ class JAXBackend:
         flat_args, _args_treedef = flatten_dynamic_args(args, static_argnums)
         session_capture = (args, closure_consts, grad_options, save_code_context)
         session = open_equation_session(self, trace, intervene, session_capture)
-        result = interpret_closed_jaxpr_with_inlining(
-            return_probe.jaxpr_to_interpret(tree, closed_jaxpr),
-            flat_args,
-            jax_control_flow=cast(str, jax_control_flow),
-            jax_max_control_flow_unroll=cast(int, jax_max_control_flow_unroll),
-            equation_hook=session.hook,
-        )
+        with forward_scopes(session, backward_ready=cast(bool, backward_ready)):
+            result = interpret_closed_jaxpr_with_inlining(
+                return_probe.jaxpr_to_interpret(tree, closed_jaxpr),
+                flat_args,
+                jax_control_flow=cast(str, jax_control_flow),
+                jax_max_control_flow_unroll=cast(int, jax_max_control_flow_unroll),
+                equation_hook=session.hook,
+            )
         result, output = session.finish(return_probe.split_outputs(result, tree), output)
         output_leaf_paths = self._output_leaf_paths(output)
         output_container_spec = self._builtin_output_container_spec(output)
@@ -743,7 +739,8 @@ class JAXBackend:
         trace.jax_outvar_key_to_capture_index = dict(result.outvar_key_to_capture_index)
         self._mark_output_events(trace, result.outputs, output_leaf_paths, output_container_spec)
         return_probe.note_return_labels(trace, tree)
-        materialize_from_events(trace, trace.capture_events)
+        events = trace.capture_events
+        materialize_from_events(trace, events)
         delattr(trace, "capture_events")
         if tree is not None:
             self._attach_pytree_params(trace, tree)
@@ -752,6 +749,7 @@ class JAXBackend:
             self._attach_params(trace, args[0] if args else None)
         self._finish_trace(trace, tree, result.equations)
         _stamp_jaxpr_results(trace, closed_jaxpr, result, static_argnums)
+        retain_backward_state(trace, session, events, backward_ready=cast(bool, backward_ready))
         apply_static_label_save_policy(trace, save_predicate, backend_name="JAX")
         if grad_options is not None:
             captured = (model, call_fn, args, static_argnums, closed_jaxpr, tree, output)
