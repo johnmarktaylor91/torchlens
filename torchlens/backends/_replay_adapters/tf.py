@@ -36,7 +36,7 @@ from ..tf.validation import (
     _payloads_close,
     _tensor_to_numpy,
 )
-from ._contract import InputOccurrence, OpRecipe, ReplayRecipeError, validate_recipe
+from ._contract import InputOccurrence, OpRecipe, ReplayRefusal, validate_recipe
 
 BACKEND = "tf"
 INERT_IDENTITY = "tf.inert"
@@ -428,7 +428,7 @@ def _decode_attr(tf: Any, node: Any) -> Any:
         return tf.dtypes.as_dtype(int(node["enum"]))
     if kind == "opaque":
         return _OpaqueAttr(str(node.get("type")))
-    raise ReplayRecipeError("type", f"unknown TensorFlow attr encoding {node!r}")
+    raise ReplayRefusal("type", f"unknown TensorFlow attr encoding {node!r}")
 
 
 def _encode_literal(item: Any) -> dict[str, Any]:
@@ -454,7 +454,7 @@ def _decode_literal(tf: Any, node: Mapping[str, Any]) -> Any:
         return None
     dtype = np.dtype(str(array["dtype"]))
     if dtype.kind not in "biufc":
-        raise ReplayRecipeError("type", f"literal dtype {dtype.str!r} is not numeric")
+        raise ReplayRefusal("type", f"literal dtype {dtype.str!r} is not numeric")
     host = np.array(list(array["data"]), dtype=dtype).reshape(tuple(int(d) for d in array["shape"]))
     return tf.convert_to_tensor(host)
 
@@ -512,7 +512,7 @@ def bind_recipes(trace: Any, recipes: Mapping[str, OpRecipe]) -> None:
     so the unchanged TensorFlow validator replays the trace. Refuses a recipe for
     another backend, an identity outside :data:`ALLOWLIST`, a label the trace does
     not hold, or an op type that disagrees with the recorded op, with
-    :class:`ReplayRecipeError`, before anything is rebuilt.
+    :class:`ReplayRefusal`, before anything is rebuilt.
     """
 
     import tensorflow as tf  # deferred: optional dependency
@@ -564,22 +564,22 @@ def _checked_record(ops: Mapping[str, Any], label: str, item: OpRecipe) -> tuple
     validate_recipe(item)
     attrs = item.attrs
     if not all(key in attrs for key in _REQUIRED_ATTRS) or not isinstance(attrs["tf_attrs"], dict):
-        raise ReplayRecipeError("shape", "TensorFlow recipe attrs are incomplete", op_label=label)
+        raise ReplayRefusal("shape", "TensorFlow recipe attrs are incomplete", op_label=label)
     if item.backend != BACKEND:
-        raise ReplayRecipeError("backend", f"recipe for {item.backend!r}", op_label=label)
+        raise ReplayRefusal("backend", f"recipe for {item.backend!r}", op_label=label)
     if item.op_identity not in ALLOWLIST:
-        raise ReplayRecipeError("unknown_op", repr(item.op_identity), op_label=label)
+        raise ReplayRefusal("unknown_op", repr(item.op_identity), op_label=label)
     record = ops.get(label)
     if record is None or not isinstance(getattr(record, "_label_raw", None), str):
-        raise ReplayRecipeError("slots", "the trace holds no op with this label", op_label=label)
+        raise ReplayRefusal("slots", "the trace holds no op with this label", op_label=label)
     op_type = item.attrs.get("tf_op_type")
     inert = item.op_identity == INERT_IDENTITY
     if not isinstance(op_type, str) or (op_type in KERNEL_OPS) == inert:
-        raise ReplayRecipeError("unknown_op", f"op type {op_type!r}", op_label=label)
+        raise ReplayRefusal("unknown_op", f"op type {op_type!r}", op_label=label)
     if not inert and op_type != item.op_identity:
-        raise ReplayRecipeError("unknown_op", "identity and op type differ", op_label=label)
+        raise ReplayRefusal("unknown_op", "identity and op type differ", op_label=label)
     if op_type != str(getattr(record, "func_name", "")):
-        raise ReplayRecipeError("slots", f"recorded op is not a {op_type}", op_label=label)
+        raise ReplayRefusal("slots", f"recorded op is not a {op_type}", op_label=label)
     return record, op_type
 
 
@@ -594,7 +594,7 @@ def _rebuilt_inputs(tf: Any, ops: Mapping[str, Any], item: OpRecipe) -> tuple[An
         parent = ops.get(occurrence.parent_label)
         parent_raw = getattr(parent, "_label_raw", None) if parent is not None else None
         if not isinstance(parent_raw, str) or index not in roles:
-            raise ReplayRecipeError("slots", f"parent {occurrence.parent_label!r}", op_label=label)
+            raise ReplayRefusal("slots", f"parent {occurrence.parent_label!r}", op_label=label)
         kind, role = roles[index]
         is_source = role == "source"
         records.append(
@@ -608,7 +608,7 @@ def _rebuilt_inputs(tf: Any, ops: Mapping[str, Any], item: OpRecipe) -> tuple[An
         records.append((index, TFInputCapture(index, None, kind, None, tensor, None)))
     indexes = [index for index, _ in records]
     if len(set(indexes)) != len(indexes):
-        raise ReplayRecipeError("slots", "two inputs share one index", op_label=label)
+        raise ReplayRefusal("slots", "two inputs share one index", op_label=label)
     return tuple(record for _, record in sorted(records, key=lambda pair: pair[0]))
 
 

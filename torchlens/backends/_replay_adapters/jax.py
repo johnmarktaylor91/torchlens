@@ -26,7 +26,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from ._contract import InputOccurrence, OpRecipe, ReplayRecipeError
+from ._contract import InputOccurrence, OpRecipe, ReplayRefusal
 
 BACKEND = "jax"
 
@@ -621,7 +621,7 @@ def _decode(node: Any) -> Any:
     if isinstance(node, Mapping) and set(node) == {_MAP_TAG}:
         return {str(k): _decode(v) for k, v in node[_MAP_TAG].items()}
     if not (isinstance(node, Mapping) and set(node) == {_TAG}):
-        raise ReplayRecipeError("type", f"bad JAX recipe value {type(node).__name__}")
+        raise ReplayRefusal("type", f"bad JAX recipe value {type(node).__name__}")
     kind, *body = node[_TAG]
     if kind == "dtype":
         return jnp.dtype(body[0])
@@ -640,7 +640,7 @@ def _decode_typed(kind: str, body: Sequence[Any]) -> Any:
         return getattr(jax.lax, body[0])(**{str(k): _decode(v) for k, v in body[1].items()})
     if kind == "closed_jaxpr":
         return _decode_closed_jaxpr(body[0])
-    raise ReplayRecipeError("type", f"unknown JAX recipe value kind {kind!r}")
+    raise ReplayRefusal("type", f"unknown JAX recipe value kind {kind!r}")
 
 
 def _decode_closed_jaxpr(data: Mapping[str, Any]) -> Any:
@@ -663,7 +663,7 @@ def _decode_closed_jaxpr(data: Mapping[str, Any]) -> Any:
             for value in results:
                 env[len(env)] = value
             if len(results) != len(outs):
-                raise ReplayRecipeError("slots", f"nested {name} output count changed")
+                raise ReplayRefusal("slots", f"nested {name} output count changed")
         return tuple(read(r) for r in data["outvars"])
 
     specs = [
@@ -680,7 +680,7 @@ def _resolve_primitive(name: str) -> Any:
     """Allowlisted primitive name to the framework's primitive object."""
 
     if f"jax.primitive.{name}" not in ALLOWLIST:
-        raise ReplayRecipeError("unknown_op", f"JAX primitive {name!r} is not allowlisted")
+        raise ReplayRefusal("unknown_op", f"JAX primitive {name!r} is not allowlisted")
     if not _PRIMITIVES:
         import jax
         import jax.extend.core
@@ -694,7 +694,7 @@ def _resolve_primitive(name: str) -> Any:
     try:
         return _PRIMITIVES[name]
     except KeyError:
-        raise ReplayRecipeError(
+        raise ReplayRefusal(
             "unknown_op", f"JAX primitive {name!r} is not exposed by this JAX version"
         ) from None
 
@@ -705,7 +705,7 @@ def _resolve_primitive(name: str) -> Any:
 def bind_recipes(trace: Any, recipes: Mapping[str, OpRecipe]) -> None:
     """Rebuild ``trace.jax_equation_captures`` from recipes plus loaded payloads.
 
-    Refuses (``ReplayRecipeError``) a missing or foreign recipe, an identity
+    Refuses (``ReplayRefusal``) a missing or foreign recipe, an identity
     outside :data:`ALLOWLIST`, and a trace whose region ops have no region
     captures (regions are not rebuilt, and an empty region list would let the
     region check pass vacuously).
@@ -714,7 +714,7 @@ def bind_recipes(trace: Any, recipes: Mapping[str, OpRecipe]) -> None:
     from ..jax.backend import _jax_equation_ops, _jax_ops_by_label, _jax_region_ops
 
     if _jax_region_ops(trace) and not getattr(trace, "jax_region_captures", ()):
-        raise ReplayRecipeError("unbindable", "JAX region ops cannot be rebuilt from recipes")
+        raise ReplayRefusal("unbindable", "JAX region ops cannot be rebuilt from recipes")
     ops_by_label = _jax_ops_by_label(trace)
     hidden = {
         label: value if isinstance(value, tuple) else (value,)
@@ -734,11 +734,11 @@ def _recipe_for(recipes: Mapping[str, OpRecipe], op: Any) -> OpRecipe:
     label = _parent_label(op)
     found = recipes.get(label)
     if found is None:
-        raise ReplayRecipeError("slots", "no recipe for this JAX equation op", op_label=label)
+        raise ReplayRefusal("slots", "no recipe for this JAX equation op", op_label=label)
     if found.backend != BACKEND or found.op_identity not in ALLOWLIST:
-        raise ReplayRecipeError("unknown_op", f"{found.op_identity!r} not allowed", op_label=label)
+        raise ReplayRefusal("unknown_op", f"{found.op_identity!r} not allowed", op_label=label)
     if found.output_slots != (label,) or found.attrs.get("kind") != _kind_annotation(op):
-        raise ReplayRecipeError("slots", "recipe does not describe this op", op_label=label)
+        raise ReplayRefusal("slots", "recipe does not describe this op", op_label=label)
     return found
 
 
@@ -756,14 +756,14 @@ def _capture_from_recipe(
     for occurrence, element in zip(rec.inputs, attrs["element_index"], strict=True):
         parent = ops_by_label.get(occurrence.parent_label)
         if parent is None:
-            raise ReplayRecipeError(
+            raise ReplayRefusal(
                 "slots", f"unknown parent {occurrence.parent_label}", op_label=label
             )
         payload = _saved_single_output(parent, hidden)
         position = _position(occurrence.arg_path, len(inputs), label)
         inputs[position] = payload[element] if element >= 0 else payload
     if any(value is _UNSET for value in inputs):
-        raise ReplayRecipeError("slots", "recipe leaves a primitive input unset", op_label=label)
+        raise ReplayRefusal("slots", "recipe leaves a primitive input unset", op_label=label)
     output = _saved_single_output(op, hidden)
     outputs = (output,) if int(attrs["num_outputs"]) == 1 else tuple(output)
     kind = str(attrs["kind"])
@@ -787,5 +787,5 @@ _UNSET: Any = object()
 
 def _position(path: Sequence[Any], count: int, label: str) -> int:
     if len(path) != 1 or type(path[0]) is not int or not 0 <= path[0] < count:
-        raise ReplayRecipeError("shape", f"bad JAX argument path {tuple(path)!r}", op_label=label)
+        raise ReplayRefusal("shape", f"bad JAX argument path {tuple(path)!r}", op_label=label)
     return int(path[0])

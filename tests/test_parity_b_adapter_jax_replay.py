@@ -22,7 +22,7 @@ from tests.test_parity_b_adapter_jax_support import (  # noqa: E402
     saved_parent_values,
 )
 from torchlens.backends._replay_adapters import (  # noqa: E402
-    ReplayRecipeError,
+    ReplayRefusal,
     get_adapter,
 )
 
@@ -118,15 +118,15 @@ def test_bind_refuses_missing_foreign_and_corrupt_recipes(adapter) -> None:  # t
     trace = capture(lambda v: jnp.exp(v) * 2.0, _x(3))
     recipes = {op.label: adapter.recipe(trace, op) for op in equation_ops(trace)}
     first = next(iter(recipes))
-    with pytest.raises(ReplayRecipeError):
+    with pytest.raises(ReplayRefusal):
         adapter.bind_recipes(trace, {k: v for k, v in recipes.items() if k != first})
-    with pytest.raises(ReplayRecipeError):
+    with pytest.raises(ReplayRefusal):
         adapter.bind_recipes(
             trace, {**recipes, first: dataclasses.replace(recipes[first], backend="tf")}
         )
     tree = json.loads(json.dumps(encode_recipe(recipes[first])))
     tree["op_identity"] = "jax.primitive.not_a_primitive"
-    with pytest.raises(ReplayRecipeError):
+    with pytest.raises(ReplayRefusal):
         decode_recipe(tree, backend="jax", allowlist=adapter.ALLOWLIST)
 
 
@@ -179,5 +179,5 @@ def test_opaque_region_is_refused_and_unbindable(adapter) -> None:  # type: igno
         pytest.skip("callback captured without an opaque op")
     recipes = {op.label: adapter.recipe(trace, op) for op in equation_ops(trace)}
     trace.jax_region_captures = ()  # a loaded trace: region captures are not rebuilt
-    with pytest.raises(ReplayRecipeError):
+    with pytest.raises(ReplayRefusal):
         adapter.bind_recipes(trace, {k: v for k, v in recipes.items() if v is not None})

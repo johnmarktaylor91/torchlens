@@ -22,7 +22,7 @@ tf = pytest.importorskip("tensorflow")
 
 import torchlens as tl  # noqa: E402
 from torchlens.backends._replay_adapters import (  # noqa: E402
-    ReplayRecipeError,
+    ReplayRefusal,
     decode_recipe,
     encode_recipe,
     get_adapter,
@@ -173,7 +173,7 @@ def test_unknown_and_inconsistent_recipes_are_refused_before_binding() -> None:
     recipes = _recipes_through_json(trace)
     label, sample = next((k, r) for k, r in recipes.items() if r.op_identity == "MatMul")
     wire = encode_recipe(sample)
-    with pytest.raises(ReplayRecipeError) as unknown:
+    with pytest.raises(ReplayRefusal) as unknown:
         decode_recipe({**wire, "op_identity": "tf.Exec"}, backend="tf", allowlist=ADAPTER.ALLOWLIST)
     assert unknown.value.reason == "unknown_op"
     original = tuple(trace._tf_op_captures)
@@ -184,10 +184,10 @@ def test_unknown_and_inconsistent_recipes_are_refused_before_binding() -> None:
         replace(sample, attrs={k: v for k, v in sample.attrs.items() if k != "input_sources"}),
     )
     for bad in bad_cases:
-        with pytest.raises(ReplayRecipeError):
+        with pytest.raises(ReplayRefusal):
             ADAPTER.bind_recipes(trace, {**recipes, label: bad})
         assert tuple(trace._tf_op_captures) == original
-    with pytest.raises(ReplayRecipeError):
+    with pytest.raises(ReplayRefusal):
         ADAPTER.bind_recipes(trace, {"no_such_op": sample})
 
 
