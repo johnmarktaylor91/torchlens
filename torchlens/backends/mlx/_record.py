@@ -218,9 +218,9 @@ class _RecordingMLXBackend(MLXBackend):
             self.tensor_store.set_label(array, label)
             events.raw_layer_counter += 1
             site = self._input_reservation(label, events.raw_layer_counter)
-            self._emit(site, "input", array, (), (), kind="input")
+            self._emit(site, "input", array, (), ())
 
-    def emit_mlx_operation(
+    def emit_mlx_operation(  # noqa: PLR0913 - overrides MLXBackend.emit_mlx_operation, same signature
         self,
         trace: Trace,
         op_name: str,
@@ -270,14 +270,16 @@ class _RecordingMLXBackend(MLXBackend):
         array: Any,
         parents: tuple[str, ...],
         frames: tuple[ModuleStackFrame, ...],
-        *,
-        kind: str = "op",
     ) -> None:
-        """Emit one event, hold its array when requested, unwind when told to stop."""
+        """Emit one event, hold its array when requested, unwind when told to stop.
+
+        ``func_name`` ``"input"`` marks an input leaf; every other name is an op event.
+        """
 
         # Deferred: the record interface is optional at import time and imports torch.
         from ...recording._backend_events import BackendOpEvent
 
+        kind = "input" if func_name == "input" else "op"
         event = BackendOpEvent(
             raw_label=site.label_raw,
             layer_type=site.layer_type,
@@ -317,7 +319,7 @@ class _RecordingMLXBackend(MLXBackend):
         values = [array for _request, array in held]
         with _state.pause_logging():
             if values or extra_values:
-                self.mx.eval(*values, *extra_values)
+                cast(Any, self.mx).eval(*values, *extra_values)
             del values
             while held:
                 request, array = held.popleft()

@@ -22,7 +22,6 @@ if sys.platform != "darwin" and os.environ.get("TORCHLENS_RUN_UNSTABLE_MLX_TESTS
     )
 
 mlx = pytest.importorskip("mlx")
-pytest.importorskip("torchlens.recording._backend_events")
 
 import mlx.core as mx  # noqa: E402
 import mlx.nn as nn  # noqa: E402

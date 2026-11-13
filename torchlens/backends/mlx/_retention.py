@@ -34,7 +34,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 #: Default byte budget for one chunked evaluation of witnesses.
 DEFAULT_CHUNK_BYTES = 64 * 2**20
@@ -318,7 +318,8 @@ class RetentionRun:
         _restore_live_misses(trace._layer_list, keep, store)
         self._apply_keep_set(trace, keep)
         public: Mapping[str, Any] = trace._selective_save_hidden_payloads
-        trace._selective_save_hidden_payloads = ChainMap(dict(public), store)
+        # ChainMap writes only to maps[0]; the read-only spill store is a lookup tail.
+        trace._selective_save_hidden_payloads = ChainMap(dict(public), cast(Any, store))
 
 
 def start_retention(mx: Any, deps: RetentionDeps) -> RetentionRun | None:
