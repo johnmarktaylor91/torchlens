@@ -6,11 +6,11 @@ captured primitive with its captured params). Nothing here changes a check:
 :func:`close` is the validator's own comparison, and :func:`bind_recipes`
 only rebuilds the runtime capture list the unchanged validator reads.
 
-Ops are matched to captures exactly as the validator pairs them (equation
-captures zipped with equation ops in execution order). Parent occurrences are
-the op's data parents in argument-position order, so a parent read twice is
-two occurrences. A multi-result JAX equation is one op whose payload is the
-tuple of its outputs, so it has one output slot whose value is that tuple.
+Ops are matched to captures as the validator pairs them (in execution
+order). Parent occurrences follow argument position, so a parent read twice is
+two occurrences. A multi-result equation is one op with one output slot whose
+value is the tuple of its outputs. Sources (inputs, parameters, constants) are
+graph-only entries: their values are loaded or given, never replayed.
 
 JAX randomness is functional: a PRNG primitive's key is an explicit graph
 input, so key-based random ops replay exactly and need no RNG state. Only
@@ -61,7 +61,8 @@ _PRIMITIVE_NAMES_TEXT = (
     "regularized_incomplete_beta rem reshape rev round rsqrt scatter scatter-add "
     "scatter-max scatter-min scatter-mul select_and_gather_add select_and_scatter_add "
     "select_n shift_left shift_right_arithmetic shift_right_logical sign sin sinh slice "
-    "sort split sqrt square squeeze sub tan tanh threefry2x32 top_k transpose xor zeta"
+    "sort split sqrt square squeeze stop_gradient sub tan tanh threefry2x32 top_k transpose "
+    "xor zeta"
 )
 _PRIMITIVE_NAMES = tuple(_PRIMITIVE_NAMES_TEXT.split())
 
@@ -77,6 +78,16 @@ _STATEFUL_RANDOM_PRIMITIVES = frozenset({"rng_uniform"})
 _ENUM_TYPE_NAMES = ("Precision", "GatherScatterMode", "RoundingMethod", "FftType")
 _STRUCT_TYPE_NAMES = ("ConvDimensionNumbers", "GatherDimensionNumbers", "ScatterDimensionNumbers")
 _TYPED_LITERALS = MappingProxyType({"TypedInt": int, "TypedFloat": float, "TypedComplex": complex})
+_PRIMITIVE_MODULES = (  # public first; private homes of primitives JAX does not re-export
+    "jax.extend.core.primitives",
+    "jax.lax",
+    "jax.extend.random",
+    "jax._src.ad_util",
+    "jax._src.lax.lax",
+    "jax._src.random.prng",
+    "jax._src.prng",
+)
+_PRNG_MODULES = ("jax._src.random.prng", "jax._src.prng")  # where the impl registry lives
 _LITERALS_MODULE = "jax._src.literals"  # jaxpr literals that carry their dtype
 _TAG = "$jax"
 _MAP_TAG = "$map"
@@ -98,11 +109,10 @@ class _TraceIndex:
 
 @dataclass(frozen=True)
 class _Plan:
-    """How to replay one op: ``kind`` is equation, source or passthrough."""
+    """How to replay one equation op: its capture and parent occurrences."""
 
-    kind: str
     op: Any
-    capture: Any = None
+    capture: Any
     positions: tuple[int, ...] = ()
     parents: tuple[Any, ...] = ()
     element_index: tuple[int | None, ...] = ()
@@ -157,7 +167,7 @@ def _equation_plan(index: _TraceIndex, capture: Any, op: Any) -> _Plan:
         _element_index(index, parent, capture.input_values[p])
         for p, parent in zip(positions, parents, strict=True)
     )
-    return _Plan("equation", op, capture, positions, parents, element_index)
+    return _Plan(op, capture, positions, parents, element_index)
 
 
 def _element_index(index: _TraceIndex, parent: Any, recorded: Any) -> int | None:
@@ -187,7 +197,7 @@ def _plan_or_reason(trace: Any, op: Any) -> _Plan | str:
         reason = getattr(capture, "unverified_reason", "jax_region_not_per_op_replayable")
         return f"opaque region ({reason}): JAX replays it only as a whole"
     if kind is None:
-        return _leaf_plan_or_reason(index, materialized)
+        return _graph_only_reason(materialized)
     if capture is None:
         return "no runtime capture for this op (stripped at save; bind recipes first)"
     return _equation_plan_or_reason(index, capture, materialized)
@@ -208,18 +218,12 @@ def _equation_plan_or_reason(index: _TraceIndex, capture: Any, op: Any) -> _Plan
         return f"parent wiring cannot be resolved: {exc}"
 
 
-def _leaf_plan_or_reason(index: _TraceIndex, op: Any) -> _Plan | str:
-    """Sources replay their saved payload; an output node passes its parent through."""
+def _graph_only_reason(op: Any) -> str:
+    """Why an op with no equation kind is not replayed (it computes nothing)."""
 
-    parents = tuple(record_member(op, "parents", None) or ())
-    if not parents:
-        if not getattr(op, "has_saved_activation", False):
-            return "source op has no saved payload"
-        return _Plan("source", op)
-    parent = index.ops_by_label.get(parents[0])
-    if record_member(op, "is_output", False) and len(parents) == 1 and parent is not None:
-        return _Plan("passthrough", op, None, (0,), (parent,), (None,))
-    return "not a recorded JAX equation"
+    if not tuple(record_member(op, "parents", None) or ()):
+        return "graph-only entry: a source value (input, parameter or constant), not a computation"
+    return "graph-only entry: not a recorded JAX equation"
 
 
 def _plan(trace: Any, op: Any) -> _Plan:
@@ -241,10 +245,7 @@ def can_replay(trace: Any, op: Any) -> str | None:
 
 
 def step(trace: Any, op: Any) -> Any:
-    """The :class:`ReplayStep` for ``op``: parent occurrences and output slots.
-
-    Available for every replayable op, including those without a recipe.
-    """
+    """The :class:`ReplayStep` for ``op`` (parent occurrences, output slot), recipe or not."""
 
     plan = _plan(trace, op)
     pairs = zip(plan.positions, plan.parents, strict=True)
@@ -257,7 +258,7 @@ def _replay_inputs(plan: _Plan, parent_values: Sequence[Any]) -> list[Any]:
 
     if len(parent_values) != len(plan.positions):
         raise ValueError(f"JAX replay expects {len(plan.positions)} parent values.")
-    inputs = list(plan.capture.input_values) if plan.capture is not None else [None]
+    inputs = list(plan.capture.input_values)
     for position, element, value in zip(
         plan.positions, plan.element_index, parent_values, strict=True
     ):
@@ -279,10 +280,6 @@ def forward(trace: Any, op: Any, parent_values: Sequence[Any]) -> tuple[Any, ...
     """Re-run one op through the validator's replay; one value per output slot."""
 
     plan = _plan(trace, op)
-    if plan.kind == "source":
-        return (plan.op.out,)
-    if plan.kind == "passthrough":
-        return tuple(_replay_inputs(plan, parent_values))
     return _to_slots(replay_equation(plan.capture, _replay_inputs(plan, parent_values)))
 
 
@@ -319,10 +316,6 @@ def vjp(
     import jax
 
     plan = _plan(trace, op)
-    if plan.kind == "source":
-        return ()
-    if plan.kind == "passthrough":
-        return (cotangents[0],)
     if len(cotangents) != 1:
         raise ValueError("JAX vjp expects one cotangent per output slot (1).")
     inputs = _replay_inputs(plan, parent_values)
@@ -430,8 +423,6 @@ def _build_recipe(trace: Any, op: Any) -> OpRecipe:
     plan = _plan_or_reason(trace, op)
     if isinstance(plan, str):
         raise ValueError(plan)
-    if plan.kind != "equation":
-        raise ValueError(f"{plan.kind} op: its payload is loaded, not replayed")
     capture = plan.capture
     identity = _op_identity(capture)
     parent_positions = set(plan.positions)
@@ -480,7 +471,7 @@ def _param_address(parent: Any) -> str | None:
 
 
 def _constant_label(parent: Any) -> str | None:
-    return _parent_label(parent) if getattr(parent, "layer_type", None) == "constant" else None
+    return _parent_label(parent) if record_member(parent, "func_name", None) == "constant" else None
 
 
 def _refs(plan: _Plan, read: Any) -> tuple[tuple[tuple[str | int, ...], str], ...]:
@@ -522,6 +513,8 @@ def _encode_framework_value(value: Any) -> Any:
         return {_TAG: ("enum", _lax_type_name(value, _ENUM_TYPE_NAMES), value.name)}
     if isinstance(value, jax.extend.core.ClosedJaxpr):
         return {_TAG: ("closed_jaxpr", _encode_closed_jaxpr(value))}
+    if type(value).__name__ == "PRNGImpl" and _prng_registry().get(value.name) is value:
+        return {_TAG: ("prng_impl", str(value.name))}
     name = _lax_type_name(value, _STRUCT_TYPE_NAMES)
     return {_TAG: ("struct", name, {f: _encode(v) for f, v in _struct_fields(value)})}
 
@@ -644,6 +637,8 @@ def _decode_typed(kind: str, body: Sequence[Any]) -> Any:
         return getattr(jax.lax, body[0])(**{str(k): _decode(v) for k, v in body[1].items()})
     if kind == "closed_jaxpr":
         return _decode_closed_jaxpr(body[0])
+    if kind == "prng_impl" and body[0] in _prng_registry():
+        return _prng_registry()[body[0]]
     raise ReplayRefusal("type", f"unknown JAX recipe value kind {kind!r}")
 
 
@@ -665,6 +660,21 @@ def _run_nested(data: Mapping[str, Any], values: Sequence[Any]) -> tuple[Any, ..
     return tuple(read(r) for r in data["outvars"])
 
 
+def _prng_registry() -> Mapping[str, Any]:
+    """JAX's registered PRNG implementations by name (threefry2x32, rbg, ...)."""
+
+    import importlib
+
+    for name in _PRNG_MODULES:
+        try:
+            registry = getattr(importlib.import_module(name), "prngs", None)
+        except ImportError:
+            continue
+        if isinstance(registry, Mapping):
+            return MappingProxyType(dict(registry))
+    return MappingProxyType({})
+
+
 def _decode_closed_jaxpr(data: Mapping[str, Any]) -> Any:
     """Rebuild a nested program by binding its equations under ``jax.make_jaxpr``."""
 
@@ -681,13 +691,17 @@ def _decode_closed_jaxpr(data: Mapping[str, Any]) -> Any:
 def _resolve_primitive(name: str) -> Any:
     """Allowlisted primitive name to the framework's primitive object (uncached)."""
 
-    import jax
+    import importlib
+
     import jax.extend.core
-    import jax.extend.core.primitives as public
 
     if f"jax.primitive.{name}" not in ALLOWLIST:
         raise ReplayRefusal("unknown_op", f"JAX primitive {name!r} is not allowlisted")
-    for module in (public, jax.lax):
+    for module_name in _PRIMITIVE_MODULES:
+        try:
+            module = importlib.import_module(module_name)
+        except ImportError:
+            continue
         for attr in dir(module):
             obj = getattr(module, attr)
             if isinstance(obj, jax.extend.core.Primitive) and obj.name == name:

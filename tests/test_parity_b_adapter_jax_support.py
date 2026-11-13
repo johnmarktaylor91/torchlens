@@ -43,19 +43,24 @@ def saved_parent_values(adapter: Any, trace: Any, op: Any) -> list[Any]:
     return [by_label[occ.parent_label].out for occ in adapter.step(trace, op).inputs]
 
 
+def is_graph_only(adapter: Any, trace: Any, op: Any) -> bool:
+    """True for sources and other entries that compute nothing (never replayed)."""
+
+    reason = adapter.can_replay(trace, op)
+    return reason is not None and reason.startswith("graph-only entry")
+
+
 def graph_forward(adapter: Any, trace: Any, overrides: Mapping[str, Any]) -> dict[str, Any]:
-    """Replay the whole graph through ``forward``; return the output-op values."""
+    """Replay every equation through ``forward`` (sources from ``overrides`` or payloads)."""
 
     values: dict[str, Any] = {}
     for op in trace._layer_list:
-        step = adapter.step(trace, op)
-        label = step.output_slots[0]
-        if label in overrides:
-            values[label] = overrides[label]
+        if is_graph_only(adapter, trace, op):
+            values[op.label] = overrides.get(op.label, op.out)
             continue
-        (values[label],) = adapter.forward(
-            trace, op, [values[occ.parent_label] for occ in step.inputs]
-        )
+        step = adapter.step(trace, op)
+        parents = [values[occ.parent_label] for occ in step.inputs]
+        (values[step.output_slots[0]],) = adapter.forward(trace, op, parents)
     return {op.label: values[op.label] for op in trace.output_ops}
 
 
@@ -94,10 +99,10 @@ def engine_grads(adapter: Any, trace: Any) -> tuple[dict[str, Any], dict[str, An
     by_label = _jax_ops_by_label(trace)
     cot: dict[str, Any] = dict(_weights(trace))
     for op in reversed(trace._layer_list):
+        if op.label not in cot or is_graph_only(adapter, trace, op):
+            continue
         step = adapter.step(trace, op)
         label = step.output_slots[0]
-        if label not in cot or not step.inputs:
-            continue
         parents = [by_label[occ.parent_label].out for occ in step.inputs]
         grads = adapter.vjp(trace, op, parents, (cot[label],))
         assert len(grads) == len(step.inputs), label
