@@ -131,8 +131,4 @@ def release_live_tensors(op_capture: Any) -> Any:
     return replace(op_capture, output_tensor=None, inputs=inputs)
 
 
-__all__ = [
-    "WeakProducerIndex",
-    "release_live_tensors",
-    "retention_policy",
-]
+__all__ = ("WeakProducerIndex", "release_live_tensors", "retention_policy")

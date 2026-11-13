@@ -264,4 +264,4 @@ def tf_record_producer() -> TFRecordProducer:
     return TFRecordProducer()
 
 
-__all__ = ["TFPayloadCodec", "TFRecordProducer", "tf_record_producer"]
+__all__ = ("TFPayloadCodec", "TFRecordProducer", "tf_record_producer")
