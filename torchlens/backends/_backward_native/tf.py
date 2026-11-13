@@ -61,6 +61,7 @@ __all__ = ("backward_ready_scope", "record_backward", "retain_backward_state")
 
 _STATE_KEY = "_tf_backward_state"
 _SESSION_TAPE = "_tl_backward_tape"
+_SESSION_ACTIVE = "_tl_backward_active"
 _CODE = "run_capability_unavailable"  # RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE
 _DETECTION_STAGE = "native_backward_capture"
 _PREFIX = "TensorFlow backward capture is unavailable: "
@@ -74,10 +75,6 @@ _SOURCE_FIELDS = (
     "backward_source_file",
     "backward_source_line",
 )
-
-#: The recorder of the backward pass running now, read by Python backward
-#: functions recorded during the forward (``tf.custom_gradient``).
-_ACTIVE: list[BackwardRecorder] = []
 
 
 # --- private TensorFlow bindings (feature detection) ------------------------
@@ -147,16 +144,23 @@ def _float_tensors(tf: Any, value: Any) -> list[Any]:
 
 
 def _framed_backward(
-    op_type: Any, inputs: Sequence[Any], outputs: Sequence[Any], backward: Callable[..., Any]
+    op_type: Any,
+    forward: tuple[Sequence[Any], Sequence[Any]],
+    backward: Callable[..., Any],
+    active: list[BackwardRecorder],
 ) -> Callable[..., Any]:
-    """A Python backward function that runs as a frame while a pass is recorded."""
+    """A Python backward function that runs as a frame while a pass is recorded.
+
+    ``forward`` is the op's ``(inputs, outputs)``; ``active`` holds the
+    recorder of the pass running now (empty between passes).
+    """
 
     def framed(*grads: Any, **kwargs: Any) -> Any:
-        recorder = _ACTIVE[-1] if _ACTIVE else None
+        recorder = active[-1] if active else None
         if recorder is None or not recorder.owns_thread():
             return backward(*grads, **kwargs)
         return recorder.run_frame(
-            "record_operation", op_type, inputs, outputs, grads, lambda: backward(*grads, **kwargs)
+            "record_operation", op_type, (*forward, grads), lambda: backward(*grads, **kwargs)
         )
 
     return framed
@@ -177,11 +181,12 @@ def backward_ready_scope(session: Any) -> Iterator[Any]:
     tf = session.tf
     record = bindings.record
     original = record.record_operation
+    active: list[BackwardRecorder] = []
 
     def recording(
         op_type: Any, outputs: Any, inputs: Any, backward: Any, *rest: Any, **kw: Any
     ) -> Any:
-        framed = _framed_backward(op_type, list(inputs), list(outputs), backward)
+        framed = _framed_backward(op_type, (list(inputs), list(outputs)), backward, active)
         return original(op_type, outputs, inputs, framed, *rest, **kw)
 
     tape = tf.GradientTape(persistent=True, watch_accessed_variables=True)
@@ -194,6 +199,7 @@ def backward_ready_scope(session: Any) -> Iterator[Any]:
     finally:
         record.record_operation = original
     setattr(session, _SESSION_TAPE, tape)
+    setattr(session, _SESSION_ACTIVE, active)
 
 
 @dataclass
@@ -212,6 +218,9 @@ class TFBackwardState:
         Stable identity objects of gradient rules no captured op owns.
     losses:
         Loss tensor of each recorded pass, by pass number.
+    active:
+        Recorder of the pass running now (empty between passes); the Python
+        backward functions the forward recorded read it.
     """
 
     tf: Any
@@ -219,6 +228,7 @@ class TFBackwardState:
     sources: dict[str, Any]
     nodes: dict[tuple[Any, ...], object] = field(default_factory=dict)
     losses: dict[int, Any] = field(default_factory=dict)
+    active: list[BackwardRecorder] = field(default_factory=list)
 
 
 def retain_backward_state(trace: Any, session: Any) -> None:
@@ -235,7 +245,9 @@ def retain_backward_state(trace: Any, session: Any) -> None:
         for record in getattr(session, "source_records", ())
         if getattr(record, "label_raw", None)
     }
-    trace.__dict__[_STATE_KEY] = TFBackwardState(tf=session.tf, tape=tape, sources=sources)
+    trace.__dict__[_STATE_KEY] = TFBackwardState(
+        tf=session.tf, tape=tape, sources=sources, active=getattr(session, _SESSION_ACTIVE, [])
+    )
     if getattr(trace, "_capture_events", None) is None:
         # The capture releases its forward stream after materializing; backward
         # passes journal into the live one, or a fresh stream extending the projection.
@@ -336,7 +348,9 @@ def _input_targets(state: TFBackwardState) -> list[tuple[str, Any]]:
 
 
 @contextlib.contextmanager
-def _observing(bindings: SimpleNamespace, recorder: BackwardRecorder) -> Iterator[None]:
+def _observing(
+    bindings: SimpleNamespace, recorder: BackwardRecorder, active: list[BackwardRecorder]
+) -> Iterator[None]:
     """Install the op callback and the framed gradient entry for one ``tape.gradient``."""
 
     original = bindings.backprop._gradient_function
@@ -346,16 +360,16 @@ def _observing(bindings: SimpleNamespace, recorder: BackwardRecorder) -> Iterato
             return original(*args)
         op_name, _attrs, _num_inputs, inputs, outputs, out_grads = args[:6]
         return recorder.run_frame(
-            "gradient_function", op_name, inputs, outputs, out_grads, lambda: original(*args)
+            "gradient_function", op_name, (inputs, outputs, out_grads), lambda: original(*args)
         )
 
     bindings.op_callbacks.add_op_callback(recorder.callback)
     bindings.pywrap_tfe.TFE_Py_RegisterGradientFunction(framed)
-    _ACTIVE.append(recorder)
+    active.append(recorder)
     try:
         yield
     finally:
-        _ACTIVE.remove(recorder)
+        active.remove(recorder)
         bindings.pywrap_tfe.TFE_Py_RegisterGradientFunction(original)
         bindings.op_callbacks.remove_op_callback(recorder.callback)
 
@@ -388,22 +402,21 @@ def record_backward(
             detection_stage=_DETECTION_STAGE,
         )
     state = _state_of(trace)
-    bindings = _require_bindings()
     policy = trace._options_save_grads if save_grads is MISSING else save_grads
     retain = _retains(policy)
-    _run_pass(trace, state, bindings, _loss_tensor(trace, state, loss), policy, retain)
+    _run_pass(trace, state, _loss_tensor(trace, state, loss), policy, retain)
 
 
 def _run_pass(
     trace: Any,
     state: TFBackwardState,
-    bindings: SimpleNamespace,
     loss_tensor: Any,
     policy: Any,
     retain: bool,
 ) -> None:
     """Run ``tape.gradient`` once under the observers and journal the pass."""
 
+    bindings = _require_bindings()
     seed = state.tf.ones_like(loss_tensor)
     inputs, params = _input_targets(state), _param_targets(trace, state)
     pass_index = next_backward_pass_index(trace)
@@ -412,7 +425,7 @@ def _run_pass(
     started = time.time()
     status = "error"
     try:
-        with _observing(bindings, recorder):
+        with _observing(bindings, recorder, state.active):
             grads = state.tape.gradient(
                 loss_tensor,
                 [tensor for _, tensor in inputs] + [variable for _, variable in params],
@@ -426,7 +439,7 @@ def _run_pass(
                 detection_stage=_DETECTION_STAGE,
             )
         state.losses[pass_index] = loss_tensor
-        journal = _PassJournal(trace, state, recorder, pass_index, retain, (loss_tensor, seed))
+        journal = _PassJournal(trace, state, recorder, (pass_index, retain), (loss_tensor, seed))
         journal.write(inputs, params, list(grads))
         status = "ok"
     finally:
@@ -535,15 +548,15 @@ class _PassJournal:
         trace: Any,
         state: TFBackwardState,
         recorder: BackwardRecorder,
-        pass_index: int,
-        retain: bool,
+        pass_retain: tuple[int, bool],
         seeded: tuple[Any, Any],
     ) -> None:
+        """``pass_retain`` is (pass number, keep gradient values); ``seeded`` is (loss, seed)."""
+
         self.trace = trace
         self.state = state
         self.frames = recorder.frames
-        self.pass_index = pass_index
-        self.retain = retain
+        self.pass_index, self.retain = pass_retain
         loss_id, seed_id = (tensor_id(item) for item in seeded)
         self.seed_ids = {seed_id} if seed_id is not None else set()
         seeds = {loss_id: seed_id} if loss_id is not None and seed_id is not None else {}

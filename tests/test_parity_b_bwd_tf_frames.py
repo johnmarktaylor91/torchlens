@@ -40,14 +40,14 @@ def _run(rec: BackwardRecorder, op_type: str, ins: list[int], outs: list[int], g
             rec.callback(name, [T(n) for n in i], None, [T(n) for n in o])
         return results
 
-    rec.run_frame("gradient_function", op_type, [T(n) for n in ins], [T(n) for n in outs],
-                  [T(n) for n in grads], body)  # fmt: skip
+    tensors = ([T(n) for n in ins], [T(n) for n in outs], [T(n) for n in grads])
+    rec.run_frame("gradient_function", op_type, tensors, body)
 
 
 def test_lone_tensor_result_is_one_item_and_returned_unchanged() -> None:
     rec = BackwardRecorder()
     lone = T(9)
-    out = rec.run_frame("gradient_function", b"Relu", [T(1)], [T(2)], [T(3)], lambda: lone)
+    out = rec.run_frame("gradient_function", b"Relu", ([T(1)], [T(2)], [T(3)]), lambda: lone)
     assert out is lone
     assert rec.frames[0].op_type == "Relu"
     assert rec.frames[0].result_ids == (9,)

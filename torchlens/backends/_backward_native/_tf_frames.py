@@ -157,7 +157,7 @@ class BackwardRecorder:
 
         return threading.get_ident() == self.owner
 
-    def callback(
+    def callback(  # noqa: PLR0913 -- TensorFlow's op-callback signature
         self,
         op_type: Any,
         inputs: Sequence[Any] | None,
@@ -186,13 +186,16 @@ class BackwardRecorder:
         self,
         kind: str,
         op_type: Any,
-        inputs: Iterable[Any] | None,
-        outputs: Iterable[Any] | None,
-        out_grads: Iterable[Any],
+        tensors: tuple[Iterable[Any] | None, Iterable[Any] | None, Iterable[Any]],
         call: Callable[[], Any],
     ) -> Any:
-        """Run one gradient rule as a frame and return its result unchanged."""
+        """Run one gradient rule as a frame and return its result unchanged.
 
+        ``tensors`` is (forward inputs, forward outputs, incoming gradients);
+        the tape passes ``None`` for forward values the rule does not need.
+        """
+
+        inputs, outputs, out_grads = tensors
         name = op_type.decode() if isinstance(op_type, bytes) else str(op_type)
         frame = Frame(
             index=len(self.frames),
@@ -316,16 +319,18 @@ def _link_by_inputs(
 def _dataflow_candidates(
     frames: Sequence[Frame],
     links: list[int | None],
-    call: ForwardCall,
-    slot: int,
-    result_id: int,
+    want: tuple[str, int, int],
     accumulations: dict[int, tuple[int, ...]],
 ) -> list[int]:
-    """Unlinked frames of ``call``'s op type whose incoming ``slot`` gradient holds ``result_id``."""
+    """Unlinked frames of ``want``'s op type whose incoming gradient holds its gradient.
 
+    ``want`` is (op type, output slot, gradient id).
+    """
+
+    op_type, slot, result_id = want
     found = []
     for frame in frames:
-        if links[frame.index] is not None or frame.op_type != call.op_type:
+        if links[frame.index] is not None or frame.op_type != op_type:
             continue
         grad_ids = frame.out_grad_ids
         if slot < len(grad_ids) and grad_ids[slot] is not None:
@@ -353,8 +358,9 @@ def _gradient_pairs(
         input_ids = frame.input_ids if linked is None else calls[linked].input_ids
         result_ids = frame.result_ids
         for slot, input_id in enumerate(input_ids):
-            if input_id is not None and slot < len(result_ids) and result_ids[slot] is not None:
-                pairs.append((input_id, result_ids[slot]))
+            result_id = result_ids[slot] if slot < len(result_ids) else None
+            if input_id is not None and result_id is not None:
+                pairs.append((input_id, result_id))
     return pairs
 
 
@@ -380,7 +386,8 @@ def _link_by_dataflow_once(
         parent, out_slot = producer[forward_id]
         if parent in links:
             continue
-        found = _dataflow_candidates(frames, links, calls[parent], out_slot, grad_id, accumulations)
+        want = (calls[parent].op_type, out_slot, grad_id)
+        found = _dataflow_candidates(frames, links, want, accumulations)
         if len(found) == 1:
             links[found[0]] = parent
             changed = True
