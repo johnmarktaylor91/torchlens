@@ -200,12 +200,13 @@ def replay_captures(
     return ReplayVerdict.ok(checked)
 
 
-def sparse_status_counts(trace: Any, verdict: ReplayVerdict) -> dict[str, Any] | None:
+def sparse_status_counts(trace: Any, verdict: ReplayVerdict, source: str) -> dict[str, Any] | None:
     """``ValidationStatus.from_replay_counts`` arguments of a sparse trace, else ``None``.
 
     The counts give torch's status for the same selective save: exempted ops
     leave the state alone, any unverified op makes it ``unverified``, and a
-    replay failure makes it ``failed``.
+    replay failure makes it ``failed``. ``source`` is ``"live"`` or
+    ``"loaded"``, as the backend reads it from the trace.
     """
 
     captures = tuple(getattr(trace, "tinygrad_uop_captures", ()) or ())
@@ -220,7 +221,6 @@ def sparse_status_counts(trace: Any, verdict: ReplayVerdict) -> dict[str, Any] |
             continue
         counts[kind][reason] += 1
         decisions.append(_decision_record(ops_by_raw_label[capture.label_raw], kind, reason))
-    source = "loaded" if getattr(trace, "_loaded_from_bundle", False) else "live"
     return {
         "backend": "tinygrad",
         "source": source,

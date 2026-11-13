@@ -647,11 +647,11 @@ class TinygradBackend:
             present, and passed status otherwise.
         """
 
-        if (sparse := sparse_status_counts(trace, verdict)) is not None:
-            return ValidationStatus.from_replay_counts(**sparse)
         source: ValidationReplaySource = (
             "loaded" if getattr(trace, "_loaded_from_bundle", False) else "live"
         )
+        if (sparse := sparse_status_counts(trace, verdict, source)) is not None:
+            return ValidationStatus.from_replay_counts(**sparse)
         payload_load_status = getattr(trace, "payload_load_status", None)
         passed = verdict.passed
         replayed_node_count = len(getattr(trace, "tinygrad_uop_captures", ())) if passed else 0
