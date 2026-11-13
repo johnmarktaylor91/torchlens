@@ -859,26 +859,26 @@ class PaddleBackend:
         *_args
             Ignored compatibility arguments.
         **kwargs
-            Compatibility keyword arguments. ``validate_metadata`` controls
-            whether backend-neutral invariant checks run.
+            ``validate_metadata`` runs the backend-neutral invariant checks.
 
         Returns
         -------
         bool or ValidationStatus
-            True for a verified live pass, False for a verified live failure,
-            or an explicit unavailable status for loaded payload-stripped traces.
+            True or False for a verified live pass or failure, else the
+            unavailable or unverified status of a loaded trace.
         """
 
         status = trace.validation_replay_status
-        if not status.is_available or _paddle_loaded_replay_unavailable(trace):
+        if not status.is_available:  # a loaded trace's replay recipe status is kept as is
+            return status
+        payload_load_status = getattr(trace, "payload_load_status", None)
+        if _paddle_loaded_replay_unavailable(trace):
             status_result = ValidationStatus.unavailable_loaded_runtime_stripped(
-                backend=self.name,
-                payload_load_status=getattr(trace, "payload_load_status", None),
+                backend=self.name, payload_load_status=payload_load_status
             )
             setattr(trace, "_validation_replay_status", status_result)
             return status_result
         source = _validation_source(trace)
-        payload_load_status = getattr(trace, "payload_load_status", None)
         try:
             from ..._validation_status import count_importer_region_annotations
 
