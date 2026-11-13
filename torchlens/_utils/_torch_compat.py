@@ -108,6 +108,7 @@ __all__ = [
     "HAS_TENSORBASE_CLASS",
     "HAS_VARIABLE_FUNCTIONS_CLASS",
     "HAS_FP8_DTYPES",
+    "HAS_DIRECT_TENSOR_HOOK_INSTALL",
     "HAS_PER_BACKEND_SEED",
     "HAS_PIPELINING",
     "HAS_SET_STANCE",
@@ -621,47 +622,6 @@ def saved_tensors_default_hooks_active() -> bool | None:
         return None
 
 
-def _probe_code_positions() -> bool:
-    """Return whether code objects expose PEP 657 fine-grained positions.
-
-    ``co_positions()`` (CPython 3.11+) yields per-instruction column offsets.
-    Conditional-branch attribution uses them to tell same-line ternary /
-    ``IfExp`` arms apart; without them the branch indexer degrades to
-    line-only matching, which deliberately FAILS CLOSED (un-attributed, never
-    mis-attributed) on same-line arms. Probe the capability behaviorally.
-
-    Returns
-    -------
-    bool
-        ``True`` when per-instruction position introspection is available.
-    """
-
-    positions = getattr(_probe_code_positions.__code__, "co_positions", None)
-    if not callable(positions):
-        return False
-    try:
-        next(iter(positions()), None)
-    except (TypeError, ValueError):
-        return False
-    return True
-
-
-def _probe_code_qualname() -> bool:
-    """Return whether code objects expose ``co_qualname`` (CPython 3.11+).
-
-    Frame-to-scope resolution for branch attribution prefers qualified names;
-    without them, same-named nested functions resolve by name plus first line
-    only and ambiguous matches fail closed.
-
-    Returns
-    -------
-    bool
-        ``True`` when ``co_qualname`` is available on code objects.
-    """
-
-    return isinstance(getattr(_probe_code_qualname.__code__, "co_qualname", None), str)
-
-
 def _probe_saved_tensors_hooks_patchable() -> bool:
     """Return whether the saved-tensors-hooks context class accepts an init patch (see the leaf)."""
 
@@ -982,6 +942,7 @@ def _force_real_op_probes() -> None:
     get_eval_batch_norm_mean_residual_support(force_probe=True)
     get_cpu_float8_deterministic_fill_support(force_probe=True)
     get_sparse_spsolve_cuda_support(force_probe=True)
+    get_direct_tensor_hook_install(force_probe=True)
 
 
 def get_meta_item_guard_support(*, force_probe: bool = False) -> bool:
@@ -1076,6 +1037,38 @@ def get_mha_fastpath_switch_support(*, force_probe: bool = False) -> bool:
         HAS_MHA_FASTPATH_SWITCH = _probe_mha_fastpath_switch()
         _MHA_FASTPATH_SWITCH_PROBED = True
     return HAS_MHA_FASTPATH_SWITCH
+
+
+def get_direct_tensor_hook_install(
+    *, force_probe: bool = False, guard: Callable[[], Any] = contextlib.nullcontext
+) -> Any:
+    """Return capture's direct tensor grad-hook install, or ``None`` for ``Tensor.register_hook``.
+
+    Parameters
+    ----------
+    force_probe:
+        Probe again even when latched (diagnostic surfaces).
+    guard:
+        Context the one-time probe runs in (capture passes its paused internal-read bracket).
+
+    Returns
+    -------
+    Any
+        The leaf's install while ``HAS_DIRECT_TENSOR_HOOK_INSTALL`` holds (probed at first use).
+    """
+
+    global HAS_DIRECT_TENSOR_HOOK_INSTALL, _DIRECT_TENSOR_HOOK_PROBED, _DIRECT_TENSOR_HOOK_FNS
+    if not _DIRECT_TENSOR_HOOK_PROBED or force_probe:
+        slots = vars(get_tensorbase_class() or object)
+        with guard():
+            _DIRECT_TENSOR_HOOK_FNS = _real_op_probe_leaf().detect_direct_tensor_hook_install(
+                (slots.get("_backward_hooks"), slots.get("grad_fn"), slots.get("requires_grad")),
+                _resolve_attribute_path("torch:_C._has_torch_function_unary"),
+                _resolve_attribute_path("torch.utils.hooks:RemovableHandle"),
+            )
+        HAS_DIRECT_TENSOR_HOOK_INSTALL = _DIRECT_TENSOR_HOOK_FNS is not None
+        _DIRECT_TENSOR_HOOK_PROBED = True
+    return _DIRECT_TENSOR_HOOK_FNS if HAS_DIRECT_TENSOR_HOOK_INSTALL else None
 
 
 def _probe_deterministic_fill_flag() -> bool:
@@ -1244,8 +1237,8 @@ HAS_FUNCTION_APPLY_SLOT: bool = isinstance(
 ROLL_TENSOR_SHIFTS_SUPPORTED: bool = _probe_roll_tensor_shifts()
 HAS_SAVED_TENSORS_HOOK_INTROSPECTION: bool = _probe_saved_tensors_hook_introspection()
 HAS_SAVED_TENSORS_HOOKS_PATCHABLE: bool = _probe_saved_tensors_hooks_patchable()
-HAS_CODE_POSITIONS: bool = _probe_code_positions()
-HAS_CODE_QUALNAME: bool = _probe_code_qualname()
+HAS_CODE_POSITIONS: bool = _real_op_probe_leaf().probe_code_positions()
+HAS_CODE_QUALNAME: bool = _real_op_probe_leaf().probe_code_qualname()
 #: ``Module.__call__`` frames that call ``forward`` (see ``_module_call_dispatch``).
 _FORWARD_CALLERS = tuple(getattr(torch.nn.Module, n, None) for n in ("_call_impl", "_slow_forward"))
 HAS_MODULE_CALL_DISPATCH_FRAME: bool = probe_module_call_dispatch_frame(_FORWARD_CALLERS)
@@ -1267,6 +1260,9 @@ HAS_MPS_MEMORY_QUERY: bool = _probe_attribute_paths("HAS_MPS_MEMORY_QUERY")
 HAS_SPARSE_INVARIANT_CHECK: bool = _probe_attribute_paths("HAS_SPARSE_INVARIANT_CHECK")
 HAS_MHA_FASTPATH_SWITCH: bool = False
 _MHA_FASTPATH_SWITCH_PROBED: bool = False
+HAS_DIRECT_TENSOR_HOOK_INSTALL: bool = False  # lazy: get_direct_tensor_hook_install()
+_DIRECT_TENSOR_HOOK_PROBED: bool = False
+_DIRECT_TENSOR_HOOK_FNS: Any = None
 HAS_REDUCE_TUPLE_DIM: bool = False
 _REDUCE_TUPLE_DIM_PROBED: bool = False
 HAS_CPU_HALF_KERNELS: bool = False
@@ -1503,6 +1499,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_SPARSE_SPSOLVE_CUDA",
     "HAS_META_ITEM_GUARD",
     "HAS_NUMPY_BRIDGE",
+    "HAS_DIRECT_TENSOR_HOOK_INSTALL",
     "HAS_PER_BACKEND_SEED",
 )
 
@@ -1530,6 +1527,7 @@ _LAZY_PROBE_FAMILIES: dict[str, tuple[str, ...]] = {
     "_NUMPY_BRIDGE_PROBED": ("HAS_NUMPY_BRIDGE",),
     "_TORCH_CPP_EXTENSION_PROBED": ("HAS_TORCH_CPP_EXTENSION",),
     "_MHA_FASTPATH_SWITCH_PROBED": ("HAS_MHA_FASTPATH_SWITCH",),
+    "_DIRECT_TENSOR_HOOK_PROBED": ("HAS_DIRECT_TENSOR_HOOK_INSTALL", "_DIRECT_TENSOR_HOOK_FNS"),
     "_FUNCOL_GROUP_RESOLUTION_PROBED": ("HAS_FUNCOL_GROUP_RESOLUTION", "_FUNCOL_GROUP_RESOLVERS"),
     "_FUNCOL_WAIT_INTERPOSITION_PROBED": (
         "HAS_FUNCOL_WAIT_INTERPOSITION",

@@ -4,7 +4,9 @@ The ``HAS_*`` flags these answer, their lazy latches and their capability-snapsh
 rows stay in ``torchlens._utils._torch_compat``, which imports this module at probe
 time through its one ``_real_op_probe_leaf`` site, so its eager import closure does
 not grow. Every probe catches only the error torch raises when the capability is
-missing, so any other failure still surfaces.
+missing, so any other failure still surfaces. The direct tensor hook-install probe
+lives in its own leaf, ``_tensor_hook_install``, and is reached through this module's
+``detect_direct_tensor_hook_install`` re-export.
 """
 
 from __future__ import annotations
@@ -20,6 +22,9 @@ from typing import Any
 import torch
 
 from ._cuda_probe import _is_cuda_available
+from ._tensor_hook_install import (
+    detect as detect_direct_tensor_hook_install,  # noqa: F401 - re-exported
+)
 
 #: Substring of torch's refusal when a CUDA build was compiled without the cuDSS
 #: sparse direct solver (``_apply_sparse_csr_linear_solve`` in
@@ -680,6 +685,47 @@ def probe_safe_weights_only_load(globals_in_pkl: object | None) -> bool:
     return globals_in_pkl is not None and hasattr(
         _serialization, "get_unsafe_globals_in_checkpoint"
     )
+
+
+def probe_code_positions() -> bool:
+    """Return whether code objects expose PEP 657 fine-grained positions.
+
+    ``co_positions()`` (CPython 3.11+) yields per-instruction column offsets.
+    Conditional-branch attribution uses them to tell same-line ternary /
+    ``IfExp`` arms apart; without them the branch indexer degrades to
+    line-only matching, which deliberately FAILS CLOSED (un-attributed, never
+    mis-attributed) on same-line arms. Probe the capability behaviorally.
+
+    Returns
+    -------
+    bool
+        ``True`` when per-instruction position introspection is available.
+    """
+
+    positions = getattr(probe_code_positions.__code__, "co_positions", None)
+    if not callable(positions):
+        return False
+    try:
+        next(iter(positions()), None)
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
+def probe_code_qualname() -> bool:
+    """Return whether code objects expose ``co_qualname`` (CPython 3.11+).
+
+    Frame-to-scope resolution for branch attribution prefers qualified names;
+    without them, same-named nested functions resolve by name plus first line
+    only and ambiguous matches fail closed.
+
+    Returns
+    -------
+    bool
+        ``True`` when ``co_qualname`` is available on code objects.
+    """
+
+    return isinstance(getattr(probe_code_qualname.__code__, "co_qualname", None), str)
 
 
 def probe_saved_tensors_hooks_patchable() -> bool:

@@ -230,6 +230,7 @@ _ROWS: tuple[CapabilityRow, ...] = (
     _row("HAS_META_ITEM_GUARD", measured=False),
     _row("HAS_NUMPY_BRIDGE", measured=False),  # varies with the installed NumPy, not torch
     _row("HAS_MHA_FASTPATH_SWITCH", measured=False),
+    _row("HAS_DIRECT_TENSOR_HOOK_INSTALL", measured=False),
     _row("HAS_MODULE_CALL_DISPATCH_FRAME", measured=False),
     _row("HAS_MODULE_NAMED_MEMBERS", measured=False),  # added after the matrix run
     _row("HAS_NAMED_TENSOR_API", absent_on=("2.13.0",)),

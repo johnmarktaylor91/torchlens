@@ -6507,9 +6507,9 @@
         "tests/test_valmem5_saved_value_aliases.py"
       ],
       "torchlens/_utils/_kernel_probes.py": [
+        "tests/test_backward_hook_install.py",
         "tests/test_capability_probe_lifecycle.py",
         "tests/test_distributed_c0_core.py",
-        "tests/test_foreign_kernel_boundary.py",
         "tests/test_lazy_torch_module_reads.py",
         "tests/test_numpy_bridge_compat.py",
         "tests/test_sdpa_probe_forced_backend.py",
@@ -6517,12 +6517,12 @@
         "tests/test_torch_compat_table.py"
       ],
       "torchlens/_utils/_lazy_import_warm.py": [
+        "tests/test_backward_hook_install.py",
         "tests/test_capability_probe_lifecycle.py",
         "tests/test_distributed_c0_core.py",
         "tests/test_foreign_kernel_boundary.py",
         "tests/test_lazy_torch_module_reads.py",
         "tests/test_numpy_bridge_compat.py",
-        "tests/test_runnable_fp32_precision_policy.py",
         "tests/test_torch_compat.py",
         "tests/test_torch_compat_table.py"
       ],
@@ -6541,12 +6541,12 @@
         "tests/test_session_prep_cost_cuts.py"
       ],
       "torchlens/_utils/_module_call_dispatch.py": [
+        "tests/test_backward_hook_install.py",
         "tests/test_capability_probe_lifecycle.py",
         "tests/test_distributed_c0_core.py",
         "tests/test_foreign_kernel_boundary.py",
         "tests/test_lazy_torch_module_reads.py",
         "tests/test_numpy_bridge_compat.py",
-        "tests/test_runnable_fp32_precision_policy.py",
         "tests/test_torch_compat.py",
         "tests/test_torch_compat_table.py"
       ],
@@ -6677,12 +6677,12 @@
         "tests/test_tlspec_runnable_resolver.py"
       ],
       "torchlens/_utils/_script_call_slot.py": [
+        "tests/test_backward_hook_install.py",
         "tests/test_capability_probe_lifecycle.py",
         "tests/test_distributed_c0_core.py",
         "tests/test_foreign_kernel_boundary.py",
         "tests/test_lazy_torch_module_reads.py",
         "tests/test_numpy_bridge_compat.py",
-        "tests/test_runnable_fp32_precision_policy.py",
         "tests/test_torch_compat.py",
         "tests/test_torch_compat_table.py"
       ],
@@ -6753,6 +6753,13 @@
         "tests/test_vizfix_skin_ink_and_legend.py",
         "tests/visualization/test_rolled_loop_route_fallback.py"
       ],
+      "torchlens/_utils/_tensor_hook_install.py": [
+        "tests/test_backward_hook_install.py",
+        "tests/test_backward_p1_triggers.py",
+        "tests/test_numpy_bridge_compat.py",
+        "tests/test_sdpa_probe_forced_backend.py",
+        "tests/test_torch_compat.py"
+      ],
       "torchlens/_utils/_tensor_label.py": [
         "tests/test_deepcopy_capture_identity.py",
         "tests/test_id_key_registry.py",
@@ -6794,12 +6801,12 @@
         "tests/test_tlspec_runnable_r83_label_anchoring.py"
       ],
       "torchlens/_utils/_torch_compat.py": [
+        "tests/test_backward_hook_install.py",
         "tests/test_capability_probe_lifecycle.py",
         "tests/test_distributed_c0_core.py",
         "tests/test_foreign_kernel_boundary.py",
         "tests/test_lazy_torch_module_reads.py",
         "tests/test_numpy_bridge_compat.py",
-        "tests/test_runnable_fp32_precision_policy.py",
         "tests/test_torch_compat.py",
         "tests/test_torch_compat_table.py"
       ],
@@ -6813,10 +6820,10 @@
         "tests/test_tlspec_runnable_r65_torch_rng.py"
       ],
       "torchlens/_utils/_torch_structseq.py": [
+        "tests/test_backward_hook_install.py",
         "tests/test_capability_probe_lifecycle.py",
         "tests/test_distributed_c0_core.py",
         "tests/test_lazy_torch_module_reads.py",
-        "tests/test_livecheck_module_exit_only.py",
         "tests/test_numpy_bridge_compat.py",
         "tests/test_tlspec_runnable_r35_exact_semantics.py",
         "tests/test_torch_compat.py",
@@ -6843,12 +6850,12 @@
         "tests/test_wrap_torch_warm_cache.py"
       ],
       "torchlens/_utils/_type_sequence_slot.py": [
+        "tests/test_backward_hook_install.py",
         "tests/test_capability_probe_lifecycle.py",
         "tests/test_distributed_c0_core.py",
         "tests/test_foreign_kernel_boundary.py",
         "tests/test_lazy_torch_module_reads.py",
         "tests/test_numpy_bridge_compat.py",
-        "tests/test_runnable_fp32_precision_policy.py",
         "tests/test_torch_compat.py",
         "tests/test_torch_compat_table.py"
       ],
@@ -9973,9 +9980,9 @@
       "torchlens/backends/torch/_arg_hash.py": [
         "tests/test_arg_hash_determinism.py",
         "tests/test_backward_grad_integrity.py",
+        "tests/test_backward_p1_triggers.py",
         "tests/test_capture_int_param_and_storage.py",
         "tests/test_implicit_boundary_tightening.py",
-        "tests/test_param_ref_pairing.py",
         "tests/test_parameter_inplace_mutation.py",
         "tests/test_plain_emit_soundness.py",
         "tests/test_thin_emit_soundness.py"
@@ -10916,6 +10923,7 @@
         "tests/test_arg_hash_determinism.py",
         "tests/test_backward.py",
         "tests/test_backward_grad_integrity.py",
+        "tests/test_backward_p1_triggers.py",
         "tests/test_implicit_boundary_tightening.py",
         "tests/test_param_ref_pairing.py",
         "tests/test_parameter_inplace_mutation.py"
@@ -11114,6 +11122,16 @@
         "tests/test_view_sibling_slice_mutation.py",
         "tests/test_weightsfree_fabrication.py",
         "tests/test_wrapper_fast_lane.py"
+      ],
+      "torchlens/backends/torch/_tensor_grad_hook.py": [
+        "tests/test_arg_hash_determinism.py",
+        "tests/test_backward.py",
+        "tests/test_backward_grad_integrity.py",
+        "tests/test_backward_hook_install.py",
+        "tests/test_backward_p1_triggers.py",
+        "tests/test_implicit_boundary_tightening.py",
+        "tests/test_param_ref_pairing.py",
+        "tests/test_parameter_inplace_mutation.py"
       ],
       "torchlens/backends/torch/_thin_emit.py": [
         "tests/test_capture_core_floor_shadow.py",
@@ -13759,10 +13777,10 @@
       "torchlens/intervention/hooks.py": [
         "tests/behaviour/test_hook_passes_restore.py",
         "tests/behaviour/test_hooks_oracle.py",
+        "tests/test_backward_hook_install.py",
         "tests/test_grad_site_hooks.py",
         "tests/test_hook_handle_remove_mid_rerun.py",
         "tests/test_intervene_hook_fire_count.py",
-        "tests/test_intervention_phase3.py",
         "tests/test_saved_tensors_hooks_capture.py",
         "tests/test_sequential_hooks.py"
       ],
