@@ -18,6 +18,7 @@ from typing import Any
 import torch
 
 from .. import _state as _st
+from ._recorded_tensor import RecordedTensor
 
 # ---------------------------------------------------------------------------
 # Registry: normalized_layer_type -> extractor function
@@ -51,6 +52,10 @@ def _register(*layer_types: str) -> Callable[[Extractor], Extractor]:
 # ---------------------------------------------------------------------------
 
 
+#: Marks a function name the decoration registry holds no argument names for.
+_NO_NAMES: Any = object()
+
+
 def _build_arg_name_map(
     func_name: str, args: tuple[Any, ...], kwargs: dict[str, Any]
 ) -> SalientArgs:
@@ -60,26 +65,23 @@ def _build_arg_name_map(
     If argnames aren't available, returns just kwargs.
     """
     normalized_func_name = func_name.strip("_")
-    argnames = _st._arg_names.get(
-        normalized_func_name,
-        _ARG_NAME_FALLBACKS.get(normalized_func_name, ()),
-    )
+    argnames = _st._arg_names.get(normalized_func_name, _NO_NAMES)
+    if argnames is _NO_NAMES:
+        argnames = _ARG_NAME_FALLBACKS.get(normalized_func_name, ())
     result = dict(kwargs)
-    for i, val in enumerate(args):
-        if i < len(argnames):
-            name = argnames[i]
-            if name not in result:  # kwargs take precedence
-                result[name] = val
+    for name, val in zip(argnames, args):
+        if name not in result:  # kwargs take precedence
+            result[name] = val
     return result
 
 
 def _to_simple(val: Any) -> Any:
     """Ensure val is a simple Python type, never a tensor.
 
-    Converts torch.Tensor to its shape tuple, recursively handles
-    lists/tuples. Passes through int, float, str, bool, None.
+    Converts torch.Tensor (or its recorded form) to its shape tuple, recursively
+    handles lists/tuples. Passes through int, float, str, bool, None.
     """
-    if isinstance(val, torch.Tensor):
+    if isinstance(val, (torch.Tensor, RecordedTensor)):
         return tuple(val.shape)
     if isinstance(val, (list, tuple)):
         converted = tuple(_to_simple(v) for v in val)
@@ -115,7 +117,7 @@ def _conv(named: SalientArgs, param_shapes: list[Shape]) -> SalientArgs:
 
     result: SalientArgs = {}
     weight = named.get("weight")
-    if isinstance(weight, torch.Tensor):
+    if isinstance(weight, (torch.Tensor, RecordedTensor)):
         # Read the weight argument itself: a computed weight (prune's
         # weight_orig * weight_mask, a functional conv over a plain tensor)
         # is not a parent parameter, and the bias then sits first in
@@ -494,6 +496,11 @@ def extract_salient_args(
 ) -> SalientArgs:
     """Extract salient hyperparameters for a logged operation.
 
+    The extractor is the layer type's per-function constant part; it resolves over
+    the call's non-tensor values and tensor shapes, so ``args`` and ``kwargs`` may be
+    the live arguments or their recorded form
+    (``_recorded_tensor.record_call_values``) with the same result.
+
     Parameters
     ----------
     layer_type:
@@ -521,3 +528,9 @@ def extract_salient_args(
     except Exception:
         # Never crash logging for salient args extraction failure.
         return {}
+
+
+def salient_reads_args(layer_type: str) -> bool:
+    """Whether the function config of ``layer_type`` reads the call's arguments."""
+
+    return layer_type in _EXTRACTORS
