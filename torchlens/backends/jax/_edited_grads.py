@@ -126,8 +126,8 @@ def _bind(eqn: Any, invals: Sequence[Any], program: EditedProgram, applied: Coun
         consts = list(getattr(callee, "consts", ()))
         outs: Any = eval_edited_jaxpr(callee.jaxpr, consts, invals, program, applied)
     else:
-        subfuns, params = eqn.primitive.get_bind_params(eqn.params)
-        outs = eqn.primitive.bind(*subfuns, *invals, **params)
+        # The capture interpreter binds every equation this way (``jaxpr.py``).
+        outs = eqn.primitive.bind(*invals, **eqn.params)
         outs = list(outs) if eqn.primitive.multiple_results else [outs]
     apply = program.appliers.get(id(eqn))
     if apply is not None:

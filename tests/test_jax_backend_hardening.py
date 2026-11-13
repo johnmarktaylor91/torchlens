@@ -1207,7 +1207,7 @@ def test_jax_capability_flags_match_preview_contract() -> None:
     assert capabilities.supports_backward_capture is False
     assert capabilities.supports_validation_replay is True
     assert capabilities.supports_fastlog is False
-    assert capabilities.supports_intervention is False
+    assert capabilities.supports_intervention is True
     assert capabilities.supports_payload_materialization is True
     assert capabilities.input_container_structure == "paths_only"
     assert capabilities.output_container_structure == "paths_only"

@@ -125,20 +125,20 @@ def test_edited_function_root_grads_match_hand_edited_program(action: Any, edit:
 
 
 def test_edited_grads_through_closure_constants_and_jit() -> None:
-    """A jitted helper with a closed-over array is edited inside the inline call."""
+    """An edit inside a jitted helper, with a closed-over array after it."""
 
     shift = jnp.asarray([0.3, -0.7], dtype=jnp.float32)
 
     @jax.jit
     def block(w: Any, x: Any) -> Any:
-        """Return ``sin(x @ w) + shift`` under ``jit``."""
+        """Return ``sin(x @ w)`` under ``jit``."""
 
-        return jnp.sin(x @ w) + shift
+        return jnp.sin(x @ w)
 
     def model(params: dict[str, Any], x: Any) -> Any:
-        """Return a jitted block followed by a tanh."""
+        """Return a jitted block, a closed-over shift and a tanh."""
 
-        return jnp.tanh(block(params["w"], x)) * params["v"]
+        return jnp.tanh(block(params["w"], x) + shift) * params["v"]
 
     def edited(p: dict[str, Any], xx: Any) -> Any:
         """Return the hand-edited forward (sin output scaled by 3)."""

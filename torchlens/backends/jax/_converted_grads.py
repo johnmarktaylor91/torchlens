@@ -85,12 +85,30 @@ def _function_root_inputs(params: Any, dynamic: tuple[Any, ...]) -> Any:
     return (params, *dynamic)
 
 
+def _leaf_reader(static_argnums: tuple[int, ...], module_root: bool) -> Callable[..., Any]:
+    """Return ``read(params, positional)``: the jaxpr's dynamic input leaves of one call."""
+
+    import jax
+
+    # A function, not the bool: the host-state check rejects closed-over scalars.
+    jaxpr_inputs = _module_root_inputs if module_root else _function_root_inputs
+
+    def read(params: Any, positional: Sequence[Any]) -> list[Any]:
+        """Drop static arguments and flatten the jaxpr inputs."""
+
+        dynamic = tuple(
+            value for index, value in enumerate(positional) if index + 1 not in static_argnums
+        )
+        return jax.tree.leaves(jaxpr_inputs(params, dynamic))
+
+    return read
+
+
 def _jaxpr_function(
     closed_jaxpr: Any,
     param_positions: dict[int, str],
-    static_argnums: tuple[int, ...],
+    read_leaves: Callable[..., Any],
     output_treedef: Any,
-    module_root: bool,
     edited: Any = None,
 ) -> Callable[..., Any]:
     """Return ``fn(params, *args, other_consts)`` evaluating the captured jaxpr.
@@ -104,28 +122,25 @@ def _jaxpr_function(
     import jax
     from jax import core as jax_core
 
+    # Slices, not an int: the host-state check rejects closed-over scalars.
     num_others = len(closed_jaxpr.consts) - len(param_positions)
-
-    # A function, not the bool: the host-state check rejects closed-over scalars.
-    jaxpr_inputs = _module_root_inputs if module_root else _function_root_inputs
+    base_slice, edit_slice = slice(0, num_others), slice(num_others, None)
+    del num_others
 
     def converted(*call_args: Any) -> Any:
         """Evaluate the captured jaxpr with explicit constant arguments."""
 
         params, *positional, other_consts = call_args
-        others = iter(other_consts[:num_others])
+        others = iter(other_consts[base_slice])
         consts = [
             params[param_positions[index]] if index in param_positions else next(others)
             for index in range(len(closed_jaxpr.consts))
         ]
-        dynamic = tuple(
-            value for index, value in enumerate(positional) if index + 1 not in static_argnums
-        )
-        leaves = jax.tree.leaves(jaxpr_inputs(params, dynamic))
+        leaves = read_leaves(params, positional)
         if edited is None:
             flat = jax_core.eval_jaxpr(closed_jaxpr.jaxpr, consts, *leaves)
         else:
-            flat = jax_core.eval_jaxpr(edited.jaxpr, other_consts[num_others:], *consts, *leaves)
+            flat = jax_core.eval_jaxpr(edited.jaxpr, other_consts[edit_slice], *consts, *leaves)
         return jax.tree.unflatten(output_treedef, flat)
 
     return converted
@@ -170,9 +185,8 @@ def converted_gradient_view(
     edited = None if edits is None else edited_closed_jaxpr(closed_jaxpr, edits)
     if edited is not None:
         others = (*others, *edited.consts)
-    fn = _jaxpr_function(
-        closed_jaxpr, param_positions, shifted_static, treedef, module_tree is not None, edited
-    )
+    read_leaves = _leaf_reader(shifted_static, module_tree is not None)
+    fn = _jaxpr_function(closed_jaxpr, param_positions, read_leaves, treedef, edited)
     view_options = replace(grad_options, params=params, intermediate_grads=False)
     return fn, [params, *positional, others], view_options, shifted_static
 
