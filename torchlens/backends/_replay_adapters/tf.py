@@ -342,6 +342,21 @@ def add(left: Any, right: Any) -> Any:
     return tf.math.add(tf.convert_to_tensor(left), tf.convert_to_tensor(right))
 
 
+def apply_helper(trace: Any, helper: Any, value: Any) -> Any:
+    """Apply a built-in edit helper to ``value`` with TensorFlow ops (finished-trace edits).
+
+    Delegates to the live-edit helper table, so ``fork().do`` and ``intervene=``
+    compute the same replacement; an unsupported helper refuses typed there.
+    """
+
+    import tensorflow as tf  # deferred: optional dependency
+
+    from ..tf._helper_hooks import tf_helper_hook
+
+    del trace
+    return tf_helper_hook(helper, tf)(tf.convert_to_tensor(value))
+
+
 def to_host(value: Any) -> np.ndarray:
     """Host NumPy copy of a TensorFlow value (the validator's own conversion)."""
 
