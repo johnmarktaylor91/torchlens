@@ -58,13 +58,20 @@ def _unique_ops(trace: Any) -> list[Any]:
     return list(trace._layer_list)
 
 
-def _is_model_output(op: Any) -> bool:
-    """Whether ``op``'s value is (part of) the model output: the tape seeds it with ones."""
+def _output_seeds(trace: Any) -> dict[str, Any]:
+    """Ones per model-output op (summed when one value is returned more than once).
 
-    if any(bool(getattr(op, name, False)) for name in ("is_output", "is_output_parent")):
-        return True
-    outputs = set(getattr(getattr(op, "_source_trace", None), "output_layers", ()) or ())
-    return bool(outputs & {getattr(op, "label", None), getattr(op, "_label_raw", None)})
+    The tape's loss is the sum over the flattened model outputs, so its seed on
+    each output op is ones, times the number of times that op's value is returned.
+    """
+
+    ops = ops_by_label(trace)
+    seeds: dict[str, Any] = {}
+    for name in trace.output_layers:
+        op = ops[name]
+        ones = ADAPTER.zeros_like(op.out) + 1
+        seeds[op.label] = ones if op.label not in seeds else ADAPTER.add(seeds[op.label], ones)
+    return seeds
 
 
 def _parent_values(trace: Any, recipe: Any) -> list[Any]:
@@ -110,11 +117,8 @@ def test_forward_equals_saved_payload_on_every_replayable_op(name: str) -> None:
 def _reverse_accumulate(trace: Any) -> dict[str, Any]:
     """Cotangent per op label from ``vjp`` composed in reverse graph order (seed: ones)."""
 
-    cotangent: dict[str, Any] = {}
+    cotangent = _output_seeds(trace)
     ops = _unique_ops(trace)
-    for op in ops:
-        if _is_model_output(op):
-            cotangent[op.label] = ADAPTER.zeros_like(op.out) + 1
     assert cotangent, "no model-output op to seed"
     for op in reversed(ops):
         seed = cotangent.get(op.label)

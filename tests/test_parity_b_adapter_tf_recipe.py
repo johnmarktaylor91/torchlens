@@ -124,17 +124,23 @@ def test_recipe_round_trip_rebuilds_a_capture_list_the_validator_passes(name: st
     assert _verdict(validate_tf_trace_detailed(trace)) == _verdict(live)
 
 
-def test_saved_and_loaded_trace_validates_from_recipes(tmp_path: Path) -> None:
-    """Validation after load: recipes plus loaded payloads give the live replay count."""
+@pytest.mark.parametrize("name", ["cnn_module", "chain_branch_function"])
+def test_saved_and_loaded_trace_validates_from_recipes(tmp_path: Path, name: str) -> None:
+    """Validation after load: recipes plus loaded payloads give the live verdict and counts.
 
-    trace = _trace("cnn_module")
+    ``cnn_module``'s live verdict is ``unverified`` (its variable reads are effect
+    regions); ``chain_branch_function`` has none and passes.
+    """
+
+    trace = _trace(name)
     live = validate_tf_trace_detailed(trace)
+    live_state = validate_tf_trace_status(trace, validate_metadata=False).state
     recipes = {k: encode_recipe(v) for k, v in _recipes_through_json(trace).items()}
-    bundle = tmp_path / "cnn.tlspec"
+    bundle = tmp_path / f"{name}.tlspec"
     trace.save(bundle, level="executable_with_callables")
     loaded = tl.load(str(bundle))
     before = validate_tf_trace_status(loaded, validate_metadata=False)
-    assert before.state != "passed"
+    assert before.state == "unavailable"
     decoded = {
         label: decode_recipe(
             json.loads(json.dumps(data)), backend="tf", allowlist=ADAPTER.ALLOWLIST
@@ -143,7 +149,7 @@ def test_saved_and_loaded_trace_validates_from_recipes(tmp_path: Path) -> None:
     }
     ADAPTER.bind_recipes(loaded, decoded)
     after = validate_tf_trace_status(loaded, validate_metadata=False)
-    assert after.state == "passed", after.message
+    assert after.state == live_state, after.message
     assert after.source == "loaded"
     assert loaded._tf_validation_result.counts == live.counts
 
