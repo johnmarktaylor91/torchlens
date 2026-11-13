@@ -219,7 +219,7 @@ def resolve_priors(model: Any) -> tuple[str, ShapePriors] | None:
             if exc.name == qualified:
                 continue
             raise
-        priors: ShapePriors = module  # type: ignore[assignment]
+        priors: ShapePriors = module
         if priors.handles(model):
             return backend_name, priors
     return None
@@ -239,7 +239,7 @@ def imported_priors() -> list[tuple[str, ShapePriors]]:
             raise
         framework = getattr(module, "FRAMEWORK", None)
         if isinstance(framework, str) and framework in sys.modules:
-            found.append((backend_name, module))  # type: ignore[arg-type]
+            found.append((backend_name, module))
     return found
 
 
