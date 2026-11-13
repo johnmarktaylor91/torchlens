@@ -21,6 +21,7 @@ back in RAM, so a wrong prediction costs a reload, not a value.
 
 from __future__ import annotations
 
+import re
 import shutil
 import tempfile
 import weakref
@@ -120,15 +121,7 @@ class PaddleRetention:
     def keeps(self, ctx: Any) -> bool:
         """Whether the selector may select the op ``ctx`` describes (True keeps it in RAM)."""
 
-        variants = (
-            ctx,
-            replace(ctx, label=f"{ctx.layer_type}_{ctx.type_index}_{ctx.raw_index}"),
-            replace(ctx, label=f"{ctx.layer_type}_{ctx.type_index}"),
-        )
-        try:
-            return any(bool(self.predicate(variant)) for variant in variants)
-        except Exception:  # noqa: BLE001 - an undecidable op stays in RAM; final labels decide
-            return True
+        return _may_select(self.predicate, ctx)
 
     def spill(self, label_raw: str, tensor: Any) -> None:
         """Write ``tensor`` to the spool under ``label_raw``."""
@@ -142,6 +135,40 @@ class PaddleRetention:
         with _state.pause_logging():
             np.save(path, tensor.numpy(), allow_pickle=False)
         self.handles[label_raw] = SpilledPayload(path=path, place=tensor.place)
+
+
+_FINAL_LABEL = re.compile(r"^(?P<stem>.+?_\d+)(?:_\d+)?(?::(?:\d+|last|all))?$")
+"""A final label: ``{type}_{type_index}[_{layer_index}][:{pass}]``."""
+
+
+def _may_select(selector: Any, ctx: Any) -> bool:
+    """Whether ``selector`` may select the op the capture context ``ctx`` describes.
+
+    Unions and intersections are decided child by child. A leaf is evaluated on
+    the context with the label spellings capture can predict. Capture refuses
+    final-label literals (their layer index is assigned when the trace is
+    finished), so such a ``tl.label`` leaf is decided by its type and type
+    index; any other undecidable leaf keeps the op. Only RAM placement depends
+    on the answer: the final labels decide what the trace keeps.
+    """
+
+    operator = getattr(selector, "operator", None)
+    children = getattr(selector, "selectors", None)
+    if operator in ("and", "or") and children is not None:
+        answers = (_may_select(child, ctx) for child in children)
+        return any(answers) if operator == "or" else all(answers)
+    variants = (
+        ctx,
+        replace(ctx, label=f"{ctx.layer_type}_{ctx.type_index}_{ctx.raw_index}"),
+        replace(ctx, label=f"{ctx.layer_type}_{ctx.type_index}"),
+    )
+    try:
+        return any(bool(selector(variant)) for variant in variants)
+    except Exception:  # noqa: BLE001 - undecidable at capture; final labels decide
+        match = _FINAL_LABEL.match(str(getattr(selector, "selector_value", "")))
+        if getattr(selector, "selector_kind", None) != "label" or match is None:
+            return True
+        return match["stem"] == f"{ctx.layer_type}_{ctx.type_index}"
 
 
 def start_retention(trace: Any, predicate: Callable[[Any], Any]) -> None:

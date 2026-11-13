@@ -102,6 +102,8 @@ def test_label_selector_reloads_the_selected_op() -> None:
     _validates(sparse)
     kept = [op.label for op in _ops(sparse) if op.has_saved_activation]
     assert kept == [target]
+    spool = Path(sparse._selective_save_hidden_payloads._spool)
+    assert len(list(spool.glob("*.npy"))) >= len(_ops(full)) - 1  # the rest left RAM at capture
     expected = {op.label: op.out.numpy() for op in _ops(full)}
     np.testing.assert_array_equal(
         next(op for op in _ops(sparse) if op.label == target).out.numpy(), expected[target]
@@ -175,12 +177,15 @@ _PEAK_SCRIPT = textwrap.dedent(
 
     config = sys.argv[1]
     small = paddle.ones([64], dtype="float32")
-    tl.trace(chain, small, backend="paddle", save=tl.func("exp"))  # warm-up
+    warm = tl.trace(chain, small, backend="paddle")  # warm-up; names the last op's final label
+    last = [op for op in warm._layer_list if op.layer_type not in ("input", "output")][-1].label
+    tl.trace(chain, small, backend="paddle", save=tl.func("exp"))
+    del warm
     x = paddle.ones([1 << 20], dtype="float32")  # 4 MiB per activation
     gc.collect()
     base = status_kib("VmRSS")
     open("/proc/self/clear_refs", "w").write("5")
-    save = tl.func("exp") if config == "sparse" else None
+    save = {"func": tl.func("exp"), "label": tl.label(last)}.get(config)
     kw = {} if save is None else {"save": save}
     trace = tl.trace(chain, x, backend="paddle", **kw)
     print(json.dumps({"peak_bytes": (status_kib("VmHWM") - base) * 1024}))
@@ -203,10 +208,11 @@ def _peak(config: str) -> int:
 
 @pytest.mark.heavy
 @pytest.mark.skipif(not Path("/proc/self/clear_refs").exists(), reason="needs Linux /proc")
-def test_capture_time_save_lowers_peak_memory() -> None:
-    """save= of the last op peaks well below a full capture (about 37 ops of 4 MiB)."""
+@pytest.mark.parametrize("config", ["func", "label"])
+def test_capture_time_save_lowers_peak_memory(config: str) -> None:
+    """save= of the last op (by function or final label) peaks well below a full capture."""
 
     full = _peak("full")
-    sparse = _peak("sparse")
+    sparse = _peak(config)
     assert full > 100 * 2**20, full
     assert sparse < full // 2, (full, sparse)
