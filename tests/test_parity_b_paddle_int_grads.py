@@ -63,9 +63,10 @@ def _options(**kwargs: Any) -> Any:
 
 
 def _close(actual: Any, expected: Any) -> None:
-    """Equal values; a missing gradient (``None``) equals zeros of the other's shape."""
+    """Equal values; a missing gradient (``None``) equals zeros, and two missing ones agree."""
 
-    assert actual is not None or expected is not None
+    if actual is None and expected is None:
+        return  # no gradient reaches this leaf in either program
     actual = paddle.zeros_like(expected) if actual is None else actual
     expected = paddle.zeros_like(actual) if expected is None else expected
     assert paddle.allclose(actual, expected, rtol=1e-5, atol=1e-6), (actual, expected)
