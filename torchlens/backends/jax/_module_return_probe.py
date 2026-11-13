@@ -42,6 +42,8 @@ from dataclasses import replace
 from typing import Any
 
 from ..._errors import CaptureGapWarning
+from .._entry_refusals import refuse_nested_primitive
+from .._errors import BackendUnsupportedError
 from .._module_returns import attach_output_paths, flag_returned_ops, iter_returned_leaves
 from ._return_ledger import JaxReturnLedger
 
@@ -120,6 +122,30 @@ def _apply_call_renumbering(tree: Any, ledger: Any, renamed: Any) -> None:
         ]
 
 
+def _refuse_regions(result: Any, tree: Any) -> None:
+    """Refuse an imported region (scan or while not unrolled) in a module capture.
+
+    Module parameters are paired with equation ops in a pass that does not count region
+    ops yet, so a region would leave its parameter links inconsistent; until that pass
+    counts them, a module capture with a region refuses typed.
+    """
+
+    if tree is None:
+        return
+    for capture in getattr(result, "captures", ()):
+        if getattr(capture, "kind", None) != "region":
+            continue
+        try:
+            refuse_nested_primitive(capture.primitive)
+        except BackendUnsupportedError as exc:
+            exc.add_note(
+                f"JAX pytree_module capture imported {capture.primitive!r} as a region "
+                f"({capture.unverified_reason}); raise jax_max_control_flow_unroll so it "
+                "unrolls, or capture the raw function_root callable."
+            )
+            raise
+
+
 def split_outputs(result: Any, tree: Any) -> Any:
     """Move the extra outputs of an extended interpretation onto the ledger.
 
@@ -136,6 +162,7 @@ def split_outputs(result: Any, tree: Any) -> Any:
         ``result`` with the model's outputs only.
     """
 
+    _refuse_regions(result, tree)
     ledger = getattr(tree, "module_returns", None)
     _apply_call_renumbering(tree, ledger, getattr(result, "module_call_renumbering", None))
     if not isinstance(ledger, JaxReturnLedger) or ledger.extended_jaxpr is None:

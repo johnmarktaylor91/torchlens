@@ -926,7 +926,7 @@ def test_jax_hoists_top_level_jit_closure_constants() -> None:
     constants = [op for op in trace._layer_list if op.func_name == "constant"]
     assert len(constants) == 1
     adds = [op for op in trace._layer_list if op.func_name == "add"]
-    assert adds and constants[0].layer_label in adds[0].parent_layers
+    assert adds and constants[0].layer_label in adds[0].parents
     assert trace.validate_forward_pass([]) is True
 
 

@@ -242,19 +242,30 @@ def test_shared_submodule_in_scan_gets_one_call_per_run() -> None:
     assert len({len(ops) for ops in op_sets}) == 1
 
 
-def test_scan_over_unroll_cap_falls_back_to_region_inside_module() -> None:
-    """Over the unroll cap, the scan inside an attributed module becomes one region."""
+@pytest.mark.parametrize(
+    ("options", "reason"),
+    [
+        ({"jax_max_control_flow_unroll": 2}, "scan_length_exceeds_unroll_cap"),
+        ({"jax_control_flow": "region"}, "scan_region_requested"),
+    ],
+)
+def test_scan_imported_as_region_inside_module_refuses_typed(
+    options: dict[str, Any], reason: str
+) -> None:
+    """A scan that would import as a region in a module capture refuses typed.
+
+    Module parameters are paired with ops in a pass that does not count region ops yet,
+    so the region would leave inconsistent parameter links; refusing keeps every module
+    capture sound.
+    """
 
     model = _Twin(_Lin(1), _Lin(2), "scan", length=5)
-    trace = _trace(
-        model, _input(), capture=tl.options.CaptureOptions(jax_max_control_flow_unroll=2)
-    )
+    with pytest.raises(BackendUnsupportedError, match="unsupported nested primitive") as excinfo:
+        tl.trace(model, _input(), backend="jax", capture=tl.options.CaptureOptions(**options))
 
-    regions = [op for op in trace._layer_list if op.annotations.get("jax_capture_kind") == "region"]
-    assert len(regions) == 1
-    assert regions[0].annotations["jax_region_reason"] == "scan_length_exceeds_unroll_cap"
-    assert not _labels(trace, "a")
-    assert trace.validate_forward_pass([]).state == "unverified"
+    assert excinfo.value.code == "jax_nested_primitive_unsupported"
+    notes = " ".join(getattr(excinfo.value, "__notes__", []))
+    assert reason in notes and "jax_max_control_flow_unroll" in notes
 
 
 def test_reject_mode_still_refuses_control_flow_inside_module() -> None:
@@ -285,28 +296,29 @@ def test_rematerialization_inside_module_is_a_typed_refusal() -> None:
     "factory", [lambda: _Twin(_Lin(1), _Lin(2), "jit"), lambda: _NnxTwin("jit")]
 )
 def test_jit_closing_over_module_weights_records_params(factory: Any) -> None:
-    """Weights a nested ``jax.jit`` closes over are recorded constants and module params."""
+    """Weights a nested ``jax.jit`` closes over are recorded as module params."""
 
     model = factory()
     trace = _trace(model, _input())
 
     assert check_metadata_invariants(trace) is True
     assert trace.validate_forward_pass([]) is True
-    constants = [op for op in trace._layer_list if op.func_name == "constant"]
-    assert constants
     for address in ("a", "b"):
         assert any(trace[label].num_params for label in _labels(trace, address))
 
 
 def test_jitted_submodule_called_twice_stays_sound() -> None:
-    """A cached nested jaxpr bound twice keeps its constants single and the trace sound."""
+    """A cached nested jaxpr bound twice is two calls that both read the module weights."""
 
     model = _JitTwice(_Lin(4))
     trace = _trace(model, _input())
 
     _assert_sound(trace, model)
-    constants = [op for op in trace._layer_list if op.func_name == "constant"]
-    assert len(constants) == 2
+    module = trace.modules["a"]
+    assert module.num_calls == 2
+    for call in (1, 2):
+        readers = [trace[label] for label in module.ops.get(call).ops]
+        assert any("a.weight" in [p.address for p in op._param_logs] for op in readers)
 
 
 def test_hoisted_jaxpr_evaluates_like_the_function() -> None:
