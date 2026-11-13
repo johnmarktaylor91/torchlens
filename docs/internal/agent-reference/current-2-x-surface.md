@@ -551,9 +551,11 @@ expert contributions from routing indices alone.
   keeps its real identity with the replacement payload plus hook-minted `FireRecord`s; the replay
   oracle uses a narrow corroborated user-intervention carve-out, so a replacement value presented
   as captured-native FAILS validation. Builtin helper adapters: `zero_ablate`, `scale`, `add`,
-  `replace_with` (others refuse typed); decisions are forward-only; intervention/halt predicates
-  may be value-dependent (real `tensor_requires_grad`/`is_scalar_bool`/`bool_value` in the ctx);
-  `recipes=` attaches facet recipes; `grad_options` cannot combine with `intervene=`/`stop_after=`.
+  `clamp`, `mean_ablate` (self form), `replace_with` (others refuse typed); finished-trace edits
+  via `trace.fork().do(...)`; `tl.grad(...)` sites apply to derived gradients; intervention/halt
+  predicates may be value-dependent (real `tensor_requires_grad`/`is_scalar_bool`/`bool_value` in
+  the ctx); `recipes=` attaches facet recipes; with `grad_options`, derived gradients
+  differentiate the edited or halted program.
   Value-dependent `save=`, streaming, fastlog, and rng_replay stay refused on paddle.
 - All four eager non-PyTorch backends (tf/mlx/tinygrad/paddle) group recurrent calls into multi-pass layers
   through the same neutral grouper torch and JAX use (`layer_label:pass` labels, `pass_number`/
