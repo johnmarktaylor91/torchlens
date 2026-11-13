@@ -692,7 +692,9 @@ class PaddleBackend:
             # could clobber a concurrent capture's _active_trace and republish
             # a stale trace on restore); concurrent capture refuses typed.
             with _state.publish_active_trace(trace), _state.pause_logging():
-                replay_output = run_derived_grad_forward(self, trace, observer, model, args, kwargs)
+                replay_output = run_derived_grad_forward(
+                    self, trace, observer, model, (args, kwargs)
+                )
                 loss = (
                     grad_options.loss_fn(replay_output) if grad_options.loss_fn else replay_output
                 )
@@ -726,7 +728,7 @@ class PaddleBackend:
                 else:
                     leaf_grads = ()
                 edited = paddle_grad_site_records(
-                    self, trace, replay_output, grad_options, (*leaves, *param_leaves), leaf_grads
+                    self, trace, replay_output, grad_options, ((*leaves, *param_leaves), leaf_grads)
                 )
                 intermediate_accessor = intermediate_accessor if edited is None else edited
             records = _records_for_paddle_leaf_grads(
