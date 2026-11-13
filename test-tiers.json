@@ -148,8 +148,8 @@
         "tests/test_call_layout_plans.py",
         "tests/test_capture_unification_p3a.py",
         "tests/test_capture_unification_p8.py",
+        "tests/test_descriptive_resolve.py",
         "tests/test_distribution_outputs.py",
-        "tests/test_intervention_phase4b.py",
         "tests/test_mutable_arg_snapshot.py",
         "tests/test_thin_emit_soundness.py"
       ],
@@ -228,7 +228,7 @@
         "tests/test_w051_episode_binding.py"
       ],
       "torchlens/_capture/_flops_shape_rules.py": [
-        "tests/test_flops3_classics_corpus.py",
+        "tests/test_descriptive_resolve.py",
         "tests/test_flops3_rules.py",
         "tests/test_grouping_call_sites.py",
         "tests/test_metadata.py",
@@ -353,6 +353,10 @@
         "tests/test_global_state_inventory.py",
         "tests/test_live_op_view_surface.py",
         "tests/test_record_overhead_counters.py"
+      ],
+      "torchlens/_capture/_recorded_tensor.py": [
+        "tests/test_descriptive_resolve.py",
+        "tests/test_view_write_call_alias_edges.py"
       ],
       "torchlens/_capture/_retention.py": [
         "tests/producer_parity/test_fastlog_late_buffer_probe.py",
@@ -496,9 +500,9 @@
       ],
       "torchlens/_capture/flops.py": [
         "tests/test_conditional_branches.py",
+        "tests/test_descriptive_resolve.py",
         "tests/test_flops2_backward_attribution.py",
         "tests/test_flops3_rules.py",
-        "tests/test_numbers_truth_compute.py",
         "tests/test_themes_stage0.py",
         "tests/test_trace_boundary_ops_multipass.py",
         "tests/test_validation.py",
@@ -1266,7 +1270,6 @@
       ],
       "torchlens/_data_classes/_op_columns.py": [
         "tests/test_bulk_column_reads.py",
-        "tests/test_column_passes_depths_finished.py",
         "tests/test_column_passes_finalize.py",
         "tests/test_fixed_floor_soundness.py",
         "tests/test_op_columns.py",
@@ -3614,8 +3617,8 @@
         "tests/test_capture_row_journal.py",
         "tests/test_fixed_floor_soundness.py",
         "tests/test_global_state_inventory.py",
-        "tests/test_hon_crash_notes.py",
         "tests/test_live_op_view_surface.py",
+        "tests/test_relations_resolve.py",
         "tests/test_thin_emit_soundness.py"
       ],
       "torchlens/_ir/_selector_nodes.py": [
@@ -4545,6 +4548,7 @@
         "tests/test_pin_b6b.py",
         "tests/test_postprocess_executor.py",
         "tests/test_postprocess_r14a_regressions.py",
+        "tests/test_seal_reorder.py",
         "tests/test_trace_core_substrate.py"
       ],
       "torchlens/_postprocess/_grouping_stamp.py": [
@@ -4676,6 +4680,16 @@
         "tests/test_postprocess_executor.py",
         "tests/test_postprocess_r14a_regressions.py",
         "tests/test_trace_core_substrate.py"
+      ],
+      "torchlens/_postprocess/_op_seal.py": [
+        "tests/test_capture_fields_dict_prune.py",
+        "tests/test_capture_overhead_counters.py",
+        "tests/test_capture_row_ingest.py",
+        "tests/test_fixed_floor_soundness.py",
+        "tests/test_internal_call_fastpath.py",
+        "tests/test_postprocess_executor.py",
+        "tests/test_postprocess_gc_pause.py",
+        "tests/test_postprocess_retention_epilogue.py"
       ],
       "torchlens/_postprocess/_orphan_predicates.py": [
         "tests/test_capture_outcome_characterization.py",
@@ -6088,12 +6102,12 @@
         "tests/test_record_field_policy.py"
       ],
       "torchlens/_trace_core/relation_views.py": [
-        "tests/backend_conformance/test_deviceref_vocabulary.py",
         "tests/test_fixed_floor_soundness.py",
         "tests/test_op_columns.py",
         "tests/test_preview_grad_tolerance_tripwires.py",
         "tests/test_preview_replay_tolerance_tripwires.py",
         "tests/test_relation_views.py",
+        "tests/test_seal_reorder.py",
         "tests/test_side_columns.py",
         "tests/test_trace_core_substrate.py"
       ],
@@ -6750,8 +6764,8 @@
         "tests/test_tlspec_runnable_r83_label_anchoring.py"
       ],
       "torchlens/_utils/_tensor_layout.py": [
+        "tests/test_arg_template_resolve.py",
         "tests/test_autograd_grad_view_write_replay.py",
-        "tests/test_backward_intervention.py",
         "tests/test_format3_linalg_recipe_keys.py",
         "tests/test_intervention_phase10.py",
         "tests/test_label_rename_reference.py",
@@ -6770,12 +6784,12 @@
         "tests/test_r18h_introspect_hash.py"
       ],
       "torchlens/_utils/_tl_collective.py": [
+        "tests/test_arg_template_resolve.py",
         "tests/test_deepcopy_capture_identity.py",
         "tests/test_id_key_registry.py",
         "tests/test_internals.py",
         "tests/test_label_plain_path.py",
         "tests/test_release_model.py",
-        "tests/test_tl_lifecycle.py",
         "tests/test_tl_meta.py",
         "tests/test_tlspec_runnable_r83_label_anchoring.py"
       ],
@@ -7115,13 +7129,13 @@
         "tests/test_w051_nondeterminism_foreign_join.py"
       ],
       "torchlens/_utils/rng/monitor_state.py": [
+        "tests/test_arg_template_resolve.py",
         "tests/test_rng_cuda_isolation.py",
         "tests/test_rng_monitor_transactionality.py",
         "tests/test_rng_seal_r57.py",
         "tests/test_tlspec_runnable_r41_crossthread_witness.py",
         "tests/test_tlspec_runnable_r61_gc_inert_edges.py",
         "tests/test_tlspec_runnable_r65_torch_rng.py",
-        "tests/test_validation_explicit_generator_replay.py",
         "tests/test_w051_nondeterminism_foreign_join.py"
       ],
       "torchlens/_utils/rng/numpy_frames.py": [
@@ -7215,10 +7229,10 @@
         "tests/test_tvscope_preprocessing.py"
       ],
       "torchlens/_validation_argument_references.py": [
+        "tests/test_arg_template_resolve.py",
         "tests/test_sem_recon_patching.py",
         "tests/test_validate_save_options.py",
         "tests/test_validation.py",
-        "tests/test_validation_hardening.py",
         "tests/test_valmem2_parameter_references.py",
         "tests/test_valmem3_saved_arg_offload.py",
         "tests/test_valmem4_same_alias_credit.py",
@@ -9966,10 +9980,20 @@
         "tests/test_plain_emit_soundness.py",
         "tests/test_thin_emit_soundness.py"
       ],
+      "torchlens/backends/torch/_arg_template_resolve.py": [
+        "tests/test_arg_scan_reference_paths.py",
+        "tests/test_arg_template_resolve.py",
+        "tests/test_args_template_plans.py",
+        "tests/test_forward_replay_untracked_writes.py",
+        "tests/test_ops_arg_slots.py"
+      ],
       "torchlens/backends/torch/_args_template_cache.py": [
         "tests/test_arg_scan_reference_paths.py",
+        "tests/test_arg_template_resolve.py",
         "tests/test_args_template_plans.py",
         "tests/test_capture_unification_p3a.py",
+        "tests/test_forward_replay_untracked_writes.py",
+        "tests/test_ops_arg_slots.py",
         "tests/test_valmem3_saved_arg_offload.py",
         "tests/test_valmem4_same_alias_credit.py"
       ],
@@ -10059,8 +10083,8 @@
       ],
       "torchlens/backends/torch/_call_layout.py": [
         "tests/test_arg_scan_reference_paths.py",
+        "tests/test_arg_template_resolve.py",
         "tests/test_call_layout_plans.py",
-        "tests/test_capture_unification_p4.py",
         "tests/test_forward_replay_untracked_writes.py",
         "tests/test_ops_arg_slots.py",
         "tests/test_r28_validation_identity_witness.py",
@@ -10602,27 +10626,27 @@
       ],
       "torchlens/backends/torch/_ops_arg_slots.py": [
         "tests/test_arg_scan_reference_paths.py",
+        "tests/test_arg_template_resolve.py",
         "tests/test_argpos_hardening.py",
         "tests/test_args_template_plans.py",
         "tests/test_call_layout_plans.py",
         "tests/test_forward_replay_untracked_writes.py",
-        "tests/test_implicit_boundary_tightening.py",
         "tests/test_ops_arg_slots.py",
         "tests/test_valmem5_saved_value_aliases.py"
       ],
       "torchlens/backends/torch/_ops_argument_fields.py": [
         "tests/test_arg_scan_reference_paths.py",
+        "tests/test_arg_template_resolve.py",
         "tests/test_call_layout_plans.py",
         "tests/test_completeness_witness.py",
         "tests/test_forward_replay_untracked_writes.py",
         "tests/test_ops_arg_slots.py",
-        "tests/test_r28_validation_identity_witness.py",
         "tests/test_set_buffer_provenance.py",
         "tests/test_valmem5_saved_value_aliases.py"
       ],
       "torchlens/backends/torch/_ops_arguments.py": [
         "tests/behaviour/test_cell_tmp.py",
-        "tests/test_args_template_plans.py",
+        "tests/test_arg_template_resolve.py",
         "tests/test_deepcopy_capture_identity.py",
         "tests/test_legacy_tensor_constructors.py",
         "tests/test_surgery_live_regions.py",
@@ -10682,13 +10706,13 @@
       ],
       "torchlens/backends/torch/_ops_descriptive_fields.py": [
         "tests/test_capture_unification_p3a.py",
+        "tests/test_descriptive_resolve.py",
         "tests/test_livecheck_module_exit_only.py",
         "tests/test_plain_emit_soundness.py",
         "tests/test_r28_validation_identity_witness.py",
         "tests/test_r29_capval_hardening.py",
         "tests/test_thin_emit_soundness.py",
-        "tests/test_valmem5_saved_value_aliases.py",
-        "tests/test_view_write_call_alias_edges.py"
+        "tests/test_valmem5_saved_value_aliases.py"
       ],
       "torchlens/backends/torch/_ops_emission.py": [
         "tests/test_buffer_datamodel.py",
@@ -10810,9 +10834,9 @@
         "tests/test_capture_row_journal.py",
         "tests/test_omitted_empty_cell_defaults.py",
         "tests/test_op_row_cells.py",
+        "tests/test_relations_resolve.py",
         "tests/test_row_direct_import_cycle.py",
-        "tests/test_sanctioned_empty_omission.py",
-        "tests/test_thin_emit_soundness.py"
+        "tests/test_sanctioned_empty_omission.py"
       ],
       "torchlens/backends/torch/_ops_row_journal.py": [
         "tests/test_capture_fields_dict_prune.py",
@@ -10820,7 +10844,7 @@
         "tests/test_capture_row_journal.py",
         "tests/test_capture_unification_p3a.py",
         "tests/test_livecheck_module_exit_only.py",
-        "tests/test_plain_emit_soundness.py",
+        "tests/test_relations_resolve.py",
         "tests/test_row_direct_import_cycle.py",
         "tests/test_thin_emit_soundness.py"
       ],
@@ -10866,13 +10890,13 @@
       ],
       "torchlens/backends/torch/_param_fingerprint.py": [
         "tests/test_arg_scan_reference_paths.py",
+        "tests/test_arg_template_resolve.py",
         "tests/test_args_template_plans.py",
         "tests/test_capture_unification_p3a.py",
         "tests/test_gc.py",
         "tests/test_livecheck_module_exit_only.py",
         "tests/test_op_row_cells.py",
-        "tests/test_scaling_ladder.py",
-        "tests/test_view_write_call_alias_edges.py"
+        "tests/test_scaling_ladder.py"
       ],
       "torchlens/backends/torch/_param_prep_plan.py": [
         "tests/test_prep_keyed_caches.py"
@@ -10942,6 +10966,16 @@
         "tests/test_robustness_pr2.py",
         "tests/test_validation.py",
         "tests/test_validation_hardening.py"
+      ],
+      "torchlens/backends/torch/_relations_resolve.py": [
+        "tests/test_argpos_hardening.py",
+        "tests/test_capture_fields_dict_prune.py",
+        "tests/test_capture_row_ingest.py",
+        "tests/test_capture_row_journal.py",
+        "tests/test_op_row_cells.py",
+        "tests/test_relations_resolve.py",
+        "tests/test_sanctioned_empty_omission.py",
+        "tests/test_valmem5_saved_value_aliases.py"
       ],
       "torchlens/backends/torch/_replacement_op_fields.py": [
         "tests/test_capopts_truth_failed_capture_release.py",
@@ -11162,6 +11196,7 @@
         "tests/test_call_layout_plans.py",
         "tests/test_capture_core_floor_shadow.py",
         "tests/test_ops_arg_slots.py",
+        "tests/test_relations_resolve.py",
         "tests/test_valmem5_saved_value_aliases.py",
         "tests/test_view_sibling_slice_mutation.py"
       ],
@@ -11189,6 +11224,7 @@
         "tests/test_call_layout_plans.py",
         "tests/test_capture_core_floor_shadow.py",
         "tests/test_ops_arg_slots.py",
+        "tests/test_relations_resolve.py",
         "tests/test_valmem5_saved_value_aliases.py",
         "tests/test_w051_gate_plan_check.py"
       ],
@@ -13027,7 +13063,7 @@
       "torchlens/intervention/_edge_semantics.py": [
         "tests/producer_parity/test_fastlog_late_buffer_probe.py",
         "tests/producer_parity/test_p1_record_types.py",
-        "tests/producer_parity/test_p2_consumer_migration.py",
+        "tests/test_arg_template_resolve.py",
         "tests/test_args_template_plans.py",
         "tests/test_backend_constants_rule.py",
         "tests/test_capture_row_ingest.py",
@@ -13045,12 +13081,12 @@
         "tests/test_w051_replay_edge_multipass.py"
       ],
       "torchlens/intervention/_edit_copy.py": [
+        "tests/test_arg_template_resolve.py",
         "tests/test_backward_intervention.py",
         "tests/test_format3_linalg_recipe_keys.py",
         "tests/test_intervention_phase10.py",
         "tests/test_label_rename_reference.py",
         "tests/test_replay_template_family.py",
-        "tests/test_repr_fix_contracts.py",
         "tests/test_schema_v12_contract.py",
         "tests/test_tlspec_runnable_resolver.py"
       ],
@@ -13131,12 +13167,12 @@
         "tests/test_subspace_projection_edits.py"
       ],
       "torchlens/intervention/_hook_spec_match.py": [
+        "tests/test_arg_template_resolve.py",
         "tests/test_backward_intervention.py",
         "tests/test_format3_linalg_recipe_keys.py",
         "tests/test_intervention_phase10.py",
         "tests/test_label_rename_reference.py",
         "tests/test_replay_template_family.py",
-        "tests/test_repr_fix_contracts.py",
         "tests/test_schema_v12_contract.py",
         "tests/test_tlspec_runnable_resolver.py"
       ],

@@ -47,6 +47,7 @@ from ._ops_freeze_refs import (
     _param_refs_from_fields,
     _resolve_call_function_ref,
 )
+from ._relations_resolve import frozen_ancestry
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
@@ -105,10 +106,9 @@ def _op_record_from_log(
         func_call_id=fields_dict["func_call_id"],
     )
     modules = tuple(fields_dict["modules"])
-    input_ancestors = frozenset(fields_dict["input_ancestors"])
-    internal_source_ancestors = frozenset(fields_dict["internal_source_ancestors"])
-    root_ancestors = frozenset(fields_dict["root_ancestors"])
-    has_internal_source_ancestor = fields_dict["has_internal_source_ancestor"]
+    input_ancestors, internal_source_ancestors, root_ancestors, has_internal_source_ancestor = (
+        frozen_ancestry(fields_dict)
+    )
     grad_fn_class_qualname = fields_dict["grad_fn_class_qualname"]
     # The legacy event's transform_config = {**user config, "_tl_annotations"}
     # and the adapter pops the two smuggled channels back out; the direct

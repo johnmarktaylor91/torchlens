@@ -40,6 +40,7 @@ from ..._trace_core.cell_states import LazyFields
 from ..._trace_core.op_store import _MISSING
 from ..._utils.container_tokens import TOKEN_EXACT, TOKEN_INERT
 from ._ops_freeze_refs import _copy_parent_arg_positions, _resolve_call_function_ref
+from ._relations_resolve import ANCESTRY_PARENTS, resolve_fields
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
@@ -276,6 +277,8 @@ def _fill_facets(
             row[f["edits"]] = edits
     if annotations:
         row[f["annotations"]] = annotations
+    if ANCESTRY_PARENTS in fields_dict:
+        resolve_fields(cast(dict, fields_dict))
     input_ancestors = fields_dict["input_ancestors"]
     internal_source_ancestors = fields_dict["internal_source_ancestors"]
     root_ancestors = fields_dict["root_ancestors"]

@@ -6107,3 +6107,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: f5f98cb1dfe99c69a5d00d03525631e0f2398524
 recorded: 2026-11-12T15:17:01+00:00
+---
+generator: scripts/regen_ledgers.py (producer static half)
+flag: none (deterministic ledger step)
+reason: op ancestry resolves on demand from the recorded parent records
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 24f3c3c48d3ec1b965b79c901a8b5d30c0774776
+recorded: 2026-11-12T19:31:47+00:00

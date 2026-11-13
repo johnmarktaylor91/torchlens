@@ -67,8 +67,8 @@ from ...recording._types import (
     CaptureSpec,
 )
 from ._ops_arg_slots import current_arg_slots, slot_positions_by_label
+from ._relations_resolve import defer_ancestry
 from .tensor_tracking import (
-    _get_ancestors_from_parents,
     _locate_parent_tensors_in_args,
     _process_parent_param_ops,
 )
@@ -359,9 +359,7 @@ def _build_graph_relationship_fields(
                 *parent_layer_entries,
                 self.capture_events.live_index.require_event(out_kwarg_label),
             ]
-    parent_arg_positions, input_ancestors, internal_source_ancestors = _parent_graph_reads(
-        self, parent_layer_entries, args, kwargs
-    )
+    parent_arg_positions = _parent_arg_positions(self, parent_layer_entries, args, kwargs)
 
     # Only the keys the freeze (``_op_record_from_log``) reads are written. The
     # graph placeholders postprocess sets (children, output and distance flags,
@@ -370,43 +368,46 @@ def _build_graph_relationship_fields(
     fields_dict["parents"] = parent_layer_labels
     fields_dict["parent_arg_positions"] = parent_arg_positions
     fields_dict["_edge_uses"] = []
-    fields_dict["root_ancestors"] = input_ancestors.union(internal_source_ancestors)
     fields_dict["is_input"] = False
     fields_dict["input_was_parameter"] = False
-    fields_dict["input_ancestors"] = input_ancestors
     fields_dict["is_output_parent"] = False
     fields_dict["is_buffer"] = False
     fields_dict["is_internal_source"] = len(parent_layer_labels) == 0
-    fields_dict["has_internal_source_ancestor"] = len(internal_source_ancestors) > 0
-    fields_dict["internal_source_ancestors"] = internal_source_ancestors
+    if parent_layer_entries:
+        # The sets are the union of these parents' and resolve on first read (FR).
+        defer_ancestry(fields_dict, parent_layer_entries)
+    else:
+        fields_dict["root_ancestors"] = set()
+        fields_dict["input_ancestors"] = set()
+        fields_dict["has_internal_source_ancestor"] = False
+        fields_dict["internal_source_ancestors"] = set()
 
     in_multi_output = issubclass(type(out_orig), (list, tuple, dict, set))
     fields_dict["in_multi_output"] = in_multi_output
 
 
-def _parent_graph_reads(
+def _parent_arg_positions(
     self: "Trace", parent_records: list[Any], args: tuple[Any, ...], kwargs: dict[str, Any]
-) -> tuple[dict[str, dict[Any, str]], set[str], set[str]]:
-    """Return the parents' argument positions, input ancestors and internal-source ancestors.
+) -> dict[str, dict[Any, str]]:
+    """Return the parents' argument positions.
 
     ``parent_records`` are the parents' indexed journal records. When the op's argument
-    slots were snapshotted, the positions come from the slots and the ancestor sets are
-    unions of the records' fields, the same values ``_locate_parent_tensors_in_args`` and
-    ``_get_ancestors_from_parents`` return; otherwise those derivations run.
+    slots were snapshotted, the positions come from the slots, the same values
+    ``_locate_parent_tensors_in_args`` returns; otherwise that derivation runs.
     """
 
     slots = current_arg_slots(self, args, kwargs) if parent_records else None
     if slots is None:
-        input_ancestors, internal_source_ancestors = _get_ancestors_from_parents(parent_records)
-        positions = _locate_parent_tensors_in_args(self, parent_records, args, kwargs)
-        return positions, input_ancestors, internal_source_ancestors
-    input_ancestors = set()
-    internal_source_ancestors = set()
-    for record in parent_records:
-        input_ancestors.update(record.input_ancestors)
-        internal_source_ancestors.update(record.internal_source_ancestors)
-    positions = slot_positions_by_label(slots, [record.label_raw for record in parent_records])
-    return positions, input_ancestors, internal_source_ancestors
+        return _locate_parent_tensors_in_args(self, parent_records, args, kwargs)
+    if len(parent_records) == 1:
+        # ``slot_positions_by_label`` for one label: its slots in slot order.
+        label = parent_records[0].label_raw
+        positions: dict[str, dict[Any, str]] = {"args": {}, "kwargs": {}}
+        for slot in slots:
+            if slot.label == label:
+                positions[slot.kind][slot.key] = label
+        return positions
+    return slot_positions_by_label(slots, [record.label_raw for record in parent_records])
 
 
 def _extract_through_dynamic_spec(

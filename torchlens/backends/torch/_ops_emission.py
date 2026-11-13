@@ -19,6 +19,7 @@ from ..._utils._tensor_label import (
     set_tensor_label,
 )
 from ._ops_arg_slots import arg_slot_facts, receiver_data_alias, retire_arg_slots, slot_fact
+from ._relations_resolve import has_input_ancestor
 from ._user_grad_fn import grad_fn_read_refused
 from ._view_writeback import (
     data_alias_write_reaches_base,
@@ -212,7 +213,7 @@ def _unattributed_tensor_arg_positions(
 
         label = get_tensor_label(tensor)
         event = live_events.get(label) if isinstance(label, str) else None
-        return bool(event is not None and event.input_ancestors)
+        return bool(event is not None and has_input_ancestor(event))
 
     unsafe_receiver_with_graph_rhs = bool(
         mutates_receiver
