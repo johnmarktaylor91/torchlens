@@ -9,6 +9,7 @@ loud way instead of being guessed around. A throwaway git repository reproduces 
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -28,6 +29,9 @@ GIT_ENV = {
     "GIT_COMMITTER_EMAIL": "t@example.invalid",
     "HOME": "/nonexistent",
     "GIT_CONFIG_NOSYSTEM": "1",
+    # Keep the caller's PATH so the git that runs is the one the suite runs
+    # under; without it /usr/bin/git answers, and an old one rejects `init -b`.
+    "PATH": os.environ.get("PATH", os.defpath),
 }
 
 
