@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import base64
 from collections.abc import Callable, Sequence
+from dataclasses import replace
 from typing import Any
 
 MODULE_SCOPE_PREFIX = "tlm_"
@@ -223,14 +224,78 @@ def _frame_stacks(
     )
 
 
+class CallNumbering:
+    """Runtime module call indices: one call per run of a loop body or jit body.
+
+    A module called inside a ``scan``/``while`` body (or a cached jitted function bound
+    twice) is one trace-time call, but the unrolled program runs it once per iteration.
+    As on PyTorch, each run is its own call: a call frame opened inside a marked frame
+    is keyed by the marked frames' paths, and every new key of a module that ever ran
+    inside one takes the next index for that module. Calls of modules never seen inside
+    a marked frame keep their trace-time index. ``renamed`` maps trace-time calls made
+    outside any marked frame to their new index when it changed.
+    """
+
+    def __init__(self) -> None:
+        """Start with no marks and no numbered calls."""
+
+        self.marks: list[tuple[int, str]] = []
+        self.renamed: dict[tuple[str, int], int] = {}
+        self._index: dict[tuple[str, int, tuple[str, ...]], int] = {}
+        self._last: dict[str, int] = {}
+        self._looped: set[str] = set()
+
+    def snapshot(self) -> tuple[Any, ...]:
+        """Return the numbering state, to undo a discarded partial unroll."""
+
+        return dict(self._index), dict(self._last), set(self._looped), dict(self.renamed)
+
+    def restore(self, state: tuple[Any, ...]) -> None:
+        """Return to a :meth:`snapshot` (the unrolled captures were dropped for a region)."""
+
+        index, last, looped, renamed = state
+        self._index, self._last, self._looped, self.renamed = index, last, looped, renamed
+
+    def number(self, stacks: tuple[Any, Any]) -> tuple[Any, Any]:
+        """Return ``stacks`` with each call frame's runtime index."""
+
+        module_stack, call_stack = stacks
+        numbered = []
+        for depth, (address, call) in enumerate(call_stack):
+            tag = tuple(mark for opened_at, mark in self.marks if depth >= opened_at)
+            numbered.append((address, self._runtime_index(address, call, tag)))
+        return module_stack, tuple(numbered)
+
+    def _runtime_index(self, address: str, call: int, tag: tuple[str, ...]) -> int:
+        """Return (and remember) the runtime index of one call frame."""
+
+        key = (address, call, tag)
+        if key in self._index:
+            return self._index[key]
+        if tag:
+            self._looped.add(address)
+        if not tag and address not in self._looped:
+            index = call
+        else:
+            index = self._last.get(address, 0) + 1
+            if not tag:
+                self.renamed[(address, call)] = index
+        self._last[address] = max(self._last.get(address, 0), index)
+        self._index[key] = index
+        return index
+
+
 def _scoped_inner(
     interpret_inner: Callable[..., tuple[Any, ...]],
     stacks: tuple[tuple[str, ...], tuple[tuple[str, int], ...]],
+    numbering: CallNumbering | None = None,
 ) -> Callable[..., tuple[Any, ...]]:
     """Return ``interpret_inner`` with the enclosing equation's module stacks bound.
 
     Taken cond branches, scan bodies and while bodies inherit the module scope of the
-    control-flow equation that runs them.
+    control-flow equation that runs them. A loop iteration's frame (path ending in
+    ``iter=<k>``, then ``body`` or ``cond``) is marked on ``numbering``, so module calls
+    made inside it get one runtime call per iteration.
     """
 
     def scoped(
@@ -242,6 +307,58 @@ def _scoped_inner(
     ) -> tuple[Any, ...]:
         """Interpret one nested frame under the enclosing module scope."""
 
-        return interpret_inner(inner, args, path, inlined_depth, control_capture_indices, *stacks)
+        run = (inner, args, path, inlined_depth, control_capture_indices, *stacks)
+        if numbering is None or len(path) < 2 or not path[-2].startswith("iter="):
+            return interpret_inner(*run)
+        return marked(numbering, len(stacks[1]), path, interpret_inner, run)
 
     return scoped
+
+
+def marked(
+    numbering: CallNumbering,
+    opened_at: int,
+    path: tuple[str, ...],
+    interpret_inner: Callable[..., tuple[Any, ...]],
+    run: tuple[Any, ...],
+) -> tuple[Any, ...]:
+    """Interpret one frame with a mark: call frames from depth ``opened_at`` are its own."""
+
+    numbering.marks.append((opened_at, "/".join(path)))
+    try:
+        return interpret_inner(*run)
+    finally:
+        numbering.marks.pop()
+
+
+_SYNTHETIC_CONTROL_KINDS = frozenset({"cond_decision", "scan_read", "scan_stack", "while_decision"})
+
+
+def _became_region(captures: Any, start: int, path: tuple[str, ...]) -> bool:
+    """Return whether the control-flow equation at ``path`` was imported as one region."""
+
+    return any(
+        captures[index].kind == "region" and captures[index].source_path == path
+        for index in range(start, len(captures))
+    )
+
+
+def _inherited(stacks: tuple[Any, Any]) -> dict[str, Any]:
+    """Return region keyword arguments for already-numbered module stacks."""
+
+    return {"inherited_module_stack": stacks[0], "inherited_module_call_stack": stacks[1]}
+
+
+def _stamp_synthetic_stacks(captures: Any, start: int, stacks: tuple[Any, Any]) -> None:
+    """Give the scan, cond and while captures from ``start`` on the equation's module scope.
+
+    Synthetic captures (slice reads, stacks and branch/loop decisions) carry no name
+    stack of their own; they belong to the module that ran the control-flow equation.
+    """
+
+    if not stacks[0]:
+        return
+    for index in range(start, len(captures)):
+        capture = captures[index]
+        if capture.kind in _SYNTHETIC_CONTROL_KINDS and not capture.module_stack:
+            captures[index] = replace(capture, module_stack=stacks[0], module_call_stack=stacks[1])

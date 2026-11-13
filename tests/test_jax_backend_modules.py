@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 import torchlens as tl
-from torchlens.errors import BackendUnsupportedError
+from torchlens.errors import BackendUnsupportedError, CaptureGapWarning
 from torchlens.validation._invariants import check_metadata_invariants
 
 jax = pytest.importorskip("jax")
@@ -125,7 +125,7 @@ class JitInsideEquinox(eqx.Module):
         self.core = eqx.nn.Linear(3, 2, key=jax.random.PRNGKey(13))
 
     def __call__(self, x: Any) -> Any:
-        """Return output through an unsupported inner ``jax.jit``."""
+        """Return output through an inner ``jax.jit``."""
 
         def inner(y: Any) -> Any:
             """Return the core layer output for ``y``."""
@@ -146,7 +146,7 @@ class ScanInsideEquinox(eqx.Module):
         self.scale = jnp.asarray(2.0, dtype=jnp.float32)
 
     def __call__(self, x: Any) -> Any:
-        """Return output through an unsupported inner ``lax.scan``."""
+        """Return output through an inner ``lax.scan``."""
 
         def body(carry: Any, item: Any) -> tuple[Any, Any]:
             """Return one scan step."""
@@ -169,7 +169,7 @@ class CondInsideEquinox(eqx.Module):
         self.scale = jnp.asarray(2.0, dtype=jnp.float32)
 
     def __call__(self, x: Any) -> Any:
-        """Return output through an unsupported inner ``lax.cond``."""
+        """Return output through an inner ``lax.cond``."""
 
         return jax.lax.cond(
             jnp.sum(x) > 0,
@@ -190,7 +190,7 @@ class WhileInsideEquinox(eqx.Module):
         self.bias = jnp.asarray(1.0, dtype=jnp.float32)
 
     def __call__(self, x: Any) -> Any:
-        """Return output through an unsupported inner ``lax.while_loop``."""
+        """Return output through an inner ``lax.while_loop``."""
 
         def cond_fn(state: tuple[Any, Any]) -> Any:
             """Return whether iteration should continue."""
@@ -299,7 +299,7 @@ class JitInsideNnx(nnx.Module):
         self.core = nnx.Linear(3, 2, rngs=nnx.Rngs(23))
 
     def __call__(self, x: Any) -> Any:
-        """Return output through an unsupported inner ``jax.jit``."""
+        """Return output through an inner ``jax.jit``."""
 
         def inner(y: Any) -> Any:
             """Return the core layer output for ``y``."""
@@ -543,31 +543,53 @@ def test_jax_nnx_explicit_function_root_keeps_raw_callable_behavior() -> None:
     assert all(op.out is not None for op in constants)
 
 
-@pytest.mark.parametrize(
-    ("model", "primitive_name"),
-    (
-        (JitInsideEquinox(), "jit"),
-        (CondInsideEquinox(), "cond"),
-        (ScanInsideEquinox(), "scan"),
-        (WhileInsideEquinox(), "while"),
-    ),
-)
-def test_jax_equinox_pytree_module_strict_rejects_inner_transforms(
-    model: Any,
-    primitive_name: str,
-) -> None:
-    """B2a strict mode should reject transforms/control flow inside modules."""
+def test_jax_equinox_pytree_module_attributes_inner_jit() -> None:
+    """Ops inside a ``jax.jit`` call in an Equinox module belong to the called child module.
 
-    match = f"pytree_module strict mode.*{primitive_name!r}.*attributed module 'self'"
-    with pytest.raises(ValueError, match=match):
-        tl.trace(model, jnp.ones(3, dtype=jnp.float32), backend="jax")
+    The child's weights, closed over by the jit body, are recorded constants; its return
+    is an inner-trace value, so the call is disclosed as unrecorded.
+    """
+
+    with pytest.warns(CaptureGapWarning, match=r"'core:1' returned arrays of an inner trace"):
+        trace = tl.trace(JitInsideEquinox(), jnp.ones(3, dtype=jnp.float32), backend="jax")
+
+    labels = trace[tl.in_module("core")].labels
+    assert labels
+    assert all("core:1" in trace[label].modules for label in labels)
+    assert check_metadata_invariants(trace) is True
+    assert trace.validate_forward_pass([]) is True
 
 
-def test_jax_nnx_pytree_module_strict_rejects_inner_jit() -> None:
-    """Strict NNX attribution should reject transform-hidden child boundaries."""
+@pytest.mark.parametrize("model", (CondInsideEquinox(), ScanInsideEquinox(), WhileInsideEquinox()))
+def test_jax_equinox_pytree_module_captures_inner_control_flow(model: Any) -> None:
+    """Cond, scan and while bodies inside an attributed root module are captured and validate."""
 
-    with pytest.raises(ValueError, match="pytree_module strict mode.*'jit'.*'self'"):
-        tl.trace(JitInsideNnx(), jnp.ones(3, dtype=jnp.float32), backend="jax")
+    trace = tl.trace(model, jnp.ones(3, dtype=jnp.float32), backend="jax")
+
+    primitives = [
+        op for op in trace._layer_list if op.annotations.get("jax_capture_kind") == "primitive"
+    ]
+    assert primitives
+    assert check_metadata_invariants(trace) is True
+    assert trace.validate_forward_pass([]) is True
+    np.testing.assert_allclose(
+        np.asarray(trace.ops[trace.output_layers[0]].out),
+        np.asarray(model(jnp.ones(3, dtype=jnp.float32))),
+        rtol=1e-6,
+    )
+
+
+def test_jax_nnx_pytree_module_attributes_inner_jit() -> None:
+    """Ops inside a ``jax.jit`` call in an NNX module belong to the called child module."""
+
+    with pytest.warns(CaptureGapWarning, match=r"'core:1' returned arrays of an inner trace"):
+        trace = tl.trace(JitInsideNnx(), jnp.ones(3, dtype=jnp.float32), backend="jax")
+
+    labels = trace[tl.in_module("core")].labels
+    assert labels
+    assert all("core:1" in trace[label].modules for label in labels)
+    assert check_metadata_invariants(trace) is True
+    assert trace.validate_forward_pass([]) is True
 
 
 def test_jax_nnx_pytree_module_rejects_state_rebinding() -> None:

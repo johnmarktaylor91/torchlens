@@ -30,9 +30,8 @@ top-level trace. A module called under ``jax.vmap`` returns tracers of the batch
 one trace-time call stands for every batch member, so no single op is its output. Such calls
 are left unrecorded (their ``output_ops`` stay empty and ``Module.out`` raises) and disclosed
 with a ``CaptureGapWarning``, never filled with a guessed op. A module call inside a
-``jax.lax.scan``, ``cond`` or ``while_loop`` body never gets here: the root is itself the
-attributed module ``self``, and the strict module surface refuses control flow inside any
-attributed module.
+``jax.lax.scan``, ``cond`` or ``while_loop`` body returns tracers of the body's trace, and
+loop bodies run once per iteration, so those calls are left unrecorded and disclosed too.
 """
 
 from __future__ import annotations
@@ -43,6 +42,8 @@ from dataclasses import replace
 from typing import Any
 
 from ..._errors import CaptureGapWarning
+from .._entry_refusals import refuse_nested_primitive
+from .._errors import BackendUnsupportedError
 from .._module_returns import attach_output_paths, flag_returned_ops, iter_returned_leaves
 from ._return_ledger import JaxReturnLedger
 
@@ -98,6 +99,53 @@ def jaxpr_to_interpret(tree: Any, closed_jaxpr: Any) -> Any:
     return closed_jaxpr
 
 
+def _apply_call_renumbering(tree: Any, ledger: Any, renamed: Any) -> None:
+    """Move trace-time module calls to their runtime call index.
+
+    Module calls inside loop or jit bodies run once per iteration or bind (the
+    interpreter's ``CallNumbering``), which shifts the index of later calls of the same
+    module; their forward arguments and noted returns follow.
+    """
+
+    if tree is None or not renamed:
+        return
+    moved = {
+        (address, renamed.get((address, call), call)): value
+        for (address, call), value in tree.forward_args_by_call.items()
+    }
+    tree.forward_args_by_call.clear()  # the tree is frozen; its dict is the shared record
+    tree.forward_args_by_call.update(moved)
+    if isinstance(ledger, JaxReturnLedger):
+        ledger.pending = [
+            (address, renamed.get((address, call), call), value)
+            for address, call, value in ledger.pending
+        ]
+
+
+def _refuse_regions(result: Any, tree: Any) -> None:
+    """Refuse an imported region (scan or while not unrolled) in a module capture.
+
+    Module parameters are paired with equation ops in a pass that does not count region
+    ops yet, so a region would leave its parameter links inconsistent; until that pass
+    counts them, a module capture with a region refuses typed.
+    """
+
+    if tree is None:
+        return
+    for capture in getattr(result, "captures", ()):
+        if getattr(capture, "kind", None) != "region":
+            continue
+        try:
+            refuse_nested_primitive(capture.primitive)
+        except BackendUnsupportedError as exc:
+            exc.add_note(
+                f"JAX pytree_module capture imported {capture.primitive!r} as a region "
+                f"({capture.unverified_reason}); raise jax_max_control_flow_unroll so it "
+                "unrolls, or capture the raw function_root callable."
+            )
+            raise
+
+
 def split_outputs(result: Any, tree: Any) -> Any:
     """Move the extra outputs of an extended interpretation onto the ledger.
 
@@ -114,10 +162,16 @@ def split_outputs(result: Any, tree: Any) -> Any:
         ``result`` with the model's outputs only.
     """
 
+    _refuse_regions(result, tree)
     ledger = getattr(tree, "module_returns", None)
+    _apply_call_renumbering(tree, ledger, getattr(result, "module_call_renumbering", None))
     if not isinstance(ledger, JaxReturnLedger) or ledger.extended_jaxpr is None:
         return result
     ledger.extended_jaxpr = None
+    if getattr(result, "halt_frontier", None) is not None:
+        # A halted run never reaches the extra outputs; no module return is recorded.
+        ledger.release()
+        return result
     kept = len(result.outputs) - len(ledger.leaves)
     ledger.extra_values = tuple(result.outputs[kept:])
     producer_by_id = {
@@ -182,8 +236,9 @@ def _record_pending(trace: Any, ledger: JaxReturnLedger) -> None:
             warnings.warn(
                 CaptureGapWarning(
                     f"JAX module call '{address}:{call_index}' returned arrays of an inner trace "
-                    "(e.g. jax.vmap: one trace-time call stands for every batch member), so no "
-                    "op is its output; its return is not recorded, so this call has no "
+                    "(jax.vmap, or a jit, scan, cond or while body: one trace-time call stands "
+                    "for every batch member, bind or iteration), so no op is its output; its "
+                    "return is not recorded, so this call has no "
                     "output_ops, output_paths or Module.out. Remedy: read the values through "
                     "the enclosing module's output",
                     code="module_return_unrecorded",

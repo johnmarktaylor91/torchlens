@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, replace
-from typing import Any, Literal, TypeAlias, cast
+from dataclasses import dataclass, field, replace
+from typing import Any, Literal, NoReturn, TypeAlias, cast
 
 from ..._ir.events import JaxEquationKind
 from .. import _entry_refusals as _refusals
@@ -17,27 +17,20 @@ from ._interp_hooks import (
     binds_as_primitive,
     dead_after,
 )
+from ._jit_consts import hoist_nested_jit_consts
 from ._module_stacks import (
+    CallNumbering,
+    _became_region,
     _frame_stacks,
+    _inherited,
     _scoped_inner,
+    _stamp_synthetic_stacks,
+    marked,
     module_call_stack_from_eqn,
     module_stack_from_eqn,
 )
 from ._source_path_components import _normalize_jax_source_path_component
 
-SAFE_JIT_NAMES = frozenset(
-    {
-        "_bernoulli",
-        "_normal",
-        "_normal_real",
-        "_one_hot",
-        "_randint",
-        "_uniform",
-        "_where",
-        "clip",
-        "relu",
-    }
-)
 REJECTED_NESTED_PRIMITIVES = frozenset(
     {
         "cond",
@@ -217,6 +210,9 @@ class JaxCaptureResult:
         Captures the retention policy did not keep.
     halt_frontier
         The capture a halt check matched (outputs are then empty), else ``None``.
+    module_call_renumbering
+        Trace-time module calls made outside any loop or jit body whose runtime call
+        index changed (``CallNumbering``), for the module tree and return ledger.
     """
 
     outputs: tuple[Any, ...]
@@ -226,6 +222,7 @@ class JaxCaptureResult:
     inlined_call_primitives: tuple[str, ...]
     released_capture_indices: frozenset[int] = frozenset()
     halt_frontier: JaxRuntimeCapture | None = None
+    module_call_renumbering: Mapping[tuple[str, int], int] = field(default_factory=dict)
 
 
 def derive_closed_jaxpr(fn: Any, args: Sequence[Any], static_argnums: Sequence[int] = ()) -> Any:
@@ -243,12 +240,18 @@ def derive_closed_jaxpr(fn: Any, args: Sequence[Any], static_argnums: Sequence[i
     Returns
     -------
     Any
-        ``jax.core.ClosedJaxpr`` on the installed JAX runtime.
+        ``jax.core.ClosedJaxpr`` on the installed JAX runtime. Constants that a
+        top-level ``jax.jit`` call closes over are hoisted to the top level
+        (``_jit_consts``), so they are recorded closure constants.
     """
 
     import jax
+    from jax.extend import core
 
-    return jax.make_jaxpr(fn, static_argnums=tuple(static_argnums))(*args)
+    closed = jax.make_jaxpr(fn, static_argnums=tuple(static_argnums))(*args)
+    return hoist_nested_jit_consts(
+        closed, core, call_primitives=PURE_JIT_CALL_PRIMITIVES, known_params=JIT_CALL_PARAM_NAMES
+    )
 
 
 def flatten_dynamic_args(
@@ -358,6 +361,7 @@ def interpret_closed_jaxpr_with_inlining(
     equation_hook = equation_hook or _unedited_outputs
     captures = HookedCaptures(hooks)
     inlined_calls: list[str] = []
+    numbering = CallNumbering()
     tap_values = {} if tap_values_by_capture_output is None else tap_values_by_capture_output
     replacement_values = (
         {} if replacement_values_by_capture_output is None else replacement_values_by_capture_output
@@ -432,7 +436,8 @@ def interpret_closed_jaxpr_with_inlining(
                 common = {"env": env, "core": core, "path": eqn_path, "captures": captures}
                 common["inlined_depth"] = inlined_depth
                 stacks = _frame_stacks(eqn, inherited_module_stack, inherited_module_call_stack)
-                scoped = _scoped_inner(interpret_inner, stacks)
+                scoped = _scoped_inner(interpret_inner, stacks, numbering)
+                numbering_state, start = numbering.snapshot(), len(captures)
                 outputs = _interpret_control_flow(
                     eqn,
                     jax_control_flow,
@@ -440,12 +445,13 @@ def interpret_closed_jaxpr_with_inlining(
                     region_kwargs={
                         **common,
                         "jax_max_control_flow_unroll": jax_max_control_flow_unroll,
-                        "inherited_module_stack": stacks[0],
-                        "inherited_module_call_stack": stacks[1],
+                        **_inherited(numbering.number(stacks)),
                         "rewrite_outputs": rewrite_outputs,
                     },
                     control_capture_indices=control_capture_indices,
                 )
+                if _became_region(captures, start, eqn_path):
+                    numbering.restore(numbering_state)
                 for var, value in zip(eqn.outvars, outputs, strict=True):
                     _write_env(env, var, value, core)
                 continue
@@ -460,8 +466,9 @@ def interpret_closed_jaxpr_with_inlining(
                     captures=captures,
                     jax_max_control_flow_unroll=jax_max_control_flow_unroll,
                     unverified_reason="custom_vjp_forward_region",
-                    inherited_module_stack=inherited_module_stack,
-                    inherited_module_call_stack=inherited_module_call_stack,
+                    **_inherited(
+                        numbering.number((inherited_module_stack, inherited_module_call_stack))
+                    ),
                     rewrite_outputs=rewrite_outputs,
                 )
                 for var, value in zip(eqn.outvars, outputs, strict=True):
@@ -492,13 +499,11 @@ def interpret_closed_jaxpr_with_inlining(
                         primitive=primitive_name,
                     )
                 inlined_calls.append(primitive_name)
-                outputs = interpret_inner(
-                    nested,
-                    inputs,
-                    eqn_path,
-                    inlined_depth + 1,
-                    control_capture_indices,
-                    *_frame_stacks(eqn, inherited_module_stack, inherited_module_call_stack),
+                stacks = _frame_stacks(eqn, inherited_module_stack, inherited_module_call_stack)
+                run = (nested, inputs, eqn_path, inlined_depth + 1, control_capture_indices)
+                # One runtime call per bind: a cached jitted body bound twice is two runs.
+                outputs = marked(
+                    numbering, len(stacks[1]), eqn_path, interpret_inner, (*run, *stacks)
                 )
                 for var, value in zip(eqn.outvars, outputs, strict=True):
                     _write_env(env, var, value, core)
@@ -507,7 +512,9 @@ def interpret_closed_jaxpr_with_inlining(
                 _refusals.refuse_nested_jaxpr(primitive_name)
             result = eqn.primitive.bind(*inputs, **eqn.params)
             outputs = tuple(result if eqn.primitive.multiple_results else (result,))
-            stacks = _frame_stacks(eqn, inherited_module_stack, inherited_module_call_stack)
+            stacks = numbering.number(
+                _frame_stacks(eqn, inherited_module_stack, inherited_module_call_stack)
+            )
             equation_module_stack, equation_module_call_stack = stacks
             outputs = equation_hook(captures, eqn, rewrite_outputs(len(captures), outputs), stacks)
             for var, value in zip(eqn.outvars, outputs, strict=True):
@@ -539,7 +546,10 @@ def interpret_closed_jaxpr_with_inlining(
         outputs = interpret_inner(closed_jaxpr, flat_args, ("root",), 0)
     except InterpreterHalt as halt:
         outputs, halt_frontier = (), halt.capture
-    return _capture_result(outputs, tuple(captures), inlined_calls, captures, halt_frontier)
+    return replace(
+        _capture_result(outputs, tuple(captures), inlined_calls, captures, halt_frontier),
+        module_call_renumbering=dict(numbering.renamed),
+    )
 
 
 def interpret_pullback_jaxpr(
@@ -623,6 +633,34 @@ def _interpret_control_flow(
     under ``"region"`` mode, else unroll, falling back to a region (and dropping the
     partial unroll's captures) when the unroll cap is exceeded.
     """
+
+    captures = loop_kwargs["captures"]
+    start = len(captures)
+    try:
+        return _dispatch_control_flow(
+            eqn,
+            jax_control_flow,
+            loop_kwargs=loop_kwargs,
+            region_kwargs=region_kwargs,
+            control_capture_indices=control_capture_indices,
+        )
+    finally:
+        stacks = (
+            region_kwargs["inherited_module_stack"],
+            region_kwargs["inherited_module_call_stack"],
+        )
+        _stamp_synthetic_stacks(captures, start, stacks)
+
+
+def _dispatch_control_flow(
+    eqn: Any,
+    jax_control_flow: str,
+    *,
+    loop_kwargs: dict[str, Any],
+    region_kwargs: dict[str, Any],
+    control_capture_indices: tuple[int, ...],
+) -> tuple[Any, ...]:
+    """Run one control-flow equation in the requested mode (see ``_interpret_control_flow``)."""
 
     name = eqn.primitive.name
     kwargs = {**loop_kwargs, "control_capture_indices": control_capture_indices}
@@ -1488,9 +1526,7 @@ def reject_attributed_module_strict_control_flow(closed_jaxpr: Any) -> None:
             primitive_name = eqn.primitive.name
             if module_stack and eqn.effects:
                 _raise_attributed_strict_error(
-                    primitive_name,
-                    module_stack[-1],
-                    suffix=f"effects={eqn.effects}",
+                    primitive_name, module_stack[-1], effects=eqn.effects
                 )
             if module_stack and _is_strict_rejected_attributed_primitive(eqn):
                 _raise_attributed_strict_error(primitive_name, module_stack[-1])
@@ -1505,7 +1541,12 @@ def reject_attributed_module_strict_control_flow(closed_jaxpr: Any) -> None:
 
 
 def _is_strict_rejected_attributed_primitive(eqn: Any) -> bool:
-    """Return whether an attributed equation is rejected by B2a strict mode.
+    """Return whether an attributed equation is outside the module-attribution surface.
+
+    ``jit``/``pjit`` calls, ``cond``, ``scan`` and ``while`` inside attributed modules are
+    interpreted with the enclosing module scope threaded into their nested jaxprs.
+    Rematerialization (``jax.checkpoint``), custom-VJP regions and ``shard_map`` stay
+    refused.
 
     Parameters
     ----------
@@ -1515,55 +1556,47 @@ def _is_strict_rejected_attributed_primitive(eqn: Any) -> bool:
     Returns
     -------
     bool
-        True when the primitive is outside the strict attributed-module surface.
+        True when the primitive is outside the attributed-module surface.
     """
 
-    primitive_name = eqn.primitive.name
-    if primitive_name == "jit" and eqn.params.get("name") in SAFE_JIT_NAMES:
-        return False
-    return primitive_name in {
-        "cond",
-        "custom_vjp_call",
-        "jit",
-        "pjit",
-        "remat2",
-        "scan",
-        "shard_map",
-        "while",
-        "while_loop",
-    }
+    return eqn.primitive.name in {"checkpoint", "custom_vjp_call", "remat2", "shard_map"}
 
 
 def _raise_attributed_strict_error(
     primitive_name: str,
     module_address: str,
     *,
-    suffix: str | None = None,
-) -> None:
-    """Raise the B2a strict-mode module-attribution error.
+    effects: Any = None,
+) -> NoReturn:
+    """Raise the typed refusal for a primitive outside the attributed-module surface.
 
     Parameters
     ----------
     primitive_name
-        JAX primitive that crossed the strict surface.
+        JAX primitive outside the attributed-module surface.
     module_address
         Deepest owning TorchLens module address.
-    suffix
-        Optional extra diagnostic text.
+    effects
+        The equation's effects, when effects are the cause.
 
     Raises
     ------
-    ValueError
-        Always raised with actionable module guidance.
+    BackendUnsupportedError
+        Always (a ``ValueError`` subclass): code ``jax_effects_unsupported`` for
+        effects, else ``jax_nested_primitive_unsupported``. A note names the module.
     """
 
-    detail = f" ({suffix})" if suffix else ""
-    raise ValueError(
-        "JAX pytree_module strict mode does not support "
-        f"{primitive_name!r} inside attributed module {module_address!r}{detail}. "
-        "Move the transform/control-flow outside the attributed module, capture the raw "
-        "function_root callable, or wait for widened attribution support."
-    )
+    try:
+        if effects is not None:
+            _refusals.refuse_equation_effects(primitive_name, effects)
+        _refusals.refuse_nested_primitive(primitive_name)
+    except BackendUnsupportedError as exc:
+        exc.add_note(
+            f"JAX pytree_module strict mode does not support {primitive_name!r} inside "
+            f"attributed module {module_address!r}; move it outside the attributed module "
+            "or capture the raw function_root callable."
+        )
+        raise
 
 
 def jax_equivalence_key(capture: JaxEquationCapture) -> str:

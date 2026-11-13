@@ -31,15 +31,43 @@ Jaxpr-first JAX backend. It fills the backend protocol (no `capture_backend`); i
   grouper torch uses), gated by `recurrence_detection` (default True).
 
 ## jaxpr.py
-- Closed-jaxpr derivation and interpretation. `SAFE_JIT_NAMES` allowlists
-  inlineable jit sub-jaxprs. The DEFAULT control-flow mode is `"unroll"`:
-  `cond`/`model_id`/`while_loop` (and forward `custom_vjp_call` regions) are
-  CAPTURED by mode-gated handlers that run before the refusal backstop —
-  only `remat2` reaches the raise on the default path (and today as a bare
-  `ValueError`, not the `BackendUnsupportedError` the backends contract
-  asks for — known gap). `REJECTED_NESTED_PRIMITIVES` refusals apply under
-  the explicit reject mode, not the default; `EFFECT_PRIMITIVES` and
-  `PURE_JIT_CALL_PRIMITIVES` classify callback and jit-call equations.
+- Closed-jaxpr derivation and interpretation. The DEFAULT control-flow mode is
+  `"unroll"`: `cond`/`scan`/`while_loop` (and forward `custom_vjp_call` regions)
+  are CAPTURED by mode-gated handlers that run before the refusal backstop;
+  `REJECTED_NESTED_PRIMITIVES` refusals apply under the explicit reject mode.
+  `EFFECT_PRIMITIVES` and `PURE_JIT_CALL_PRIMITIVES` classify callback and
+  jit-call equations. Inside an attributed Equinox/NNX module the enclosing
+  equation's `tlm_`/`tlc_` scope is threaded into nested jit, taken cond
+  branches, scan and while bodies; synthetic control captures (`scan_read`,
+  `scan_stack`, `cond_decision`, `while_decision`) get the equation's stacks.
+  `checkpoint`/`remat2`/`custom_vjp_call`/`shard_map` inside an attributed
+  module refuse through the existing `_entry_refusals` codes with an
+  "inside attributed module" note; never a bare `ValueError`.
+- `_interp_hooks.py`: `InterpreterHooks(session, halt, bind_combiners)`. Retention
+  placeholders (`jax/_retention.py` contract: `keep(capture_index)`), the halt
+  check at capture append (`InterpreterHalt` unwinds every nested frame; the
+  result carries `halt_frontier`, no suffix primitive binds) and the pullback
+  entry `interpret_pullback_jaxpr` (binds combiner primitives such as
+  `scatter-add`).
+- `_module_stacks.py`: the `tlm_`/`tlc_` codec and relative-stack composition
+  (nested name stacks carry only their own scope); `CallNumbering` gives a module
+  called inside a loop iteration or a jit bind one runtime call per run, as on
+  PyTorch (`module_call_renumbering` on the result moves later trace-time calls;
+  `_module_return_probe.split_outputs` applies it to forward args and the ledger).
+  Leaf module. A module capture with an imported region (scan or while over the
+  unroll cap, or `jax_control_flow="region"`) refuses typed in `split_outputs`:
+  `backend._finish_trace` pairs module params with `result.equations`, which has no
+  region captures, so a region would misalign them; passing `result.captures`
+  there lifts it.
+- `_jit_consts.py`: `derive_closed_jaxpr` hoists the closure constants of top-level
+  jit calls (a module's weights read inside `jax.jit`) to top-level constants, so
+  their reads are recorded parents (module params, or `constant` sources outside a
+  module). A jit inside a cond,
+  scan or while body that closes over constants still refuses (purity gate).
+- `_halt.py`: `JaxStop`, the `stop_after=` site for `capture_trace` (selector or
+  callable, matched on the equation context at hook time; halted traces get
+  torch's `is_stopped`/`stop_reason`/`_graph_stop_frontier`/`stopped` slot).
+  Uses the session's private `_reserve`/`_context`.
 
 ## modules.py
 - Module helpers for Equinox and Flax NNX roots — `EquinoxModuleTree` for
@@ -55,7 +83,9 @@ Jaxpr-first JAX backend. It fills the backend protocol (no `capture_backend`); i
   added), `split_outputs` moves the extra outputs off the interpreter result, and
   `note_return_labels` / `build_module_logs_with_returns` resolve them to op labels.
   A call under `jax.vmap` (inner-trace tracers) stays unrecorded, never guessed;
-  control flow refuses earlier (strict surface, the root is module `self`). The probe
+  a call inside a scan, cond or while body (body-trace tracers) is likewise left
+  unrecorded and disclosed with a `CaptureGapWarning`; a halted run releases the
+  ledger. The probe
   must not import import-cycle members (`jaxpr.py`, `_postprocess.finalization`):
   backend.py passes them in, which keeps `largest_scc` at its baseline.
 
@@ -95,12 +125,14 @@ Jaxpr-first JAX backend. It fills the backend protocol (no `capture_backend`); i
 
 ## Local Invariants
 - `intervene=` edits equation outputs at capture time (`_edits.py`); `stop_after=`
-  is NOT supported on jax.
+  halts at capture time through `_halt.py` once `backend.py` wires `JaxStop` and
+  the options policy stops refusing it; until then it is refused as a runtime option.
 - The capture is static (jaxpr interpretation), not eager wrapper capture;
   taken-branch honesty depends on the control-flow mode, and rejected nested
   primitives must stay typed refusals rather than silent boundary nodes.
-- Module scope labels are the only module-identity channel; keep the
-  `tlm_`/`tlc_` codecs in `modules.py` and `jaxpr.py` in lockstep.
+- Module scope labels are the only module-identity channel; the `tlm_`/`tlc_`
+  codec lives in `_module_stacks.py` and the writer in `modules.py`: keep them
+  in lockstep.
 - Perturbation exemptions are value proofs only. `_zero_annihilator.py` (torch
   parity, reason `multiplicative_zero_annihilator`) credits a `mul`/`dot_general`
   edge no candidate moved only when the parent fills one slot and the saved
