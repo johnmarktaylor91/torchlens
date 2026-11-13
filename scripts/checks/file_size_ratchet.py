@@ -383,7 +383,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # 50-line step above it; conscious raise, not drift.
     # 3250 -> 3150 (2026-11-03 tinygrad realize-once): capture planning and the
     # single realization moved to _realize_once.py (measured 3149 after the train merge).
-    "torchlens/backends/tinygrad/backend.py": 3150,
+    "torchlens/backends/tinygrad/backend.py": 3050,
     # 3250 -> 2600 (2026-11-01 preview-protocol union): the intermediate-tap
     # observers moved to _tap_observers.py and the derived-gradient oracle
     # helpers to _grad_oracle.py (measured 2573); next 50-line step above it.

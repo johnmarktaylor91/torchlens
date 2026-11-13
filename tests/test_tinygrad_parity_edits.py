@@ -16,6 +16,7 @@ from typing import Any
 
 import numpy as np
 import pytest
+import torch
 
 import torchlens as tl
 from torchlens.backends.tinygrad import GradOptions, TinygradBackend
@@ -23,7 +24,6 @@ from torchlens.errors import BackendUnsupportedError
 
 tinygrad = pytest.importorskip("tinygrad")
 Tensor = tinygrad.Tensor
-torch = pytest.importorskip("torch")
 
 pytestmark = [pytest.mark.backend_tinygrad, pytest.mark.rare]
 

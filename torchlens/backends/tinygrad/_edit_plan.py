@@ -21,7 +21,10 @@ from ..._postprocess._selective_save import _STATIC_INTERVENTION_SELECTOR_KINDS
 from ..._selection.selectors import BaseSelector
 from ...intervention._types import Edit, InterventionDecision
 from ...intervention.hooks import make_hook_context, normalize_hook, split_site_branches
+from .._backend_protocol import refusal_code_for_capability
 from ._edits import EDIT_REFUSAL, TinygradEdit, TinygradEditPlan, refuse_edit
+
+__tl_layer__ = "L4"
 
 _SUPPORTED_HELPERS = ("zero_ablate", "scale", "add", "clamp", "replace_with")
 _EDIT_SELECTOR_KINDS = _STATIC_INTERVENTION_SELECTOR_KINDS - frozenset({"module"})
@@ -66,7 +69,7 @@ def resolve_tinygrad_edit_plan(intervene: Any, halt: Any) -> TinygradEditPlan:
     if any(universe != "activation" for universe, _branch in split_site_branches(selector)):
         raise refuse_edit(
             f"the site {selector!r} addresses a gradient; tinygrad captures no backward pass.",
-            code="backward_capture_unsupported",
+            code=refusal_code_for_capability("backward_capture"),
         )
     unsupported = first_selector_kind_outside(selector, allowed=_EDIT_SELECTOR_KINDS)
     if unsupported is not None:

@@ -33,9 +33,6 @@ class _observe_tensor_ops:
         observed_module_stacks: dict[int, tuple[TinygradModuleFrame, ...]] | None = None,
         observed_tensors: dict[int, list[Any]] | None = None,
         pinned_uops: list[Any] | None = None,
-        *,
-        source_lines: SourceLineRecorder | None = None,
-        edits: TinygradEditSession | None = None,
     ) -> None:
         """Initialize the observation context.
 
@@ -55,18 +52,17 @@ class _observe_tensor_ops:
             mid-forward frees its id for a later UOp, which would then inherit
             the dropped one's names. Holding the returned UOps for the capture
             keeps every key unique, and their order numbers the calls.
-        source_lines
-            Optional recorder of the user frames each call ran from.
-        edits
-            Optional static-label edit session applied to call results.
+        The optional ``source_lines`` recorder (the user frames each call
+        ran from) and ``edits`` session (static-label edits applied to call
+        results) are attributes set after construction.
         """
 
         self.observed_ops = observed_ops
         self.observed_module_stacks = observed_module_stacks
         self.observed_tensors = observed_tensors
         self.pinned_uops = pinned_uops
-        self.source_lines = source_lines
-        self.edits = edits
+        self.source_lines: SourceLineRecorder | None = None
+        self.edits: TinygradEditSession | None = None
         self.paused = False
         self.original: Any = None
 

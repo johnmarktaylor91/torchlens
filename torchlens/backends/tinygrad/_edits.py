@@ -25,9 +25,9 @@ from typing import TYPE_CHECKING, Any, cast
 
 from ..._ir.intervention import FireResult
 from ..._ir.op_record import OpAmendment, amend_module_exit_intervention
-from ...intervention._zero_fire import settle_capture_zero_fire
 from .._options import is_missing
 from ..registry import BackendUnsupportedError, get_backend_spec, require_capability_implementation
+from ._rules import RNG_STATE_IN_GRAPH_CODE
 
 if TYPE_CHECKING:
     from ..._selection.selectors import BaseSelector
@@ -261,7 +261,9 @@ def capture_with_edits(backend: Any, call: dict[str, Any], intervene: Any, halt:
     Parameters
     ----------
     backend
-        The ``TinygradBackend``; ``capture_trace`` reads its ``_edit_session``.
+        The ``TinygradBackend``; ``capture_trace`` reads its ``_edit_session``
+        and ``_warn_zero_fire`` (the shared coded zero-fire settlement) warns
+        when nothing matched.
     call
         ``capture_trace`` keyword arguments without ``intervene``/``stop_after``.
     intervene
@@ -291,7 +293,7 @@ def capture_with_edits(backend: Any, call: dict[str, Any], intervene: Any, halt:
     planned = _run_session(backend, call, planning)
     sites = _planned_sites(planned, plan.selector, planning.calls)
     if not sites:
-        settle_capture_zero_fire(
+        backend._warn_zero_fire(
             f"Capture-time intervention selector {plan.selector!r} matched zero sites on "
             "the tinygrad forward; no intervention fired.",
             selector=repr(plan.selector),
@@ -332,7 +334,7 @@ def _refuse_lazy_random_draws(planned: Any) -> None:
                 "the forward reads lazy random values (for example default-initialized "
                 "tinygrad.nn weights), which an edited capture would draw twice. Realize "
                 "them first, e.g. with Tensor.realize(*nn.state.get_parameters(model)).",
-                code="rng_state_in_graph",
+                code=RNG_STATE_IN_GRAPH_CODE,
             )
         stack.extend(getattr(uop, "src", ()) or ())
 

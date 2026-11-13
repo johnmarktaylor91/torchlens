@@ -15,6 +15,7 @@ from typing import Any, cast
 
 from ..._ir.events import ModuleFrame, OpEvent
 from ._captures import TinygradUOpCapture
+from ._derived_grads import call_input_leaves
 from ._edits import fire_amendment
 from ._module_tree import TinygradModuleFrame
 from ._realize_once import RealizedCapture, realize_capture
@@ -84,11 +85,10 @@ def realize_with_state(
 
     session = backend._edit_session
     realized = realize_capture(
-        args,
+        call_input_leaves(args, backend._call_kwargs),
         outputs,
         preexisting_uops,
         backend.is_tensor,
-        kwargs=backend._call_kwargs,
         edit_sites=session.replaced if session is not None else None,
     )
     if backend._source_lines is not None:

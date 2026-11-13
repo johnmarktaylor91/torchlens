@@ -28,7 +28,6 @@ from dataclasses import dataclass, field
 from typing import Any, cast
 
 from .._protocols.tinygrad import TinygradProtocol
-from ._derived_grads import call_input_leaves
 from ._rules import (
     CONSTANT_UNREALIZABLE_CODE,
     RNG_STATE_IN_GRAPH_CODE,
@@ -311,12 +310,11 @@ def realized_value_uops(realized_tensor: Any) -> tuple[Any, ...]:
 
 
 def realize_capture(
-    args: Sequence[Any],
+    call_leaves: Iterable[tuple[Any, Any]],
     outputs: Sequence[Any],
     preexisting_uops: Iterable[Any],
     is_tensor: Callable[[Any], bool],
     *,
-    kwargs: Mapping[str, Any] | None = None,
     edit_sites: Mapping[int, Any] | None = None,
 ) -> RealizedCapture:
     """Read the forward's graph, plan the capture, and realize it once.
@@ -326,16 +324,15 @@ def realize_capture(
 
     Parameters
     ----------
-    args
-        Normalized positional call arguments.
+    call_leaves
+        ``(path, value)`` leaves of the call's positional and keyword
+        arguments (:func:`call_input_leaves`).
     outputs
         Flat tinygrad output tensors of the forward.
     preexisting_uops
         UOps live tensors held before the forward ran (:func:`live_tensor_uops`).
     is_tensor
-        Predicate selecting tinygrad tensor leaves of ``args`` and ``kwargs``.
-    kwargs
-        Keyword call arguments; their tensor leaves are inputs too.
+        Predicate selecting the tinygrad tensor leaves of ``call_leaves``.
     edit_sites
         ``id(replacement UOp) -> replaced result UOp`` of an edited capture.
 
@@ -346,9 +343,7 @@ def realize_capture(
     """
 
     input_leaves = tuple(
-        (path, value, cast(Any, value).uop)
-        for path, value in call_input_leaves(args, kwargs)
-        if is_tensor(value)
+        (path, value, cast(Any, value).uop) for path, value in call_leaves if is_tensor(value)
     )
     source_uops = tuple(uop for _path, _value, uop in input_leaves)
     output_uops = tuple(cast(Any, output).uop for output in outputs)

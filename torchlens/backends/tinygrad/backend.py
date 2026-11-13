@@ -49,6 +49,7 @@ from ..._validation_status import (
     count_importer_region_annotations,
 )
 from ...backends.registry import get_backend_spec
+from ...intervention._zero_fire import settle_capture_zero_fire
 from ...options import CaptureOptions, merge_capture_options
 from ...recording._types import CaptureSpec
 from .._facet_recipes import attach_facet_recipes, pop_facet_recipes
@@ -222,6 +223,7 @@ class TinygradBackend:
     _call_kwargs: Mapping[str, Any] = MappingProxyType({})
     _source_lines: SourceLineRecorder | None = None
     _edit_session: TinygradEditSession | None = None
+    _warn_zero_fire = staticmethod(settle_capture_zero_fire)
 
     def capture_trace(
         self,
@@ -545,12 +547,9 @@ class TinygradBackend:
             else _null_context()
         )
         observer = _observe_tensor_ops(
-            observed_ops,
-            observed_module_stacks,
-            pinned_uops=pinned_uops,
-            source_lines=self._source_lines,
-            edits=self._edit_session,
+            observed_ops, observed_module_stacks, pinned_uops=pinned_uops
         )
+        observer.source_lines, observer.edits = self._source_lines, self._edit_session
         with module_call_context, observer, _reject_mid_capture_execution():
             output = model(*args, **self._call_kwargs)
         if self._input_identities(args) != input_identities:
