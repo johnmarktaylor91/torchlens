@@ -386,12 +386,13 @@ def forward(model: Any, example: Any) -> Any:
 
     import jax
 
+    tracer_errors = tuple(
+        getattr(jax.errors, name) for name in _TRACER_ERRORS if hasattr(jax.errors, name)
+    )
     try:
         return _abstract_call(model, example)
-    except Exception as exc:  # noqa: BLE001 - only tracer conversions fall back
-        if type(exc).__name__ not in _TRACER_ERRORS:
-            raise
-    return jax.block_until_ready(model(example))
+    except tracer_errors:  # only value-dependent forwards fall back to a real call
+        return jax.block_until_ready(model(example))
 
 
 def classify_error(exc: Exception) -> ProbeError:
@@ -484,15 +485,3 @@ def state_scope(model: Any) -> Iterator[None]:
         nnx.update(model, saved_state)
         for module, attr, value in saved_modes:
             setattr(module, attr, value)
-
-
-__all__ = [
-    "candidates",
-    "classify_error",
-    "executed_constraint",
-    "forward",
-    "handles",
-    "lazy_reason",
-    "make_input",
-    "state_scope",
-]

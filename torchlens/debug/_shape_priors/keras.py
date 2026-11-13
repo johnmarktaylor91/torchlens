@@ -477,15 +477,3 @@ def state_scope(model: Any) -> Iterator[None]:
     finally:
         for variable, value in zip(variables, saved, strict=True):
             variable.assign(value)
-
-
-__all__ = [
-    "candidates",
-    "classify_error",
-    "executed_constraint",
-    "forward",
-    "handles",
-    "lazy_reason",
-    "make_input",
-    "state_scope",
-]
