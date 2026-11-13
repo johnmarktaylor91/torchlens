@@ -17,8 +17,11 @@ import torchlens as tl  # noqa: E402
 from torchlens._capture.structure_only import StructureOnlyCapabilityError  # noqa: E402
 from torchlens.backends import registry  # noqa: E402
 from torchlens.backends.paddle import _stream_capture  # noqa: E402
+from torchlens.options import CaptureOptions  # noqa: E402
 
 pytestmark = [pytest.mark.backend_paddle, pytest.mark.rare]
+
+_SHELL = CaptureOptions(structure_only=True)
 
 
 @pytest.fixture(autouse=True)
@@ -73,12 +76,12 @@ def test_structure_only_records_the_taken_path_without_payloads(rows: int) -> No
     paddle.seed(0)
     model = _Branchy()
     full = tl.trace(model, _input(rows), backend="paddle")
-    shell = tl.trace(model, _input(rows), backend="paddle", structure_only=True)
+    shell = tl.trace(model, _input(rows), backend="paddle", capture=_SHELL)
 
     assert _structure(shell) == _structure(full)
     assert any("tanh" in op.label for op in shell._layer_list) is (rows > 2)
     assert bool(shell._options_structure_only) is True
-    computed = [op for op in shell._layer_list if op.layer_type not in ("input", "output")]
+    computed = [op for op in shell._layer_list if op.type not in ("input", "output")]
     assert computed and all(op.out is None for op in computed)
     assert all(not op.has_saved_activation for op in computed)
 
@@ -88,11 +91,11 @@ def test_structure_only_refuses_validation_typed() -> None:
 
     paddle.seed(0)
     model = _Branchy()
-    shell = tl.trace(model, _input(4), backend="paddle", structure_only=True)
+    shell = tl.trace(model, _input(4), backend="paddle", capture=_SHELL)
 
     with pytest.raises(StructureOnlyCapabilityError) as info:
         shell.validate_forward_pass(model(_input(4)))
-    assert info.value.code == "structure_only_validation_unsupported"
+    assert info.value.fields["code"] == "structure_only_validation_unsupported"
 
 
 def test_structure_only_is_refused_while_the_gate_is_closed(
@@ -102,7 +105,7 @@ def test_structure_only_is_refused_while_the_gate_is_closed(
 
     monkeypatch.undo()
     with pytest.raises(Exception, match="structure_only"):
-        tl.trace(_Branchy(), _input(2), backend="paddle", structure_only=True)
+        tl.trace(_Branchy(), _input(2), backend="paddle", capture=_SHELL)
 
 
 def test_plain_capture_has_no_structure_only_marker() -> None:
@@ -110,5 +113,5 @@ def test_plain_capture_has_no_structure_only_marker() -> None:
 
     trace = tl.trace(_Branchy(), _input(2), backend="paddle")
     assert not bool(trace._options_structure_only)
-    computed = [op for op in trace._layer_list if op.layer_type not in ("input", "output")]
+    computed = [op for op in trace._layer_list if op.type not in ("input", "output")]
     assert all(op.out is not None for op in computed)

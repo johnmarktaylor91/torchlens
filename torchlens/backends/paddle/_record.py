@@ -161,6 +161,10 @@ def _scratch_session(model: Any) -> Trace:
     return session
 
 
+_NO_LINEAGE: tuple[tuple[str, ...], tuple[Any, ...]] = ((), ())
+"""The (parent labels, module frames) of an input or source leaf: neither."""
+
+
 class _RecordingPaddleBackend(PaddleBackend):
     """A Paddle backend whose wrapper events go to a record sink, not a trace."""
 
@@ -179,7 +183,7 @@ class _RecordingPaddleBackend(PaddleBackend):
         events.raw_layer_counter += 1
         index = events.raw_layer_counter
         site = ReservedLabel(label, label, index, index, "input", label)
-        self._emit(site, "input", tensor, (), (), kind="input")
+        self._emit(site, "input", tensor, _NO_LINEAGE, kind="input")
 
     def emit_paddle_operation(
         self,
@@ -212,7 +216,7 @@ class _RecordingPaddleBackend(PaddleBackend):
         for index, (_path, tensor) in enumerate(outputs):
             if aliases_allowed and id(tensor) in input_ids:
                 continue
-            self._emit(reserved[index], op_name, tensor, parents, frames)
+            self._emit(reserved[index], op_name, tensor, (parents, frames))
             self.tensor_store.set_label_if_unlabeled(tensor, reserved[index].label_raw)
         return output
 
@@ -229,19 +233,24 @@ class _RecordingPaddleBackend(PaddleBackend):
             event.label_raw,
         )
         kind = "buffer" if event.layer_type == PADDLE_BUFFER_OP else "op"
-        self._emit(site, event.layer_type, tensor, (), (), kind=kind)
+        self._emit(site, event.layer_type, tensor, _NO_LINEAGE, kind=kind)
 
     def _emit(
         self,
         site: ReservedLabel,
         func_name: str,
         tensor: Any,
-        parents: tuple[str, ...],
-        frames: tuple[Any, ...],
+        lineage: tuple[tuple[str, ...], tuple[Any, ...]],
         *,
         kind: str = "op",
     ) -> None:
-        """Emit one event, deliver its value when requested, unwind when told to stop."""
+        """Emit one event, deliver its value when requested, unwind when told to stop.
+
+        ``lineage`` is the call's (parent labels, module frames) pair, shared by
+        every output of one call; source leaves have neither.
+        """
+
+        parents, frames = lineage
 
         # Deferred: the record interface is optional at import time and imports torch.
         from ...recording._backend_events import BackendOpEvent

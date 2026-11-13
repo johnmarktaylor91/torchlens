@@ -130,7 +130,7 @@ def test_record_covers_every_trace_op_on_a_module_model() -> None:
     traced = [
         str(op._label_raw)
         for op in trace._layer_list
-        if op.layer_type not in ("input", "output") and op.out is not None
+        if op.type not in ("input", "output") and op.out is not None
     ]
 
     _assert_records_match_trace(recording, _trace_payloads(model, _x()))
