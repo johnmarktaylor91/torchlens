@@ -1,4 +1,4 @@
-"""Static-selector edits applied during a tinygrad capture.
+"""Edits applied during a tinygrad capture.
 
 The observer sees every Tensor-API call result before the model does, so an
 edit (resolved by ``_edit_plan``) replaces a call's result with a lazy

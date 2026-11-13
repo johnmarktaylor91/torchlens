@@ -108,7 +108,7 @@ and its refusal cell has not yet passed on the pinned CI leg (not yet proven, no
 | `intermediate_derived_grads` | supported | opt-in through `GradOptions(intermediate_grads=True)` |
 | `backward_capture` | unsupported | refusal `backward_capture_unsupported` |
 | `fastlog` | unsupported | refusal `fastlog_unsupported` |
-| `can_intervene` | supported | static selectors (`tl.func`, `tl.label`, `tl.label_contains`, `tl.in_module` and their `&`, `|`, `~` combinations) with `tl.zero_ablate`, `tl.scale`, `tl.add`, `tl.clamp`, `tl.replace_with` or a callable transform; see Static-selector edits |
+| `can_intervene` | supported | static selectors and conditions over the predicate context (`tl.where`, a callable) with `tl.zero_ablate`, `tl.scale`, `tl.add`, `tl.clamp`, `tl.mean_ablate`, `tl.replace_with` or a callable transform; edits with derived gradients; `tl.grad(...)` sites in derived gradients; see Edits |
 | `rng_replay` | unsupported | refusal `rng_replay_unsupported` |
 | `has_streaming` | unsupported | refusal `streaming_unsupported` |
 | `structure_only_capture` | unsupported | refusal `structure_only_capture_unsupported` |
@@ -127,29 +127,71 @@ and its refusal cell has not yet passed on the pinned CI leg (not yet proven, no
 | No tinygrad Tensor input (positional or keyword) | unsupported | refusal `tinygrad_input_required` |
 | Replay validation or derived gradients on an audit-only trace | unsupported | refusal `live_payloads_required` |
 
-## Static-selector edits
+## Edits
 
-`trace(intervene=tl.when(selector, edit))` runs the forward twice. The first run is a plain
-capture: the selector is matched against its finished ops, as `save=` matches, and each
-matched op is mapped to the Tensor calls that returned it. The second run replaces those
-calls' results with the edit applied lazily, so it still realizes once. The edited op's
-payload is the edited value, and replay validation replays the original op, applies the
-edit and compares. tinygrad interns identical expressions, so an edit at an op applies at
-every call that returned that op.
+`trace(intervene=tl.when(condition, edit))` runs the forward twice. The first run is a
+plain capture: the condition is matched against its finished ops, as `save=` matches, and
+each matched op is mapped to the Tensor calls that returned it. The second run replaces
+those calls' results with the edit applied lazily, so it still realizes once. The edited
+op's payload is the edited value, and replay validation replays the original op, applies
+the edit and compares. tinygrad interns identical expressions, so an edit at an op applies
+at every call that returned that op.
+
+**Conditions.** A static selector (`tl.func`, `tl.label`, `tl.label_contains`,
+`tl.in_module` and their `&`, `|`, `~` combinations), or a condition over the predicate
+context: a plain callable `condition(ctx)` or a `tl.where(...)` leaf, alone or combined with
+static selectors. The context carries what PyTorch's live context carries (labels,
+function, module, parents, shape, dtype and the recent-event window); on PyTorch too its
+value fields stay unset during the forward. Those facts do not change when an edit is
+applied, so the condition is evaluated on the planning capture's contexts, the same
+contexts `trace(save=...)` predicates see on a finished tinygrad capture.
+
+**Edits.** The built-in helpers `tl.zero_ablate`, `tl.scale`, `tl.add`, `tl.clamp`,
+`tl.mean_ablate` (over the site itself, a tinygrad Tensor or a tinygrad op, with `dim=`)
+and `tl.replace_with`, or a callable transform over tinygrad Tensors. Each helper's edited
+capture validates.
+
+**Edits of a finished trace.** `trace.fork().do(...)` edits a finished tinygrad trace by
+replay. The same six helpers and callable transforms apply; the edited fork passes replay
+verification. An op the replay adapter cannot replay refuses by name.
+
+**Edits with derived gradients.** With `grad_options=GradOptions(...)`, the input and
+intermediate derived gradients are tinygrad's gradients of the edited program: the
+gradient run re-applies the edit at the same Tensor calls, never the unedited model. At an
+edited op the intermediate gradient is the gradient at the edited value, as on PyTorch.
+
+**Gradient sites.** `tl.when(tl.grad(selector), edit)` with `grad_options=` edits the
+gradient of the selected ops' outputs and lets the edited gradient flow upstream, as a
+PyTorch gradient hook does. tinygrad has no gradient hooks, so the forward is captured
+plain and the derived gradients are computed by TorchLens's reverse engine over the
+replay recipes, from the captured inputs and parameters. Input and intermediate derived
+gradients are published; parameter gradients are not.
 
 These stay refused, each with a typed code:
 
 | Request | Refusal |
 |---|---|
-| Value-dependent predicates (`tl.where(...)`, a lambda over values) | `interventions_unsupported`: a lazy forward has no values before its one realization |
-| `stop_after=` | `interventions_unsupported` |
+| `stop_after=` | `interventions_unsupported`: a tinygrad forward builds its whole lazy graph before anything runs |
 | Module-output selectors (`tl.module(...)`) and ops no Tensor call returned | `interventions_unsupported` |
-| Gradient sites (`tl.grad(...)`) | `backward_capture_unsupported` |
-| `grad_options=` together with `intervene=` | `intervention_with_derived_grads_unsupported` |
+| Helpers other than the six above (`tl.add_noise`, `tl.steer`, ...) and `tl.mean_ablate` over a torch-side population | `interventions_unsupported` |
+| A site that mixes activation and gradient branches | `backward_capture_unsupported` |
+| A gradient site without `grad_options=` | `backward_capture_unsupported`: no later backward computes it |
+| A gradient site whose selector names no op | `run_capability_unavailable` |
+| A gradient site on a capture with several outputs, or whose source values were not saved | `backward_capture_unsupported` |
 | An edit that changes shape or dtype | `interventions_unsupported` |
 | A forward reading lazy random values (unrealized default-init weights) | `rng_state_in_graph`: the two runs would draw them twice; realize the parameters first |
+| `Trace.do` with a `tl.grad(...)` site | `run_capability_unavailable` |
 
-A selector that matches nothing warns, as on torch, and returns the plain capture.
+A condition that matches nothing warns, as on torch, and returns the plain capture.
+
+## Backward pass
+
+`trace.backward(loss_fn)` records one backward pass per capture. Its gradient UOps are the
+ones tinygrad builds on the forward's own UOps, computed in the capture's single
+realization; the loss is `GradOptions(loss_fn=...)`. Leaf and parameter gradients equal
+eager `Tensor.backward`. tinygrad fuses its whole gradient program and recomputes forward
+values inside it, so a recorded gradient can differ from a replay of its op on the stored
+payloads by float32 rounding where the gradient cancels toward zero.
 
 ## Scorecard
 
