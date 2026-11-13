@@ -6,7 +6,6 @@ changing how a call's arguments are scanned edits this module alone.
 :func:`_scan_call_arguments` runs inside the shared-fields builder's alias binding.
 """
 
-import operator
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
@@ -31,6 +30,7 @@ from ..._utils._tensor_label import (
 )
 from ..._utils._tl_collective import _async_collective_elem
 from ..._utils.introspection import get_arg_tensors_for_resolution
+from ._arg_observation import FlatChecks, slot_parent_labels, snapshot_flat_slots
 from ._arg_template_resolve import resolve_arg_template_fields
 from ._args_template_cache import observe_template
 from ._call_layout import planned_tensor_items
@@ -41,12 +41,12 @@ from ._ops_arg_slots import (
     _peek_raw_graph_workspace,
     _session_parent_labels,
     _SlotCall,
-    _SlotContext,
     _SnapshotScope,
     _storage_intact,
     _tensor_items,
     arg_slot_labels,
-    parents_from_slots,
+    new_arg_slot,
+    new_slot_context,
     templates_requested,
 )
 from .buffer_writes import (
@@ -75,8 +75,6 @@ _PARAMETER = torch.nn.Parameter
 _TENSOR = torch.Tensor
 #: Exact types that are never an ``AsyncCollectiveTensor`` (a strict Tensor subclass).
 _PLAIN_TENSOR_TYPES = frozenset({_TENSOR, _PARAMETER})
-#: The tensor of a ``(kind, key, tensor, template_visited)`` slot item.
-_ITEM_VALUE = operator.itemgetter(2)
 
 
 def _scan_call_arguments(
@@ -103,19 +101,23 @@ def _scan_call_arguments(
         tensors_to_resolve = get_arg_tensors_for_resolution(args, kwargs)
     else:
         arg_tensors, arg_parameters, tensors_to_resolve = scanned
+    # The gated labels read here, handed to the snapshot while no source is logged.
+    reads: dict[int, str] | None = {}
     # Inline, not a helper: once per op (tests/test_capture_row_commit_cost.py pins calls).
     for tensor in tensors_to_resolve:
         kind = type(tensor)
-        if (
-            kind is _PARAMETER
-            or (
-                getattr(tensor, "_is_param", False)
-                if kind is _TENSOR
-                else isinstance(tensor, _PARAMETER)
-            )
-            or get_tensor_label(tensor) is not None
+        if kind is _PARAMETER or (
+            getattr(tensor, "_is_param", False)
+            if kind is _TENSOR
+            else isinstance(tensor, _PARAMETER)
         ):
             continue
+        label = get_tensor_label(tensor)
+        if label is not None:
+            if reads is not None:
+                reads[id(tensor)] = label
+            continue
+        reads = None
         if func_name in _RECEIVER_REBIND_NAMES and _repin_rebound_receiver(self, args, tensor):
             continue
         # Never source-log a "buffer" off a raw static stamp (stale cross-capture, or
@@ -126,9 +128,14 @@ def _scan_call_arguments(
         else:
             log_closure_constant_if_known(self, tensor)
 
+    runtime.arg_reads = (id(call), reads)  # read by the snapshot of this very call
     slots = snapshot_arg_slots(self, call, arg_tensors)
-    parent_layer_labels = list(dict.fromkeys(parents_from_slots(self, slots, arg_tensors)))
-    return arg_tensors, arg_parameters, parent_layer_labels
+    parents = slot_parent_labels(self, slots, arg_tensors)
+    return (
+        arg_tensors,
+        arg_parameters,
+        parents if len(parents) < 2 else list(dict.fromkeys(parents)),
+    )
 
 
 #: ``(normalized name, argument types, keyword names, keyword types) -> spec`` of the
@@ -295,26 +302,31 @@ def snapshot_arg_slots(
     """Walk the call's arguments once and record every tensor slot's derivation reads.
 
     Records the slots as the current op's context (read by the parent-position
-    recorder and the witness) and returns them in walk order.
+    recorder and the witness) and returns them in walk order. A flat call reuses
+    the gated labels the resolve loop handed over for it (the runtime's ``arg_reads``).
     """
 
+    runtime = trace._wrapper_runtime_ws
+    handed, runtime.arg_reads = runtime.arg_reads, None
+
     layout = call.layout
+    if layout is not None and layout.tensor_slots:
+        workspace = _peek_raw_graph_workspace(trace)
+        if workspace is None:
+            return ()
+        reads = handed[1] if handed is not None and handed[0] == id(call) else None
+        flat = snapshot_flat_slots(trace, workspace, call, (arg_tensors, reads), _FLAT_CHECKS)
+        if flat is not None:
+            return flat
     items = list(_tensor_items(call)) if layout is None else planned_tensor_items(call, layout)
     workspace = _peek_raw_graph_workspace(trace)
     if not items or workspace is None:
         return ()
     # Built with C-level set and map calls, not comprehensions: once per op.
-    clear_ids = set(map(id, arg_tensors))
-    # A flat layout without an ``out`` keyword has no ``out=`` destination.
-    if layout is None or layout.has_out:
-        clear_ids |= _out_destination_ids(call.kwargs)
-    if not templates_requested(trace):
-        visited_ids: set[int] = set()
-    elif layout is None:
-        visited_ids = {id(value) for _, _, value, seen in items if seen}
-    else:
-        # Every tensor of a flat call is a top-level value the template walk reaches.
-        visited_ids = set(map(id, map(_ITEM_VALUE, items)))
+    clear_ids = set(map(id, arg_tensors)) | _out_destination_ids(call.kwargs)
+    visited_ids = (
+        {id(value) for _, _, value, seen in items if seen} if templates_requested(trace) else set()
+    )
     scope = _SnapshotScope(trace.capture_events.live_index.by_raw_label, clear_ids, visited_ids)
     facts: dict[int, tuple[Any, ...]] = {}
     slot_list = []
@@ -325,11 +337,11 @@ def snapshot_arg_slots(
         if value_facts is None:
             value_facts = facts[id(value)] = _object_facts(trace, value, scope)
             labels[id(value)] = value_facts[0]
-        slot = _ArgSlot(kind, key, id(value), *value_facts)
+        slot = new_arg_slot(kind, key, id(value), value_facts)
         slot_list.append(slot)
         by_key[(kind, key)] = slot
     slots = tuple(slot_list)
-    workspace._pending_arg_slots = _SlotContext(call.args, call.kwargs, slots, by_key, labels)
+    workspace._pending_arg_slots = new_slot_context(call.args, call.kwargs, slots, by_key, labels)
     return slots
 
 
@@ -401,6 +413,7 @@ def _repin_rebound_receiver(self: "Trace", args: tuple[Any, ...], tensor: torch.
 
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
+from ..._data_classes.param import ParamAccessor  # noqa: E402
 from . import _ops_arguments  # noqa: E402
 from ._ops_arguments import (  # noqa: E402
     _function_registry_key,
@@ -409,4 +422,9 @@ from ._ops_arguments import (  # noqa: E402
 )
 from ._ops_predicate_events import (  # noqa: E402
     _extract_arg_tensors_and_params,
+)
+
+#: The flat snapshot's reads from this package's cyclic modules.
+_FLAT_CHECKS = FlatChecks(
+    _object_facts, _session_validated_parameter, session_validated_buffer_address, ParamAccessor
 )

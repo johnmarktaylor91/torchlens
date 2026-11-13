@@ -289,11 +289,13 @@ def test_one_label_read_per_tensor_slot(
 #: whose label reads take ``buffer`` from 110 to 103. A single-output call now reuses its
 #: loggable-output verdict instead of reading the output's label a second time in the emit
 #: loop, which takes the three traces to 44, 97 and 59. The thin emit logs a plain single
-#: output without the emit loop's label reads, which takes them to 38, 91 and 50.
+#: output without the emit loop's label reads (38, 91 and 50 alone), and a flat call's
+#: snapshot reuses the labels the resolve loop just read for its plain tensors (36, 89 and
+#: 49 alone); together they take them to 36, 89 and 49.
 _PINNED_LABEL_READS = (
-    ("inplace_mlp", _InplaceMLP, (2, 8), 38),
-    ("buffer", _BufferModel, (2, 3, 6, 6), 91),
-    ("nested_args", _NestedArgsModel, (3, 4), 50),
+    ("inplace_mlp", _InplaceMLP, (2, 8), 36),
+    ("buffer", _BufferModel, (2, 3, 6, 6), 89),
+    ("nested_args", _NestedArgsModel, (3, 4), 49),
 )
 
 
