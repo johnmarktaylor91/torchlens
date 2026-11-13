@@ -50,6 +50,7 @@ from .._options import (
 )
 from ..registry import BackendUnsupportedError, get_backend_spec
 from ._capture_hooks import after_forward, forward_hooks
+from ._grad_sites import arm_tf_grad_sites
 from ._halt import refuse_static_halt
 from .funcgraph import capture_static_funcgraph
 from .interventions import finish_halt, run_wired_session, wire_eager_session
@@ -402,6 +403,10 @@ class TFBackend:
                 intervene=intervene,
                 halt=halt,
             )
+        else:
+            arm_tf_grad_sites(
+                trace, tf
+            )  # a later trace.backward applies capture-time tl.grad sites
         attach_facet_recipes(trace, facet_recipes, backend_name="tf")
         freeze_trace_relation_views(trace)
         stamp_backend_finalized(trace)
