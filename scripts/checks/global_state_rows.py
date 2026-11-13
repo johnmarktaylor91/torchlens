@@ -614,6 +614,9 @@ _WEAK_SUBJECT_TABLES = frozenset(
         # Call-site grouping side table per live Trace (WeakKeyDictionary keyed
         # by the Trace), so re-validation of a fresh capture can re-check it.
         ("torchlens/_postprocess/_call_site_contract.py", "_CALL_SITE_CLASSES"),
+        # TF variable-read ledger per live Trace (WeakKeyDictionary keyed by the
+        # Trace): pre-forward snapshots and handle writes for validation; dies with it.
+        ("torchlens/backends/tf/_variable_reads.py", "_LEDGERS"),
         ("torchlens/_state.py", "_log_registry"),
         # L9 runtime journals are keyed by the owning Trace and contain only
         # timing/token/finalization bookkeeping. They must disappear with
@@ -997,6 +1000,7 @@ _WEAKLY_HELD = frozenset(
     {
         ("torchlens/_utils/_optimizer_hooks.py", "_BINDINGS"),
         ("torchlens/_postprocess/_call_site_contract.py", "_CALL_SITE_CLASSES"),
+        ("torchlens/backends/tf/_variable_reads.py", "_LEDGERS"),
         ("torchlens/_utils/_call_site.py", "_CODE_TOKENS"),
         ("torchlens/_utils/_call_site.py", "_INSTRUCTION_MAPS"),
         ("torchlens/_capture_state_helpers.py", "_VALIDATION_DEEPCOPY_WARNING_TYPES"),
