@@ -31,6 +31,7 @@ from ..._data_classes.derived_grad import (
 )
 from ..._ir.refs import DtypeRef
 from ...intervention._grad_site_neutral import (
+    GradSitePass,
     GradSiteResult,
     arm_grad_sites,
     build_grad_site_edits,
@@ -99,7 +100,8 @@ def _seed(trace: Any, adapter: Any, values: dict[str, Any], loss_fn: Any) -> dic
     label = str(outputs[0]._label_raw) if recipe is None else recipe.output_slots[0]
     from tinygrad import Tensor
 
-    leaf = Tensor(values[label].numpy(), requires_grad=True)
+    leaf = Tensor(values[label].numpy())
+    leaf.requires_grad = True
     loss = loss_fn(leaf) if loss_fn is not None else leaf
     if tuple(loss.shape) not in ((), (1,)):
         raise ValueError(
@@ -177,10 +179,8 @@ def attach_grad_site_derived_grads(
     backend: Any,
     trace: Any,
     call: dict[str, Any],
-    site: Any,
-    apply: Callable[[Any], Any],
+    plan: Any,
     resolve_labels: Callable[[Any, Any], Sequence[str]],
-    grad_options: Any,
 ) -> GradSiteResult:
     """Arm one ``tl.when(tl.grad(...), edit)`` clause on ``trace`` and attach its gradients.
 
@@ -191,15 +191,14 @@ def attach_grad_site_derived_grads(
     trace
         The plain capture of the forward.
     call
-        The ``capture_trace`` keyword arguments of the capture.
-    site
-        The clause's gradient site (``tl.grad(s)``, unions, a pass qualifier).
-    apply
-        The resolved edit, a ``tensor -> tensor`` application.
+        The ``capture_trace`` keyword arguments of the capture; its
+        ``grad_options`` is the tinygrad ``GradOptions``.
+    plan
+        The clause's ``TinygradEditPlan``: ``plan.selector`` is the gradient
+        site (``tl.grad(s)``, unions, a pass qualifier) and ``plan.edit.apply``
+        the resolved ``tensor -> tensor`` edit.
     resolve_labels
         ``resolve_labels(trace, forward_selector)``: raw labels it names.
-    grad_options
-        The tinygrad ``GradOptions``.
 
     Returns
     -------
@@ -207,17 +206,20 @@ def attach_grad_site_derived_grads(
         The edited pass: gradient per reached label and the fires.
     """
 
+    grad_options = call["grad_options"]
     adapter = get_adapter("tinygrad")
     edits = build_grad_site_edits(
-        site,
-        lambda grad, _call: apply(grad),
+        plan.selector,
+        lambda grad, _call: plan.edit.apply(grad),
         lambda inner: resolve_labels(trace, inner),
         operands=selector_operands,
     )
     arm_grad_sites(trace, edits)
     values, graph_ops = _replay_values(trace, adapter)
     seeds = _seed(trace, adapter, values, grad_options.loss_fn)
-    result = run_armed_grad_sites(trace, "tinygrad", graph_ops, values.__getitem__, seeds)
+    result = run_armed_grad_sites(
+        trace, "tinygrad", graph_ops, values.__getitem__, GradSitePass(seeds)
+    )
     args = backend._normalize_input_args(call["input_args"])
     trace._autograd_derived_grads = DerivedGradAccessor(
         _input_records(backend, trace, args, grad_options, result)

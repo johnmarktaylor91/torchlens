@@ -324,7 +324,7 @@ def capture_with_edits(backend: Any, call: dict[str, Any], intervene: Any, halt:
         )
     if grad_options is not None:
         replay = TinygradEditSession(fired_sites(session), plan.edit)
-        attach_edited_derived_grads(backend, edited, call, session, replay, grad_options)
+        attach_edited_derived_grads(backend, edited, original, session, replay)
     return edited
 
 
@@ -354,7 +354,7 @@ def _capture_with_grad_site(
         )
     trace = backend.capture_trace(**{**call, "grad_options": None})
     attach = cast(Any, plan.grad_site)
-    attach(backend, trace, call, plan.selector, plan.edit.apply, _site_labels, grad_options)
+    attach(backend, trace, call, plan, _site_labels)
     return trace
 
 

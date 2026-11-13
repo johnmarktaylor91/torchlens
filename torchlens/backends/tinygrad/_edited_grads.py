@@ -77,7 +77,7 @@ class _EditedGradientRun:
             return returned
 
         # The capture observer replaces the same tinygrad method the same way.
-        setattr(Tensor, "_apply_uop", wrapped)
+        Tensor._apply_uop = wrapped  # type: ignore[method-assign]
         return self
 
     def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
@@ -85,7 +85,7 @@ class _EditedGradientRun:
 
         from tinygrad import Tensor
 
-        setattr(Tensor, "_apply_uop", self._original)
+        Tensor._apply_uop = self._original  # type: ignore[method-assign]
 
 
 def _edited_model(model: Callable[..., Any], run: _EditedGradientRun) -> Callable[..., Any]:
@@ -170,7 +170,6 @@ def attach_edited_derived_grads(
     call: Mapping[str, Any],
     capture_session: TinygradEditSession,
     replay_session: TinygradEditSession,
-    grad_options: Any,
 ) -> None:
     """Attach derived gradients of the edited program to an edited capture.
 
@@ -181,13 +180,12 @@ def attach_edited_derived_grads(
     trace
         The edited capture.
     call
-        The ``capture_trace`` keyword arguments of the capture.
+        The ``capture_trace`` keyword arguments of the capture; its
+        ``grad_options`` is the tinygrad ``GradOptions``.
     capture_session
         The edit session of the edited capture (its call numbers).
     replay_session
         A fresh session that edits the same call numbers with the same edit.
-    grad_options
-        The tinygrad ``GradOptions``.
 
     Raises
     ------
@@ -197,6 +195,7 @@ def attach_edited_derived_grads(
         checks).
     """
 
+    grad_options = call["grad_options"]
     run = _EditedGradientRun(replay_session)
     args = backend._normalize_input_args(call["input_args"])
     leaf_options = _leaf_options(backend, args, grad_options)
