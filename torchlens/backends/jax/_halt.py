@@ -27,11 +27,18 @@ from ..._capture._stop_after_policy import settle_unfired_stop_after
 from ..._capture.outcome import StopRequest
 from ..._ir.selector_eval import module_union_addresses, selector_contains_kind
 from ..._output_slot import returned, stopped
-from ..._selection import selectors
 from .._options import pop_stop_directive
 from ._interp_hooks import InterpreterHooks
 
 _ALIAS_RETRY_KINDS = ("label", "contains", "regex")
+
+
+def _selectors() -> Any:
+    """Return ``torchlens._selection.selectors`` (L4; deferred, this module is L2)."""
+
+    from ..._selection import selectors
+
+    return selectors
 
 
 def resolve_stop_selector(halt: Any) -> Any:
@@ -41,6 +48,7 @@ def resolve_stop_selector(halt: Any) -> Any:
     typed refusal, as on MLX.
     """
 
+    selectors = _selectors()
     if isinstance(halt, (selectors.BaseSelector, type)) or not callable(halt):
         return halt
     return selectors.WhereSelector(halt)
@@ -181,7 +189,7 @@ class JaxStop:
         """Pop the stop directive from ``kwargs``; leave an unsupported value for rejection."""
 
         stop = cls(pop_stop_directive(kwargs))
-        if stop.selector is not None and not isinstance(stop.selector, selectors.BaseSelector):
+        if stop.selector is not None and not isinstance(stop.selector, _selectors().BaseSelector):
             kwargs["stop_after"] = stop.stop_site
         return stop
 
