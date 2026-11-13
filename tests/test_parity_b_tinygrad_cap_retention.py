@@ -134,6 +134,21 @@ def test_sparse_capture_realizes_once_and_runs_fewer_kernels(
     assert sparse_kernels < full_kernels
 
 
+def test_reshape_constant_does_not_block_deferral() -> None:
+    """A deep chain whose reduction carries a ``CONST`` shape argument still defers."""
+
+    def deep(x: Any) -> Any:
+        for _ in range(4):
+            x = ((x + 1.0) * 0.5).relu()
+        return x.sum()
+
+    last = _ops(_trace(deep))[-1].label
+    sparse = _trace(deep, save=tl.label(last))
+
+    assert {c.retention for c in sparse.tinygrad_uop_captures} == {"kept", "dropped"}
+    assert [op.label for op in sparse.saved_ops] == [last]
+
+
 def test_side_effecting_python_suffix_runs_once(monkeypatch: pytest.MonkeyPatch) -> None:
     """Python after the last tensor op runs once; the deferred realize does not rerun it."""
 

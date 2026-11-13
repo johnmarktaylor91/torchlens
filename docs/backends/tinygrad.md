@@ -123,6 +123,7 @@ and its refusal cell has not yet passed on the pinned CI leg (not yet proven, no
 | Input mutation (`Tensor.assign()`, `Tensor.replace()`, setitem on an input) | unsupported | refusal `input_mutation_unsupported` |
 | A callable that returns no tinygrad Tensor | unsupported | refusal `tensor_output_required` |
 | Keyword tensor inputs (`input_kwargs=`) | supported | each keyword leaf is a trace input |
+| Static-label `save=` (`tl.label`, `tl.func`, `tl.in_module`, `tl.label_contains` and their `&`, `|`, `~` combinations) | supported | kept values and the outputs are realized in the capture's single evaluation; dropped values are never computed into a buffer. Replay validation reports a dropped op as exempted (`not_saved_by_user`) and a kept op with a dropped parent as unverified (`parent_payload_missing`), as torch does |
 | User source lines (`op.source.frames`, `save_source_context=`) | supported | user frames from the `tl.trace` call site to the op's line; TorchLens and tinygrad frames are skipped |
 | No tinygrad Tensor input (positional or keyword) | unsupported | refusal `tinygrad_input_required` |
 | Replay validation or derived gradients on an audit-only trace | unsupported | refusal `live_payloads_required` |

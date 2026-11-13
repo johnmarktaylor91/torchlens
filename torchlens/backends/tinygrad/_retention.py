@@ -78,16 +78,26 @@ def defer_realize(
 
     ``targets`` and ``owned`` are the lazy realization targets
     (``_realization_targets``). A target the capture does not own shares the
-    UOp itself; emission copies it at once, which is only free of a realize
-    when tinygrad already holds its buffer, so any other shared value keeps
-    the capture on the realize-everything path.
+    UOp itself; emission copies it at once. That copy reads no forward value
+    when tinygrad already holds its buffer or the UOp is a ``CONST`` (a
+    scalar such as a reshape's shape argument, copied the same way in a full
+    capture). Any other shared value would compute its ancestors early, so it
+    keeps the capture on the realize-everything path.
     """
 
     for key, tensor in targets.items():
-        if key not in owned and not bool(getattr(tensor.uop, "is_realized", False)):
+        if key not in owned and not _copy_reads_no_value(tensor.uop):
             return False
     session.deferred = DeferredRealize(outputs=tuple(outputs))
     return True
+
+
+def _copy_reads_no_value(uop: Any) -> bool:
+    """Whether copying a shared ``uop`` needs no forward value computed first."""
+
+    if bool(getattr(uop, "is_realized", False)):
+        return True
+    return getattr(getattr(uop, "op", None), "name", None) == "CONST"
 
 
 def realize_retained(trace: Any, session: Any, after_realize: Callable[[Any], None]) -> None:
