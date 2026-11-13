@@ -496,7 +496,7 @@ class TinygradPayloadCodec:
         kwargs: dict[str, Any] = {"dtype": dtype}
         if device not in (None, "", "unknown"):
             kwargs["device"] = device
-        return Tensor(array, **kwargs).realize()
+        return Tensor(array, **kwargs).reshape(array.shape).realize()  # Tensor(0-d) is (1,)
 
     def manifest_fields(self, value: Any, encoded: EncodedArray) -> dict[str, Any]:
         """Return v2 manifest vocabulary for a tinygrad payload."""
