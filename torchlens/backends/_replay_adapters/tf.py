@@ -27,6 +27,7 @@ import numpy as np
 
 from ... import _state
 from .._validation_shared import ops_by_label
+from ..tf._helper_hooks import tf_helper_hook
 from ..tf._raw_op_replay import _replay_raw_op
 from ..tf.op_callback_capture import TFInputCapture, TFOpCapture, TFUnresolvedProducer
 from ..tf.validation import (
@@ -350,8 +351,6 @@ def apply_helper(trace: Any, helper: Any, value: Any) -> Any:
     """
 
     import tensorflow as tf  # deferred: optional dependency
-
-    from ..tf._helper_hooks import tf_helper_hook
 
     del trace
     return tf_helper_hook(helper, tf)(tf.convert_to_tensor(value))
