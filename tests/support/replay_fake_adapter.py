@@ -50,6 +50,7 @@ class FakeTrace:
     payloads: dict[str, np.ndarray]
     backend: str = BACKEND
     captures: dict[str, OpRecipe] = field(default_factory=dict)
+    param_payloads: dict[str, Any] = field(default_factory=dict)
 
     @property
     def op_labels(self) -> tuple[str, ...]:
@@ -161,10 +162,16 @@ def recipe(trace: FakeTrace, op: FakeOp) -> OpRecipe | None:
     )
 
 
-def bind_recipes(trace: FakeTrace, recipes: Mapping[str, OpRecipe]) -> None:
+def bind_recipes(
+    trace: FakeTrace,
+    recipes: Mapping[str, OpRecipe],
+    *,
+    param_payloads: Mapping[str, Any] | None = None,
+) -> None:
     """Rebuild ops and the capture list from recipes (as after a load)."""
 
     trace.captures = dict(recipes)
+    trace.param_payloads = dict(param_payloads or {})
     for label, rec in recipes.items():
         trace.ops[label] = FakeOp(
             label=label,
