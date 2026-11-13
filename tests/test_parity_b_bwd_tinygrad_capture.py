@@ -42,6 +42,7 @@ from torchlens.backends.tinygrad._execution_guard import (  # noqa: E402
     _reject_mid_capture_execution,
 )
 from torchlens.validation._backward_neutral import (  # noqa: E402
+    RecordedBackward,
     check_backward_records,
     recorded_backward_from_trace,
 )
@@ -59,13 +60,22 @@ def _float_leaves(value: Any) -> list[Any]:
     return [leaf for leaf in native._flat_tensors(value) if dtypes.is_float(leaf.dtype)]
 
 
+def _weighted(leaf: Any) -> Any:
+    """``leaf`` times a fixed non-constant pattern, summed (a plain sum of a
+    normalized output has zero gradient, which would compare rounding noise)."""
+
+    count = max(int(np.prod(leaf.shape)), 1)
+    pattern = (Tensor.arange(count, dtype=leaf.dtype) * 0.37 + 0.1).sin()
+    return (leaf * pattern.reshape(leaf.shape)).sum()
+
+
 def scalar_loss(output: Any) -> Any:
-    """Sum of every float output: one scalar that reaches each output."""
+    """Weighted sum of every float output: one scalar that reaches each output."""
 
     leaves = _float_leaves(output)
-    total = leaves[0].sum()
+    total = _weighted(leaves[0])
     for leaf in leaves[1:]:
-        total = total + leaf.sum()
+        total = total + _weighted(leaf)
     return total
 
 
@@ -157,6 +167,17 @@ def _close(expected: Any, actual: Any) -> bool:
     return bool(adapter.close(expected, actual))
 
 
+def _difference(expected: Any, actual: Any) -> tuple[bool, float, float]:
+    """(bit-exact, largest absolute difference, largest absolute expected value)."""
+
+    want, got = _array(expected), _array(actual)
+    return (
+        bool(np.array_equal(want, got)),
+        float(np.max(np.abs(want - got), initial=0.0)),
+        float(np.max(np.abs(want), initial=0.0)),
+    )
+
+
 def _input_label(trace: Any) -> str:
     sources = [op for op in trace._layer_list if _is_input(op)]
     assert len(sources) == 1, [op.layer_label for op in sources]
@@ -181,10 +202,22 @@ def _eager_grads(model: Any, value: Any) -> tuple[Any, dict[str, Any], Any]:
 
 
 def _check(trace: Any) -> Any:
+    """The replay graph and the recorded pass, both keyed by the graph's labels.
+
+    The records key ops by layer label (``GradFn.op_label``); the tinygrad
+    replay graph names each node by its pass label (``op.label``).
+    """
+
     ops = [op for op in trace._layer_list if not _is_input(op)]
     graph = graph_from_recipes(trace, adapter, ops, lambda label: trace[label].out)
     pass_number = trace.autograd.backward_passes[-1].pass_number
-    return graph, recorded_backward_from_trace(trace, pass_number)
+    recorded = recorded_backward_from_trace(trace, pass_number)
+    to_graph = {op.layer_label: op.label for op in trace._layer_list}
+    keyed = RecordedBackward(
+        calls={to_graph[key]: call for key, call in recorded.calls.items()},
+        grads={to_graph[key]: grad for key, grad in recorded.grads.items()},
+    )
+    return graph, keyed, to_graph
 
 
 def _diag(name: str, payload: dict[str, Any]) -> None:
@@ -201,9 +234,9 @@ def test_recorded_pass_passes_the_backward_validator(joint: _JointCapture, row: 
     state = trace.__dict__[native.STATE_KEY]
     assert state.unavailable is None, state.unavailable
     trace.backward(scalar_loss)
-    graph, recorded = _check(trace)
+    graph, recorded, to_graph = _check(trace)
     input_grad, _params, _output = _eager_grads(model, value)
-    label = _input_label(trace)
+    label = to_graph[_input_label(trace)]
     result = check_backward_records(trace, adapter, graph, recorded, {label: input_grad})
     _diag(
         f"validator-{row.family}",
@@ -230,13 +263,13 @@ def test_leaf_and_parameter_gradients_equal_tensor_backward(joint: _JointCapture
     input_grad, params, _output = _eager_grads(model, value)
     recorded = recorded_backward_from_trace(trace, trace.autograd.backward_passes[-1].pass_number)
     label = _input_label(trace)
-    exact = {label: bool(np.array_equal(_array(input_grad), _array(recorded.grads[label])))}
-    assert _close(input_grad, recorded.grads[label])
+    exact = {label: _difference(input_grad, recorded.grads[label])}
+    assert _close(input_grad, recorded.grads[label]), exact
     recorded_params = dict(state.param_grads)
     assert sorted(recorded_params) == sorted(params), (sorted(recorded_params), sorted(params))
     for name, grad in params.items():
         assert _close(grad, recorded_params[name]), name
-        exact[name] = bool(np.array_equal(_array(grad), _array(recorded_params[name])))
+        exact[name] = _difference(grad, recorded_params[name])
     _diag(f"leaves-{row.family}", {"exact": exact, "params": sorted(params)})
 
 
