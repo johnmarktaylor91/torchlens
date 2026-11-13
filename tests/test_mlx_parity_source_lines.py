@@ -99,7 +99,10 @@ def test_mlx_innermost_frame_is_the_user_line_that_ran_the_op() -> None:
     assert _same_file(relu[-1].file)
     assert relu[-1].line_number == _line_of("BLOCK_RELU")
     assert relu[-1].func_name == "__call__"
-    assert relu[-1].func_qualname.endswith("_Block.__call__")
+    if hasattr(inspect.currentframe().f_code, "co_qualname"):
+        assert relu[-1].func_qualname.endswith("_Block.__call__")
+    else:  # Pythons without co_qualname record None, as the torch walk does
+        assert relu[-1].func_qualname is None
 
     assert _same_file(relu[0].file)
     assert relu[0].line_number == call_site_line
