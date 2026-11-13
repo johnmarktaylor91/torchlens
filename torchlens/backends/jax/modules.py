@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import base64
 from collections import defaultdict
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -22,10 +21,11 @@ from ._equinox_children import (
     iter_equinox_module_fields,
     with_sequence_containers,
 )
+from ._module_stacks import (  # the tlm_/tlc_ scope codec
+    encode_module_call_scope,
+    encode_module_scope,
+)
 from ._return_ledger import JaxReturnLedger, note_return
-
-MODULE_SCOPE_PREFIX = "tlm_"
-MODULE_CALL_SCOPE_PREFIX = "tlc_"
 
 
 @dataclass(frozen=True)
@@ -294,104 +294,6 @@ def scoped_nnx_module_calls(tree: NnxModuleTree) -> Iterator[None]:
 
     with scoped_equinox_module_calls(tree):
         yield
-
-
-def encode_module_scope(address: str) -> str:
-    """Return a reversible ``jax.named_scope`` marker for a module address.
-
-    Parameters
-    ----------
-    address
-        TorchLens module address.
-
-    Returns
-    -------
-    str
-        Named-scope-safe marker string.
-    """
-
-    encoded = base64.urlsafe_b64encode(address.encode("utf-8")).decode("ascii")
-    return MODULE_SCOPE_PREFIX + encoded.rstrip("=")
-
-
-def encode_module_call_scope(address: str, call_index: int) -> str:
-    """Return a reversible ``jax.named_scope`` marker for a module call.
-
-    Parameters
-    ----------
-    address
-        TorchLens module address.
-    call_index
-        One-based module call index.
-
-    Returns
-    -------
-    str
-        Named-scope-safe marker string.
-    """
-
-    payload = f"{address}\0{call_index}"
-    encoded = base64.urlsafe_b64encode(payload.encode("utf-8")).decode("ascii")
-    return MODULE_CALL_SCOPE_PREFIX + encoded.rstrip("=")
-
-
-def decode_module_scope(scope_name: str) -> str | None:
-    """Decode a TorchLens module named-scope marker.
-
-    Parameters
-    ----------
-    scope_name
-        Name-stack component.
-
-    Returns
-    -------
-    str | None
-        Decoded module address, or ``None`` for non-TorchLens scopes.
-    """
-
-    if not scope_name.startswith(MODULE_SCOPE_PREFIX):
-        return None
-    payload = scope_name.removeprefix(MODULE_SCOPE_PREFIX)
-    padded = payload + "=" * (-len(payload) % 4)
-    try:
-        return base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8")
-    except (ValueError, UnicodeDecodeError):
-        return None
-
-
-def decode_module_call_scope(scope_name: str) -> tuple[str, int] | None:
-    """Decode a TorchLens module-call named-scope marker.
-
-    Parameters
-    ----------
-    scope_name
-        Name-stack component.
-
-    Returns
-    -------
-    tuple[str, int] | None
-        Decoded ``(module_address, call_index)``, or ``None`` for non-call
-        TorchLens scopes.
-    """
-
-    if not scope_name.startswith(MODULE_CALL_SCOPE_PREFIX):
-        return None
-    payload = scope_name.removeprefix(MODULE_CALL_SCOPE_PREFIX)
-    padded = payload + "=" * (-len(payload) % 4)
-    try:
-        decoded = base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8")
-    except (ValueError, UnicodeDecodeError):
-        return None
-    address, separator, call_index_text = decoded.partition("\0")
-    if not separator:
-        return None
-    try:
-        call_index = int(call_index_text)
-    except ValueError:
-        return None
-    if call_index < 1:
-        return None
-    return address, call_index
 
 
 def equinox_param_logs(tree: EquinoxModuleTree, trace: Any) -> dict[str, Param]:
