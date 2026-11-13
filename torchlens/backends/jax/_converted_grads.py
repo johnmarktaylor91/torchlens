@@ -45,6 +45,19 @@ def _param_const_positions(closed_jaxpr: Any, module_tree: Any) -> dict[int, str
     }
 
 
+def _module_root_inputs(params: Any, dynamic: tuple[Any, ...]) -> Any:
+    """Return a module root's jaxpr inputs: params fill constants, not arguments."""
+
+    del params
+    return dynamic
+
+
+def _function_root_inputs(params: Any, dynamic: tuple[Any, ...]) -> Any:
+    """Return a function root's jaxpr inputs: params are the first dynamic argument."""
+
+    return (params, *dynamic)
+
+
 def _jaxpr_function(
     closed_jaxpr: Any,
     param_positions: dict[int, str],
@@ -61,6 +74,9 @@ def _jaxpr_function(
     import jax
     from jax import core as jax_core
 
+    # A function, not the bool: the host-state check rejects closed-over scalars.
+    jaxpr_inputs = _module_root_inputs if module_root else _function_root_inputs
+
     def converted(*call_args: Any) -> Any:
         """Evaluate the captured jaxpr with explicit constant arguments."""
 
@@ -73,7 +89,7 @@ def _jaxpr_function(
         dynamic = tuple(
             value for index, value in enumerate(positional) if index + 1 not in static_argnums
         )
-        leaves = jax.tree.leaves(dynamic if module_root else (params, *dynamic))
+        leaves = jax.tree.leaves(jaxpr_inputs(params, dynamic))
         flat = jax_core.eval_jaxpr(closed_jaxpr.jaxpr, consts, *leaves)
         return jax.tree.unflatten(output_treedef, flat)
 
