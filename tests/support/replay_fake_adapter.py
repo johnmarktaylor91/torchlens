@@ -91,26 +91,43 @@ def _literal(op: FakeOp, name: str) -> Any:
     raise KeyError(name)
 
 
+def _split_vjp(op: FakeOp, vals: list[Any], cts: list[Any]) -> tuple[Any, ...]:
+    index = op.attrs["index"]
+    upper = cts[0] if cts[0] is not None else np.zeros_like(vals[0][:index])
+    lower = cts[1] if cts[1] is not None else np.zeros_like(vals[0][index:])
+    return (np.concatenate([upper, lower]),)
+
+
+def _sum_vjp(op: FakeOp, vals: list[Any], cts: list[Any]) -> tuple[Any, ...]:
+    grad = np.broadcast_to(np.expand_dims(cts[0], op.attrs["axis"]), vals[0].shape)
+    return (grad.copy(),)
+
+
+# op identity -> (forward(op, parent values), vjp(op, parent values, cotangents))
+_RULES: dict[str, tuple[Any, Any]] = {
+    "add": (lambda op, v: (v[0] + v[1],), lambda op, v, c: (c[0], c[0])),
+    "mul": (lambda op, v: (v[0] * v[1],), lambda op, v, c: (c[0] * v[1], c[0] * v[0])),
+    "neg": (lambda op, v: (-v[0],), lambda op, v, c: (-c[0],)),
+    "scale": (
+        lambda op, v: (v[0] * _literal(op, "factor"),),
+        lambda op, v, c: (c[0] * _literal(op, "factor"),),
+    ),
+    "sum": (lambda op, v: (np.sum(v[0], axis=op.attrs["axis"]),), _sum_vjp),
+    "split2": (
+        lambda op, v: (v[0][: op.attrs["index"]], v[0][op.attrs["index"] :]),
+        _split_vjp,
+    ),
+}
+
+
 def forward(trace: FakeTrace, op: FakeOp, parent_values: Sequence[Any]) -> tuple[Any, ...]:
     """Recompute ``op`` from ``parent_values`` (one per occurrence)."""
 
-    ident, vals = op.op_identity, list(parent_values)
-    if ident == "input":
+    if op.op_identity == "input":
         return (trace.payloads[op.label],)
-    if ident == "add":
-        return (vals[0] + vals[1],)
-    if ident == "mul":
-        return (vals[0] * vals[1],)
-    if ident == "neg":
-        return (-vals[0],)
-    if ident == "scale":
-        return (vals[0] * _literal(op, "factor"),)
-    if ident == "sum":
-        return (np.sum(vals[0], axis=op.attrs["axis"]),)
-    if ident == "split2":
-        index = op.attrs["index"]
-        return (vals[0][:index], vals[0][index:])
-    raise ValueError(f"fake adapter cannot replay {ident!r}")
+    if op.op_identity not in _RULES:
+        raise ValueError(f"fake adapter cannot replay {op.op_identity!r}")
+    return tuple(_RULES[op.op_identity][0](op, list(parent_values)))
 
 
 def vjp(
@@ -121,24 +138,11 @@ def vjp(
 ) -> tuple[Any | None, ...]:
     """Hand-written derivative per op identity; one cotangent per occurrence."""
 
-    ident, vals, cts = op.op_identity, list(parent_values), list(cotangents)
-    if ident == "input":
+    if op.op_identity == "input":
         return ()
-    if ident == "add":
-        return (cts[0], cts[0])
-    if ident == "mul":
-        return (cts[0] * vals[1], cts[0] * vals[0])
-    if ident == "neg":
-        return (-cts[0],)
-    if ident == "scale":
-        return (cts[0] * _literal(op, "factor"),)
-    if ident == "sum":
-        return (np.broadcast_to(np.expand_dims(cts[0], op.attrs["axis"]), vals[0].shape).copy(),)
-    if ident == "split2":
-        upper = cts[0] if cts[0] is not None else np.zeros_like(vals[0][: op.attrs["index"]])
-        lower = cts[1] if cts[1] is not None else np.zeros_like(vals[0][op.attrs["index"] :])
-        return (np.concatenate([upper, lower]),)
-    raise ValueError(f"fake adapter has no derivative for {ident!r}")
+    if op.op_identity not in _RULES:
+        raise ValueError(f"fake adapter has no derivative for {op.op_identity!r}")
+    return tuple(_RULES[op.op_identity][1](op, list(parent_values), list(cotangents)))
 
 
 def recipe(trace: FakeTrace, op: FakeOp) -> OpRecipe | None:

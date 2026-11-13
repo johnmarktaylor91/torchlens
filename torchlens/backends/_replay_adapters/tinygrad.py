@@ -19,8 +19,10 @@ replay through the contract in :mod:`._contract`:
 - :func:`close` is the validator's own payload comparison.
 
 An op with no recorded parents (a parameter buffer, a constant, a realized
-random-init weight) replays to its saved payload in the validator; its
-recipe is :data:`SAVED_VALUE_IDENTITY` and carries no UOp sources.
+random-init weight) replays to its capture-time snapshot in the validator; its
+recipe is :data:`SAVED_VALUE_IDENTITY` and carries that snapshot as data, so a
+rebound trace still checks a loaded payload against the captured value. A
+fixed UOp source that is not built from constants alone is stored by value too.
 
 Framework imports stay inside functions.
 """
@@ -53,6 +55,8 @@ SAVED_VALUE_IDENTITY = "tinygrad.saved_value"
 
 _UOP_IDENTITY_PREFIX = "tinygrad.uop."
 _VALUE_NODE = "VALUE"
+_MAX_VALUE_ITEMS = 16_384
+"""Largest tensor a recipe stores by value; larger ones store a digest."""
 
 #: UOp ops a recorded op may be replayed as. Closed: anything else is refused.
 REPLAY_UOP_OPS: frozenset[str] = frozenset(
@@ -89,39 +93,27 @@ class _NotData(ValueError):
 
 @dataclass(frozen=True)
 class _TraceIndex:
-    """Label maps and captures of one trace, rebuilt when either changes."""
+    """Label maps and captures of one trace."""
 
-    layer_list: Any
-    captures: Any
     ops_by_raw: dict[str, Any]
     final_to_raw: dict[str, str]
     raw_to_final: dict[str, str]
+    captures: Any
     captures_by_raw: dict[str, Any]
 
 
-_INDEX_CACHE: list[_TraceIndex] = []
-
-
 def _index(trace: Any) -> _TraceIndex:
-    """The label maps for ``trace``, cached on the identity of its op list and captures."""
+    """The label maps for ``trace``, built per call as the validator builds its own."""
 
-    layer_list = getattr(trace, "_layer_list", ())
     captures = getattr(trace, "tinygrad_uop_captures", None)
-    if _INDEX_CACHE:
-        cached = _INDEX_CACHE[0]
-        if cached.layer_list is layer_list and cached.captures is captures:
-            return cached
-    ops_by_raw = {getattr(op, "_label_raw", ""): op for op in layer_list}
-    index = _TraceIndex(
-        layer_list=layer_list,
-        captures=captures,
+    ops_by_raw = {getattr(op, "_label_raw", ""): op for op in getattr(trace, "_layer_list", ())}
+    return _TraceIndex(
         ops_by_raw=ops_by_raw,
         final_to_raw=_final_to_raw_labels(ops_by_raw),
         raw_to_final={raw: getattr(op, "label", raw) for raw, op in ops_by_raw.items()},
+        captures=captures,
         captures_by_raw={c.label_raw: c for c in (captures or ())},
     )
-    _INDEX_CACHE[:] = [index]
-    return index
 
 
 def _occurrences(capture: Any) -> tuple[tuple[int, str], ...]:
@@ -152,7 +144,7 @@ def can_replay(trace: Any, op: Any) -> str | None:
             "the trace holds no tinygrad replay captures (a loaded trace needs "
             "bind_recipes first; an audit-only trace has no payloads)"
         )
-    capture = index.captures_by_raw.get(getattr(op, "_label_raw", None))
+    capture = index.captures_by_raw.get(getattr(op, "_label_raw", ""))
     if capture is None:
         if getattr(op, "is_input_layer", False) or not getattr(op, "parents", ()):
             return "input source: a value of the capture, not a replayed op"
@@ -174,11 +166,18 @@ def _uop_refusal(capture: Any, op: Any, index: _TraceIndex) -> str | None:
     graph = _graph_positions(op, index)
     if tuple(sorted(graph.items())) != _occurrences(capture):
         return "the op's parent positions no longer match its capture"
+    return _fixed_sources_refusal(capture, index)
+
+
+def _fixed_sources_refusal(capture: Any, index: _TraceIndex) -> str | None:
+    """The refusal for the UOp's fields and the sources the validator keeps, or ``None``."""
+
+    uop = capture.uop
     try:
         _encode_attrs(uop)
         fixed = [uop.src[pos] for pos in _fixed_positions(capture, index)]
     except _NotData as error:
-        return f"tinygrad UOp {name} has a field with no data encoding: {error}"
+        return f"tinygrad UOp {_uop_name(uop)} has a field with no data encoding: {error}"
     except ValueError as error:
         return f"a parent payload is not available for replay: {error}"
     if any(_uop_name(node) in RNG_UOP_NAMES for source in fixed for node in source.toposort()):
@@ -334,7 +333,7 @@ def recipe(trace: Any, op: Any) -> OpRecipe | None:
             backend=BACKEND,
             op_identity=SAVED_VALUE_IDENTITY,
             inputs=(),
-            attrs={"uop_op": capture.op_name},
+            attrs={"uop_op": capture.op_name, "value": _value_tree(capture.payload_snapshot)},
             output_slots=(label,),
             framework_version=_framework_version(),
         )
@@ -459,17 +458,28 @@ def _capture_fields(
     label = item.output_slots[0]
     payload = _saved(ops_by_raw[raw])
     if item.op_identity == SAVED_VALUE_IDENTITY:
+        # The snapshot comes from the recipe, never the loaded payload, so the
+        # validator still compares the payload against the captured value.
         if item.inputs:
             raise ReplayRefusal("shape", "a saved value has no inputs", op_label=label)
-        return (raw, payload.uop, str(item.attrs.get("uop_op", "")), (), (), payload)
+        try:
+            snapshot = _decode_value(item.attrs.get("value"), payload)
+        except (_NotData, KeyError, TypeError, ValueError) as error:
+            raise ReplayRefusal("shape", f"bad saved value: {error}", op_label=label) from error
+        return (raw, snapshot.uop, str(item.attrs.get("uop_op", "")), (), (), snapshot)
     occurrences = []
     for occurrence in item.inputs:
         path = occurrence.arg_path
         parent_raw = final_to_raw.get(occurrence.parent_label)
-        bad_path = len(path) != 1 or type(path[0]) is not int
-        if bad_path or parent_raw is None or parent_raw not in ops_by_raw:
+        position = path[0] if len(path) == 1 else None
+        if (
+            not isinstance(position, int)
+            or isinstance(position, bool)
+            or parent_raw is None
+            or parent_raw not in ops_by_raw
+        ):
             raise ReplayRefusal("shape", "bad parent occurrence", op_label=label)
-        occurrences.append((path[0], parent_raw))
+        occurrences.append((position, parent_raw))
     uop = _rebuild_uop(item, occurrences, ops_by_raw)
     occurrences.sort()
     return (
@@ -538,16 +548,8 @@ def _encode_source(source: Any) -> dict[str, Any]:
         pass
     from tinygrad import Tensor
 
-    value = Tensor(source)
-    if not isinstance(value.device, str):
-        raise _NotData("fixed source on a multi-device tensor")
-    return {
-        "uop_op": _VALUE_NODE,
-        "dtype": _encode_dtype(value.dtype),
-        "shape": tuple(int(n) for n in value.shape),
-        "device": value.device,
-        "data": value.tolist(),
-    }
+    # No loaded payload stands for a fixed source, so it is always stored by value.
+    return _value_tree(Tensor(source), allow_digest=False)
 
 
 def _decode_source(tree: Any) -> Any:
@@ -555,13 +557,61 @@ def _decode_source(tree: Any) -> Any:
 
     if not isinstance(tree, Mapping) or tree.get("uop_op") != _VALUE_NODE:
         return _decode_uop(tree)
+    return _decode_value(tree).uop
+
+
+def _value_tree(value: Any, *, allow_digest: bool = True) -> dict[str, Any]:
+    """A tinygrad tensor's values as data: dtype, shape, device and nested values.
+
+    Above :data:`_MAX_VALUE_ITEMS` elements the tree holds a SHA-256 digest of
+    the bytes instead of the values (see :func:`_decode_value`).
+    """
+
+    if not isinstance(value.device, str):
+        raise _NotData("value on a multi-device tensor")
+    tree = {
+        "uop_op": _VALUE_NODE,
+        "dtype": _encode_dtype(value.dtype),
+        "shape": tuple(int(n) for n in value.shape),
+        "device": value.device,
+    }
+    if allow_digest and int(value.numel()) > _MAX_VALUE_ITEMS:
+        return {**tree, "sha256": _digest(value)}
+    return {**tree, "data": value.tolist()}
+
+
+def _decode_value(tree: Any, payload: Any = None) -> Any:
+    """The realized tinygrad tensor a :func:`_value_tree` describes.
+
+    A digest tree has no values: the loaded ``payload`` stands in for them
+    only when its bytes have that digest; any other payload is refused.
+    """
+
+    if not isinstance(tree, Mapping) or tree.get("uop_op") != _VALUE_NODE:
+        raise _NotData("not a value tree")
     shape, device = tree.get("shape"), tree.get("device")
     if not isinstance(shape, (tuple, list)) or not isinstance(device, str):
-        raise _NotData("malformed fixed source value")
-    value = _host_tensor(tree.get("data"), _decode_dtype(tree.get("dtype")), device)
+        raise _NotData("malformed value tree")
+    dtype = _decode_dtype(tree.get("dtype"))
+    if "sha256" in tree:
+        if (
+            payload is None
+            or str(payload.dtype) != str(dtype)
+            or _digest(payload) != tree["sha256"]
+        ):
+            raise _NotData("the loaded payload is not the captured value (digest differs)")
+        value = payload
+    else:
+        value = _host_tensor(tree.get("data"), dtype, device)
     if tuple(value.shape) != tuple(shape):
-        raise _NotData("fixed source value does not have its recorded shape")
-    return value.uop
+        raise _NotData("value does not have its recorded shape")
+    return value
+
+
+def _digest(value: Any) -> str:
+    import hashlib
+
+    return hashlib.sha256(value.numpy().tobytes()).hexdigest()
 
 
 def _encode_uop(uop: Any, depth: int = 0) -> dict[str, Any]:

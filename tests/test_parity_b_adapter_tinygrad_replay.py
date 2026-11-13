@@ -11,7 +11,14 @@ import numpy as np
 import pytest
 
 import torchlens as tl
-from torchlens.backends._replay_adapters import ReplaySession, ReplayStep, get_adapter
+from torchlens.backends._replay_adapters import (
+    ReplayPlan,
+    ReplaySession,
+    ReplayStep,
+    get_adapter,
+    merge_grads,
+    pullback_step,
+)
 
 pytest.importorskip("tinygrad")
 from tinygrad import Tensor  # noqa: E402
@@ -90,29 +97,24 @@ def _output_seed_labels(trace: Any) -> list[str]:
 
 
 def _chain_input_grad(trace: Any) -> np.ndarray:
-    """Compose ``vjp`` in reverse over the trace; seed ones on every output."""
+    """Compose ``vjp`` in reverse over the trace through ``pullback_step``; seed ones on outputs."""
 
     ops = _ops_by_label(trace)
-    grads: dict[str, Any] = {}
     seeds = _output_seed_labels(trace)
     assert seeds
-    for label in seeds:
-        seed = Tensor.ones(*ops[label].out.shape, dtype=ops[label].out.dtype)
-        grads[label] = seed if label not in grads else adapter.add(grads[label], seed)
+    ones = [
+        (label, Tensor.ones(*ops[label].out.shape, dtype=ops[label].out.dtype)) for label in seeds
+    ]
+    grads = merge_grads(adapter, {}, ones)
     for op in reversed(trace._layer_list):
         cotangent = grads.get(op.label)
-        if cotangent is None or adapter.can_replay(trace, op) is not None:
-            continue
         recipe = adapter.recipe(trace, op)
-        if not recipe.inputs:
+        if cotangent is None or recipe is None or not recipe.inputs:
             continue
         values = [ops[occ.parent_label].out for occ in recipe.inputs]
-        for occ, grad in zip(recipe.inputs, adapter.vjp(trace, op, values, (cotangent,))):
-            if grad is None:
-                continue
-            prior = grads.get(occ.parent_label)
-            total = grad if prior is None else adapter.add(prior, grad)
-            grads[occ.parent_label] = total.realize()
+        step = ReplayStep.from_recipe(op, recipe)
+        contributions = pullback_step(adapter, trace, step, values, (cotangent,))
+        grads = merge_grads(adapter, grads, {k: v.realize() for k, v in contributions.items()})
     (input_op,) = [op for op in trace._layer_list if op.type == "input"]
     return adapter.to_host(grads[input_op.label])
 
@@ -200,7 +202,8 @@ def test_session_chain_replays_every_roster_op_from_replayed_parents(row: Any) -
             initial[op.label] = op.out
         else:
             steps.append(ReplayStep.from_recipe(op, recipe))
-    values = ReplaySession(adapter, trace, steps, initial=initial).run()
+    plan = ReplayPlan(steps=tuple(steps), initial=initial)
+    values = ReplaySession(adapter, trace, plan).run()
     for op in trace._layer_list:
         assert adapter.close(op.out, values[op.label]), op.label
 
