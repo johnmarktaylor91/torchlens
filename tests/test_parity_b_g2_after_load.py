@@ -3,9 +3,11 @@
 Each roster row is captured and saved at the conformance adapter's
 ``replay_save_level`` together with its reference outputs (as NumPy files).
 A fresh interpreter then loads the artifact, rebuilds the reference outputs
-from the files and validates: the row must pass exactly as the conformance
-cell ``c2_validation_after_load`` judges it; a payload changed after load must
-fail naming the op or its consumer; an artifact written without replay recipes
+from the files and validates. The verdict must equal the live one: a row
+that passes live passes after load as the conformance cell
+``c2_validation_after_load`` judges it, any other live verdict recurs with its
+state and reason, and a payload changed after load fails naming the op or its
+consumer wherever the live validator names it. An artifact written without replay recipes
 (a default-level save, or a bundle from before the recipe section) must stay
 unavailable. Rows run only where the framework and its replay adapter exist.
 """
@@ -23,11 +25,18 @@ from typing import Any
 import pytest
 
 from tests.conformance._adapters import resolve_adapter
-from tests.conformance._validation_cells import capture_for_validation
+from tests.conformance._protocol_cases import adapter_protocol
+from tests.conformance._validation_cells import (
+    capture_for_validation,
+    names_reason_problems,
+    tamper_target,
+    tampered_payload,
+)
 from torchlens._io import _trace_sidecars
 from torchlens.backends._replay_adapters import has_adapter
 
 _REPO = Path(__file__).resolve().parents[1]
+_STRIPPED = "loaded_trace_runtime_capture_stripped"
 
 #: Runs in the fresh interpreter: never imports or builds a roster model.
 _FRESH = textwrap.dedent(
@@ -89,8 +98,31 @@ _FRESH = textwrap.dedent(
 )
 
 
-def _save_row(adapter: Any, model: Any, root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Capture one row and save it three ways, with its reference outputs."""
+def _live_verdicts(adapter: Any, model: Any, outputs: list[Any]) -> dict[str, Any]:
+    """The live trace's clean verdict and whether a live tamper is named."""
+
+    import warnings
+
+    net, example = model.builder()
+    protocol = adapter_protocol(adapter)
+    clean = protocol.validate(capture_for_validation(adapter, net, example), outputs)
+    trace = capture_for_validation(adapter, net, example)
+    target = tamper_target(trace)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        target.out = tampered_payload(target.out)
+    tampered = protocol.validate(trace, outputs)
+    return {
+        "state": clean.state,
+        "reason": clean.reason,
+        "tamper_named": not names_reason_problems(tampered, target, trace),
+    }
+
+
+def _save_row(
+    adapter: Any, model: Any, root: Path, monkeypatch: pytest.MonkeyPatch
+) -> dict[str, Any]:
+    """Capture one row, save it three ways with its reference outputs; return live verdicts."""
 
     import numpy as np
 
@@ -107,6 +139,7 @@ def _save_row(adapter: Any, model: Any, root: Path, monkeypatch: pytest.MonkeyPa
         # A bundle written before the replay recipe section existed.
         patch.setattr(_trace_sidecars, "write_replay_recipes", lambda *a, **k: False)
         adapter.save(trace, root / "old.tlspec", level=adapter.replay_save_level)
+    return _live_verdicts(adapter, model, outputs)
 
 
 def _fresh_validate(backend: str, root: Path) -> dict[str, Any]:
@@ -125,6 +158,30 @@ def _fresh_validate(backend: str, root: Path) -> dict[str, Any]:
     return json.loads(lines[-1][len("RESULT ") :])
 
 
+def _row_problems(row: str, live: dict[str, Any], result: dict[str, Any]) -> list[str]:
+    """Where the fresh-process verdicts fall short of the live ones for one row.
+
+    A row that passes live must pass after load with registered reasons; any
+    other live verdict must recur after load with the same state and reason. A
+    tamper the live validator names must be named after load. Artifacts saved
+    without replay recipes must stay unavailable.
+    """
+
+    problems: list[str] = []
+    clean = result["clean"]
+    if live["state"] == "passed":
+        problems += [f"{row}: {item}" for item in result["clean_problems"]]
+    elif (clean["state"], clean["reason"]) != (live["state"], live["reason"]):
+        problems.append(f"{row}: after load {clean}, live {live}")
+    if live["tamper_named"]:
+        problems += [f"{row} tampered: {item}" for item in result["tampered_problems"]]
+    for kind in ("portable", "old"):
+        verdict = result[kind]
+        if (verdict["state"], verdict["reason"]) != ("unavailable", _STRIPPED):
+            problems.append(f"{row} {kind}: {verdict}")
+    return problems
+
+
 def _run_backend(backend: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     adapter = resolve_adapter(backend)
     reason = adapter.unavailable_reason()
@@ -132,17 +189,14 @@ def _run_backend(backend: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
         pytest.skip(f"{backend} framework unavailable: {reason}")
     if not has_adapter(backend):
         pytest.skip(f"{backend} replay adapter has not landed on this branch")
+    problems: list[str] = []
     for model in adapter.default_roster():
         root = tmp_path / model.family
         root.mkdir()
-        _save_row(adapter, model, root, monkeypatch)
+        live = _save_row(adapter, model, root, monkeypatch)
         result = _fresh_validate(backend, root)
-        row = f"{backend}/{model.family}"
-        assert result["clean_problems"] == [], (row, result["clean"])
-        assert result["tampered_problems"] == [], (row, result["tampered"])
-        for kind in ("portable", "old"):
-            assert result[kind]["state"] == "unavailable", (row, kind, result[kind])
-            assert result[kind]["reason"] == "loaded_trace_runtime_capture_stripped", result[kind]
+        problems += _row_problems(f"{backend}/{model.family}", live, result)
+    assert not problems, "\n".join(problems)
 
 
 @pytest.mark.rare
