@@ -1,0 +1,84 @@
+"""The TensorFlow adapter drives the shared replay session and pullback step.
+
+A whole roster graph replays through :class:`ReplaySession` from the saved
+payloads of the ops the adapter refuses (inputs, constants, resource reads);
+every replayed value equals the saved payload, and :func:`pullback_step` over
+the same steps in reverse gives ``tf.GradientTape.gradient`` for the input.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+import pytest
+
+from tests.conformance._rosters import tf as tf_roster
+
+tf = pytest.importorskip("tensorflow")
+
+import torchlens as tl  # noqa: E402
+from torchlens.backends._replay_adapters import (  # noqa: E402
+    ReplaySession,
+    ReplayStep,
+    get_adapter,
+    pullback_step,
+)
+from torchlens.backends._validation_shared import ops_by_label  # noqa: E402
+
+pytestmark = [pytest.mark.tf_backend, pytest.mark.rare]
+
+ADAPTER = get_adapter("tf")
+_ROWS = {row.family: row for row in tf_roster.roster()}
+_CONFIG_ROWS = [name for name in _ROWS if name not in set(tf_roster.ECOSYSTEM_FAMILIES)]
+
+
+def _unique_ops(trace: Any) -> list[Any]:
+    seen: dict[int, Any] = {}
+    for op in ops_by_label(trace).values():
+        seen.setdefault(id(op), op)
+    return list(seen.values())
+
+
+def _plan(trace: Any) -> tuple[list[ReplayStep], dict[str, Any]]:
+    """Steps for every replayable op; saved payloads for every refused op."""
+
+    steps: list[ReplayStep] = []
+    initial: dict[str, Any] = {}
+    for op in _unique_ops(trace):
+        if ADAPTER.can_replay(trace, op) is None:
+            steps.append(ReplayStep.from_recipe(op, ADAPTER.recipe(trace, op)))
+        else:
+            initial[op.label] = op.out
+    return steps, initial
+
+
+@pytest.mark.parametrize("name", _CONFIG_ROWS)
+def test_session_replays_the_graph_and_pullback_matches_the_tape(name: str) -> None:
+    """Forward through the session reproduces payloads; reverse pullback equals the tape."""
+
+    model, example = _ROWS[name].builder()
+    trace = tl.trace(model, example, backend="tf")
+    steps, initial = _plan(trace)
+    assert steps
+    with ReplaySession(ADAPTER, trace, steps, initial=initial) as session:
+        values = session.run()
+    ops = ops_by_label(trace)
+    for step in steps:
+        assert ADAPTER.close(ops[step.label].out, values[step.label]), f"{name}:{step.label}"
+    grads: dict[str, Any] = {
+        op.label: ADAPTER.zeros_like(op.out) + 1
+        for op in _unique_ops(trace)
+        if bool(getattr(op, "is_output", False))
+    }
+    for step in reversed(steps):
+        seed = grads.get(step.label)
+        if seed is None:
+            continue
+        parents = [values.get(o.parent_label, initial.get(o.parent_label)) for o in step.inputs]
+        pullback_step(ADAPTER, trace, step, parents, [seed], grads)
+    inputs = tf.convert_to_tensor(example)
+    with tf.GradientTape() as tape:
+        tape.watch(inputs)
+        loss = tf.add_n([tf.reduce_sum(item) for item in tf.nest.flatten(model(inputs))])
+    (input_op,) = [op for op in _unique_ops(trace) if bool(getattr(op, "is_input", False))]
+    assert ADAPTER.close(tape.gradient(loss, inputs), grads[input_op.label]), name
