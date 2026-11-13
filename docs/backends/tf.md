@@ -5,8 +5,10 @@ including operation values and taken branches. Keras and `tf.Module` roots can
 carry module attribution; raw callables use a function root. Graph-only entries
 use a separate FuncGraph importer, with opaque regions reported as unverified.
 It supports static-label payload selection, eager interventions with static or
-value-dependent conditions, early stop (`stop_after=`), user source lines, array
-payload persistence, and derived gradients; true backward capture remains deferred.
+value-dependent conditions, the six built-in edit helpers, edits on a finished trace
+(`trace.fork().do(...)`), early stop (`stop_after=`), user source lines, array
+payload persistence, and derived gradients, including gradients of an edited or
+halted program and `tl.grad` edit sites.
 
 ## Tutorial
 
@@ -78,14 +80,44 @@ print(status.state)
   `tl.trace` call frame. `CaptureOptions(save_source_context=True)` loads the
   surrounding code lines.
 
+### Edit helpers, finished-trace edits and gradients
+
+- The six built-in helpers work on live captures and on finished traces:
+  `tl.zero_ablate()`, `tl.scale(...)`, `tl.add(...)`, `tl.clamp(...)`,
+  `tl.mean_ablate(...)` and `tl.replace_with(...)`. Their values are computed with
+  TensorFlow ops, so an edited live capture passes replay validation. A value from
+  another framework (a torch tensor, a JAX array), a `Population` source for
+  `tl.mean_ablate` and any other helper refuse with `trace_option_unsupported`.
+- `trace.fork().do(site, edit)` edits a finished TensorFlow trace: the edit is
+  applied at the site and each downstream op is re-run once through the TensorFlow
+  replay adapter from its updated parents. An edited fork equals a live
+  `intervene=` capture of the same edit, passes `verify_backend_replay`, and reads
+  `is_pristine` False. An op the adapter cannot replay refuses by its op name before
+  anything is committed.
+- `CaptureOptions(grad_options=...)` combines with `intervene=` and `stop_after=`.
+  The derived gradients are the gradients of the program that actually ran: the
+  replay applies the same edits, so an edit changes the gradients exactly as
+  differentiating the edited code by hand would, and a halted capture
+  differentiates the frontier op's value (the halted output) rather than the full
+  model's output.
+- `tl.when(tl.grad(selector), edit)` edits the gradient flowing back into the ops
+  `selector` names. The forward is unchanged. Where TensorFlow computes gradients
+  (the derived-gradient replay), the named op's output passes through an identity
+  whose custom gradient applies the edit, and the edited gradient propagates
+  upstream to the inputs and parameters. The edit takes a helper or a callable
+  `edit(grad, *, ctx)`. A single site that mixes gradient and activation addresses,
+  or names autograd nodes TensorFlow does not record, refuses with
+  `backward_capture_unsupported`; pass gradient sites as their own `tl.when` clause.
+
 ### Known gaps
 
 - Replay validation reports `unverified`, rather than `passed`, on Keras models
   because parameter reads (`ReadVariableOp`) count as unverified regions.
-- `tl.zero_ablate()` records its replacement as a `ZerosLike` op, which replay validation
-  does not classify yet, so a zero-ablated trace fails validation at that op. Arithmetic
-  actions such as `tl.scale(...)` record ops that replay and validate. `tf.reduce_any`
-  (`Any`) is likewise unclassified, edited or not.
+- `tf.reduce_any` (`Any`) is not classified by replay validation yet, so a trace that
+  uses it fails validation at that op, edited or not.
+- Ops TensorFlow runs from C++ without returning through a python wrapper
+  (`tf.raw_ops.*` calls, `tf.function` bodies, fused kernels' internals) cannot be
+  edited live; see the writable-layer note above.
 - Loaded traces cannot be replay-validated because runtime captures are not persisted.
 - Array-valued closure constants (closure weights, `tf.constant([...])`) are recorded as
   `constant` source ops with a saved payload; rank-zero literals stay replayable values on
