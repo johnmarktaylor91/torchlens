@@ -21,7 +21,7 @@ reruns the Yes and Partial cells so the table cannot quietly go stale.
 | TensorFlow | Partial (1) | Partial (3) | Yes | Partial (5) | Partial (7) | Yes | Partial (8) | Yes | Yes |
 | MLX | Partial (1) | Partial (3) | Yes | Partial (5) | Partial (7) | Yes | Partial (8) | Yes | Yes |
 | PaddlePaddle | Partial (1) | Partial (3) | Yes | Partial (5) | Partial (7) | Yes | Partial (8) | Yes | Yes |
-| tinygrad | Partial (1) | Partial (2) | Partial (4) | Partial (5) | No (6) | Yes | Partial (8) | Yes | Yes |
+| tinygrad | Partial (1) | Partial (2) | Yes | Partial (5) | Partial (7) | Yes | Partial (8) | Yes | Yes |
 
 1. You can select operations by function, by module, or both. Selecting by influence (which
    later units a given unit can reach) works only on PyTorch; on the other frameworks it refuses
@@ -38,8 +38,10 @@ reruns the Yes and Partial cells so the table cannot quietly go stale.
    available.
 6. Edits are not available yet; asking for one raises an error.
 7. Edits work during a new run, on operations chosen by function, by module or by a condition on
-   their values (`tl.where` or a plain callable). You cannot edit a finished trace or patch in activations from another run; asking for either
-   raises an error that names the framework.
+   their values (`tl.where` or a plain callable). On tinygrad the operations must be chosen by
+   function or by module; a condition on their values raises an error. You cannot edit a
+   finished trace or patch in activations from another run; asking for either raises an error
+   that names the framework.
 8. The NaN finder and the dead-unit counter work. Guessing a model's input shape works only on
    PyTorch, and on a convolution output the dead-unit counter needs the channel axis passed as
    `dim`.
@@ -163,8 +165,12 @@ expose that point decides what they support:
   interpreter can replace an equation's outputs (its gradient checks already do). That is the edit
   point, but edits through it are not built yet, so `intervene=` and `stop_after=` refuse with
   typed errors.
-- **tinygrad** builds a lazy graph whose values appear only after `realize()`. Edits that wrap
-  its Tensor calls are not built yet, so `intervene=` and `stop_after=` refuse with typed errors.
+- **tinygrad** builds a lazy graph whose values appear only after `realize()`. `intervene=`
+  runs the forward twice: the first run matches a static selector (by function, label or module)
+  against the finished ops, and the second applies the edit lazily to the Tensor calls that
+  returned them, so the forward still realizes once. Value-dependent conditions and
+  `stop_after=` refuse with typed errors, because a lazy forward has no values before its one
+  realization.
 
 Value-dependent `save=` predicates are rejected on every non-PyTorch backend. Editing a finished
 trace (`trace.fork().do(...)`) and patching in activations from another run refuse on every
@@ -523,6 +529,13 @@ trace = tl.trace(fn, Tensor([1.0, -2.0, 3.0]), backend="tinygrad")
 assert trace.validate_forward_pass([fn(Tensor([1.0, -2.0, 3.0]))]) is True
 ```
 
+- Inputs may be positional tensors, keyword tensors passed through `input_kwargs=`, or both.
+- Each op records the user source lines that ran it, as on PyTorch (`op.source.frames`,
+  `save_source_context`).
+- `intervene=tl.when(selector, edit)` works with static selectors (`tl.func`, `tl.label`,
+  `tl.label_contains`, `tl.in_module`). The edit is applied lazily, so the forward still realizes
+  once; the edited op keeps its label and parents and the trace validates.
+
 What it does:
 
 - Raw callables use `module_identity_mode="function_root"`. Callable objects with discoverable
@@ -551,7 +564,7 @@ assert trace.modules["fc"].params
 
 - Refused: mid-capture `Tensor.realize()`, `Tensor.assign()`, `Tensor.replace()`, setitem input
   mutation, TinyJit execution, value-dependent `save=` predicates, `followed_by` and `preceded_by`,
-  `intervene=`, `stop_after=`, streaming, `save_grads=`, `backward_ready=True` and
+  value-dependent `intervene=` conditions, `stop_after=`, streaming, `save_grads=`, `backward_ready=True` and
   `tl.record(backend="tinygrad")`. Static-label `save=` (`tl.func`, `tl.label`,
   `tl.label_contains`, module selectors) applies after finalization. Return a pure lazy tinygrad
   expression from a raw callable, or use the PyTorch backend for the refused features.
@@ -588,7 +601,7 @@ The implementation view of the same facts, one row per backend:
 | `torch` | Stable eager wrapper capture | Replay validation | Materialized `.tlspec` payloads | `torch_module` | True backward capture |
 | `mlx` | Eager-dispatch capture; live `intervene=`/`stop_after=` (static or value-dependent) | Live per-op replay and parent perturbation over the captured (whitelisted) op set | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.autograd.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads` |
 | `jax` | Jaxpr-first functional capture | Live per-equation replay and parent perturbation | Materialized forward/derived array `.tlspec` payloads | `function_root`, Equinox/NNX `pytree_module` | `trace.autograd.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads` |
-| `tinygrad` | UOp-snapshot functional capture | Live UOp replay and parent perturbation on `DEV=PYTHON` payloads | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.autograd.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads` |
+| `tinygrad` | UOp-snapshot functional capture; live static-selector `intervene=` | Live UOp replay and parent perturbation on `DEV=PYTHON` payloads | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.autograd.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads` |
 | `paddle` | Dygraph/eager capture with live forward `intervene=`/`stop_after=` | Live replay/perturbation plus static inventory guard; corroborated user-intervention carve-out | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.autograd.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads` |
 | `tf` | Eager op-callback capture with live `intervene=`/`stop_after=` (static or value-dependent); implemented graph-only FuncGraph static path for compiled/SavedModel entries | Callback self-consistency plus per-op replay/perturbation accounting | Materialized forward array `.tlspec` payloads | `function_root`, Keras/`tf.Module` object `object_module` | `trace.autograd.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads` (eager entries only) |
 
