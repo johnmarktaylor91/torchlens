@@ -372,7 +372,7 @@ class TFBackend:
             save_payloads=True,
             save_predicate=save_predicate,
         )
-        wiring = wire_eager_session(tf, trace, session, intervene, halt, module_tree)
+        wiring = wire_eager_session(trace, session, intervene, halt)
         trace.capture_events = CaptureEvents()
         trace._provenance_start_time = time.time()
         # Admission-locked publication: a raw save/restore swap here silently

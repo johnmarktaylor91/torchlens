@@ -659,25 +659,20 @@ class TFEagerWiring:
     halt: TFHaltRuntime | None
 
 
-def wire_eager_session(
-    tf: Any, trace: Any, session: Any, intervene: Any, halt: Any, module_tree: Any
-) -> TFEagerWiring:
+def wire_eager_session(trace: Any, session: Any, intervene: Any, halt: Any) -> TFEagerWiring:
     """Install intervention, halt and source-context hooks on one eager session.
 
     Parameters
     ----------
-    tf
-        Imported TensorFlow module.
     trace
         Trace being captured.
     session
-        ``TFEagerCaptureSession`` about to run.
+        ``TFEagerCaptureSession`` about to run; it carries the imported TensorFlow
+        module and the discovered module tree (``None`` in function-root mode).
     intervene
         Public ``intervene=`` value, or ``None``.
     halt
         Public ``stop_after=`` value, or ``None``.
-    module_tree
-        Discovered module tree, or ``None`` in function-root mode.
 
     Returns
     -------
@@ -685,11 +680,12 @@ def wire_eager_session(
         Plan and halt runtime for :func:`run_wired_session`.
     """
 
+    tf = session.tf
     plan = None
     edit_hook = None
     if intervene is not None:
         plan = normalize_tf_interventions(intervene, tf)
-        if plan.module_sites and module_tree is None:
+        if plan.module_sites and session.module_tree is None:
             raise BackendUnsupportedError(
                 "tf module-boundary interventions (tl.module/tl.in_module "
                 "conditions) require object-module attribution; this capture "
