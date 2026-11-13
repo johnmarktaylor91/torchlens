@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-90 packages, 1852 modules, 732374 lines, 0 modules without a docstring.
+90 packages, 1852 modules, 732389 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -61,7 +61,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends._rng_capture` | Random-state capture and replay for the non-PyTorch backends (private). | 5 | 1585 |
 | `torchlens.backends.jax` | JAX backend exports. | 24 | 10805 |
 | `torchlens.backends.mlx` | MLX backend for TorchLens. | 18 | 7242 |
-| `torchlens.backends.paddle` | Paddle backend. | 16 | 6915 |
+| `torchlens.backends.paddle` | Paddle backend. | 16 | 6931 |
 | `torchlens.backends.tf` | TensorFlow backend exports. | 19 | 9370 |
 | `torchlens.backends.tinygrad` | tinygrad backend. | 16 | 5624 |
 | `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 140 | 59510 |
@@ -80,7 +80,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.experimental` | Experimental TorchLens APIs with unstable naming and behavior. | 2 | 372 |
 | `torchlens.export` | Static export helpers for TorchLens logs. | 15 | 5549 |
 | `torchlens.export._model_explorer` | Google Model Explorer export: a writer for Model Explorer's file-ingest schema with module-hierarchy namespaces, op-type labels, ported e... | 16 | 3039 |
-| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 90 | 38953 |
+| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 90 | 38952 |
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1923 |
 | `torchlens.intervention._topology` | Topology comparison and supergraph construction for intervention bundles. | 2 | 798 |
 | `torchlens.io` | Public I/O and administrative helpers for TorchLens. | 1 | 432 |
@@ -1494,7 +1494,7 @@ MLX backend for TorchLens. (18 modules, 7242 lines)
 
 ### `torchlens.backends.paddle`
 
-Paddle backend. (16 modules, 6915 lines)
+Paddle backend. (16 modules, 6931 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1509,7 +1509,7 @@ Paddle backend. (16 modules, 6915 lines)
 | `interventions` | Live intervention runtime for the Paddle backend. | 569 |
 | `model_prep` | Paddle model preparation helpers for Paddle capture. | 412 |
 | `source_frames` | The user source lines of one Paddle op (''Op.source.frames''), recorded like torch. | 160 |
-| `source_leaves` | Pre-forward source leaves of a Paddle capture: registered buffers and closure constants. | 227 |
+| `source_leaves` | Pre-forward source leaves of a Paddle capture: registered buffers and closure constants. | 243 |
 | `tensor_store` | External metadata store for Paddle tensors. | 114 |
 | `validation` | Replay-validation helpers for the Paddle backend. | 700 |
 | `validation_decisions` | Per-op validation decisions for the Paddle backend. | 280 |
@@ -1997,7 +1997,7 @@ Google Model Explorer export: a writer for Model Explorer's file-ingest schema w
 
 ### `torchlens.intervention`
 
-Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (90 modules, 38953 lines)
+Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (90 modules, 38952 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -2006,7 +2006,7 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `_audit` | The ONE FireRecord builder and the InterventionEvent envelope. | 555 |
 | `_backend_adapter_lookup` | Find the replay adapter that drives finished-trace edits on a non-PyTorch trace. | 66 |
 | `_backend_replay` | Finished-trace replay for non-PyTorch backends, driven through a replay adapter. | 357 |
-| `_backend_replay_run` | The Trace-facing half of backend replay: edits at their sites, then the commit. | 276 |
+| `_backend_replay_run` | The Trace-facing half of backend replay: edits at their sites, then the commit. | 275 |
 | `_bind_step` | The decode-step position of an armed capture-free binding. | 34 |
 | `_binding` | ''spec.bind(model)'' -- the capture-free bound intervention executor. | 1551 |
 | `_binding_calls` | Pure call and output probes for the bound-model rule lane. | 54 |
