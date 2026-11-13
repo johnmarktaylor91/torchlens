@@ -139,6 +139,32 @@ def resolve_helper_applier(spec: Any) -> Callable[[Any], Any]:
     )
 
 
+def apply_helper(trace: Any, helper: Any, value: Any) -> Any:
+    """Apply a builtin helper to one value during a finished-trace fork replay.
+
+    The replay adapter's optional ``apply_helper`` hook (``fork.do(site,
+    tl.scale(0.5))`` on a JAX trace); the same JAX-native application the
+    live ``intervene=`` capture uses, so a fork edit equals a live edit.
+
+    Parameters
+    ----------
+    trace
+        Trace being replayed (unused: the helpers read only their own args).
+    helper
+        Builtin helper spec exposing ``name``, ``args`` and ``kwargs``.
+    value
+        The site's replayed ``jax.Array``.
+
+    Returns
+    -------
+    Any
+        The edited array.
+    """
+
+    del trace
+    return resolve_helper_applier(helper)(value)
+
+
 def checked_replacement(site_label: str, original: Any, replacement: Any) -> Any:
     """Validate a hook result against the edited output and return a fresh copy.
 
