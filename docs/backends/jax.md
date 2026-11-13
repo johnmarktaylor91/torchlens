@@ -39,7 +39,7 @@ print(status.state)
 | backward_capture | unsupported | True backward graphs are deferred. |
 | has_validation_replay | supported | Replay distinguishes verified operations and partial regions. |
 | fastlog | unsupported | Sparse recording is not declared. |
-| can_intervene | unsupported | The registry does not declare it yet, so `intervene=` refuses at `trace()`; the backend's capture-time edits are described under Edits. |
+| can_intervene | supported | `intervene=` edits equation outputs at capture, with derived gradients of the edited program; `stop_after=` refuses. See Edits. |
 | rng_replay | unsupported | RNG replay is not declared. |
 | payload_materialization | supported | Portable forward and derived array payloads are materialized. |
 | has_streaming | unsupported | Streaming capture refuses. |
@@ -86,8 +86,23 @@ These shapes refuse with a typed error:
   (`intervention_result_invalid`);
 - a predicate that returns something other than a decision, helper, callable or
   `None` (`predicate_return_invalid`);
-- `intervene=` combined with `grad_options=`
-  (`intervention_with_derived_grads_unsupported`).
+- `stop_after=`: the capture interprets the whole jaxpr and has no partial-capture
+  finalization (`interventions_unsupported`).
+
+#### Edits with derived gradients
+
+`intervene=` combined with `grad_options=` differentiates the edited program: the
+gradients of parameters and inputs are those of the forward the trace recorded, with each
+edit applied at its equation, never of a rerun of the unedited model. This holds on raw
+function roots, Equinox and Flax NNX module roots and functions that close over arrays,
+and for an edit inside a nested `jax.jit` call. An edit that has no single position in
+the program refuses with `intervention_with_derived_grads_unsupported`:
+
+- an edit on an equation inside a `fori_loop`, `scan` or `while_loop` body, or in a
+  jitted helper called more than once (the equation runs more than once);
+- an edit inside a `lax.cond` branch (the gradient program binds the `cond` whole);
+- `GradOptions(intermediate_grads=True)`, whose per-boundary replay is not edit-aware
+  yet.
 
 ### Source lines
 
