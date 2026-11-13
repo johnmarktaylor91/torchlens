@@ -63,7 +63,10 @@ def test_draws_replay_and_caller_sequence_is_unchanged(seed: int) -> None:
     names = [d.op_name for d in replayed]
     assert names.count("RandomStandardNormal") >= 2 and "RandomUniform" in names
     assert any(d.kind == "generator_state" for d in replayed)
-    assert rng.draw_for(session, outputs[0]) is not None
+    # Draws are logged per kernel: tf.random.normal scales the kernel output, so the
+    # capture lane looks a draw up by the RandomStandardNormal output it records.
+    assert rng.draw_for(session, log.output_of(0)) is log.draws[0]
+    assert rng.draw_for(session, outputs[0]) is None
     np.testing.assert_array_equal(generator.state.numpy(), after_state)
     tf.random.set_seed(seed)
     reference_generator = tf.random.Generator.from_seed(seed)
