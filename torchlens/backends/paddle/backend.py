@@ -73,7 +73,6 @@ from .._options import (
 from .._protocols.paddle import (
     PADDLE_REFUSAL_IDENTITY_MODE,
     PADDLE_REFUSAL_INTERMEDIATE_GRADS,
-    PADDLE_REFUSAL_OPTION,
     PADDLE_REFUSAL_RUNTIME_MODE,
     PADDLE_REFUSAL_SEED,
 )
@@ -88,6 +87,8 @@ from ._capture_helpers import (
     paddle_layer_type,
 )
 from ._capture_scopes import PaddleCaptureHooks
+from ._edit_replay import run_derived_grad_forward
+from ._grad_sites import paddle_grad_site_records
 from ._param_writes import PARAMETER_WRITE_MARKER, ParameterWriteGuard
 from .constants_rule import constant_labels, is_constant_capture, is_literal_producer_capture
 from .derived_grads import (
@@ -129,7 +130,7 @@ from .validation_decisions import (
     public_label,
     with_failure_message,
 )
-from .wrappers import is_alias_allowed_op, paddle_tap_observer, unwrap_paddle, wrap_paddle
+from .wrappers import is_alias_allowed_op, unwrap_paddle, wrap_paddle
 
 
 @dataclass(frozen=True)
@@ -404,15 +405,6 @@ class PaddleBackend:
         intervene = _default_if_missing(extra_kwargs.pop("intervene", None), None)
         halt = pop_stop_directive(extra_kwargs)
         facet_recipes = _default_if_missing(extra_kwargs.pop("facets", None), None)
-        if grad_options is not None and (intervene is not None or halt is not None):
-            raise BackendUnsupportedError(
-                "the paddle backend cannot combine grad_options with trace(intervene=...) "
-                "or trace(stop_after=...): derived-gradient replay re-executes the forward "
-                "without interventions, so the matched intermediates would misrepresent the "
-                "intervened capture. Capture derived gradients in a separate plain trace.",
-                code=PADDLE_REFUSAL_OPTION,
-                option="grad_options",
-            )
         intervention_runtime = (
             PaddleInterventionRuntime(self, intervene=intervene, halt=halt)
             if intervene is not None or halt is not None
@@ -566,6 +558,8 @@ class PaddleBackend:
             self._finish_trace(trace, module_tree if use_object_module else None)
             hooks.retain(trace)
             _retention.apply_save_with_retention(trace, save_predicate, backend_name="paddle")
+            if intervention_runtime is not None:
+                intervention_runtime.arm_gradient_sites(trace)
             if grad_options is not None:
                 self._attach_derived_grads(
                     trace=trace,
@@ -694,11 +688,7 @@ class PaddleBackend:
             # could clobber a concurrent capture's _active_trace and republish
             # a stale trace on restore); concurrent capture refuses typed.
             with _state.publish_active_trace(trace), _state.pause_logging():
-                if observer is not None:
-                    with paddle_tap_observer(observer):
-                        replay_output = model(*args, **dict(kwargs))
-                else:
-                    replay_output = model(*args, **dict(kwargs))
+                replay_output = run_derived_grad_forward(self, trace, observer, model, args, kwargs)
                 loss = (
                     grad_options.loss_fn(replay_output) if grad_options.loss_fn else replay_output
                 )
@@ -731,6 +721,10 @@ class PaddleBackend:
                     )
                 else:
                     leaf_grads = ()
+                edited = paddle_grad_site_records(
+                    self, trace, replay_output, grad_options, (*leaves, *param_leaves), leaf_grads
+                )
+                intermediate_accessor = intermediate_accessor if edited is None else edited
             records = _records_for_paddle_leaf_grads(
                 leaves=(*leaves, *param_leaves),
                 grads=leaf_grads,
