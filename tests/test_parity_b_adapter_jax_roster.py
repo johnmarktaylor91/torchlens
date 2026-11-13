@@ -95,3 +95,31 @@ def test_replayed_graph_is_differentiable_by_jax() -> None:
     grad = jax.grad(loss)(leaf.out)
     assert grad.shape == leaf.out.shape
     assert bool(jnp.all(jnp.isfinite(grad)))
+
+
+@pytest.mark.parametrize("family", sorted(ROWS))
+def test_bind_reads_param_payloads(family: str) -> None:
+    """Loaded parameter arrays (keyed by ``param_refs`` address) feed the rebuilt captures."""
+
+    import numpy as np
+
+    from torchlens.backends.jax.backend import JAXBackend, _jax_ops_by_label
+
+    adapter = get_adapter("jax")
+    _net, _example, trace = _row_trace(family)
+    recipes = round_trip_validates(adapter, trace)
+    by_label = _jax_ops_by_label(trace)
+    params = {}
+    for rec in recipes.values():
+        refs = {tuple(path): address for path, address in rec.param_refs}
+        for occ in rec.inputs:
+            address = refs.get(tuple(occ.arg_path))
+            if address is not None:
+                params[address] = np.asarray(by_label[occ.parent_label].out)
+    if not params:
+        pytest.skip(f"{family}: no parameter references")
+    adapter.bind_recipes(trace, recipes, param_payloads=params)
+    assert JAXBackend().validation_status(trace).state == "passed"
+    shifted = {address: value + 1.0 for address, value in params.items()}
+    adapter.bind_recipes(trace, recipes, param_payloads=shifted)
+    assert JAXBackend().validation_status(trace).state == "failed"

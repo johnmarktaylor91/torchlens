@@ -1,20 +1,14 @@
 """JAX replay adapter: per-op replay, derivative and data-only recipe.
 
-Thin wrappers over the replay the JAX validator already uses
-(:func:`torchlens.backends.jax.jaxpr.replay_equation`, which binds each
-captured primitive with its captured params). Nothing here changes a check:
-:func:`close` is the validator's own comparison, and :func:`bind_recipes`
-only rebuilds the runtime capture list the unchanged validator reads.
-
-Ops are matched to captures as the validator pairs them (in execution
-order). Parent occurrences follow argument position, so a parent read twice is
-two occurrences. A multi-result equation is one op with one output slot whose
-value is the tuple of its outputs. Sources (inputs, parameters, constants) are
-graph-only entries: their values are loaded or given, never replayed.
-
-JAX randomness is functional: a PRNG primitive's key is an explicit graph
-input, so key-based random ops replay exactly and need no RNG state. Only
-``rng_uniform`` (XLA's stateful generator) is refused.
+Thin wrappers over the validator's own replay (:func:`replay_equation` binds
+each captured primitive with its captured params). Nothing here changes a
+check: :func:`close` is the validator's comparison, and :func:`bind_recipes`
+only rebuilds the capture list the unchanged validator reads. Ops pair with
+captures in execution order; a parent read twice is two occurrences; a
+multi-result equation is one op whose single output slot holds a tuple.
+Sources (inputs, parameters, constants) are graph-only entries. Key-based
+random ops replay exactly (the key is a graph input); only ``rng_uniform``
+(XLA's stateful generator) is refused.
 """
 
 from __future__ import annotations
@@ -705,24 +699,26 @@ def _resolve_primitive(name: str) -> Any:
 # --- binding recipes back onto a trace ------------------------------------------
 
 
-def bind_recipes(trace: Any, recipes: Mapping[str, OpRecipe]) -> None:
+def bind_recipes(
+    trace: Any, recipes: Mapping[str, OpRecipe], *, param_payloads: Mapping[str, Any] | None = None
+) -> None:
     """Rebuild ``trace.jax_equation_captures`` from recipes plus loaded payloads.
 
-    Refuses (``ReplayRefusal``) a missing or foreign recipe, an identity
-    outside :data:`ALLOWLIST`, and a trace whose region ops have no region
-    captures (regions are not rebuilt, and an empty region list would let the
-    region check pass vacuously).
+    ``param_payloads`` (``param_refs`` address to loaded array) takes precedence
+    over a parameter parent's saved payload. Refuses (``ReplayRefusal``) a
+    missing or foreign recipe, an identity outside :data:`ALLOWLIST`, and a
+    trace whose region ops have no region captures (regions are not rebuilt).
     """
 
     if _jax_region_ops(trace) and not getattr(trace, "jax_region_captures", ()):
         raise ReplayRefusal("cannot_replay", "JAX region ops cannot be rebuilt from recipes")
-    ops_by_label = _jax_ops_by_label(trace)
+    ops_by_label, params = _jax_ops_by_label(trace), dict(param_payloads or {})
     hidden = {
         label: value if isinstance(value, tuple) else (value,)
         for label, value in getattr(trace, "_selective_save_hidden_payloads", {}).items()
     }
     captures = tuple(
-        _capture_from_recipe(_recipe_for(recipes, op), op, ops_by_label, hidden)
+        _capture_from_recipe(_recipe_for(recipes, op), op, ops_by_label, hidden, params)
         for op in _jax_equation_ops(trace)
     )
     regions = tuple(getattr(trace, "jax_region_captures", ()) or ())
@@ -745,10 +741,10 @@ def _recipe_for(recipes: Mapping[str, OpRecipe], op: Any) -> OpRecipe:
 
 
 def _capture_from_recipe(
-    rec: OpRecipe, op: Any, ops_by_label: Mapping[str, Any], hidden: Mapping[str, Any]
+    rec: OpRecipe, op: Any, ops_by_label: Mapping[str, Any], hidden: Any, params: Any
 ) -> Any:
     attrs = rec.attrs
-    inputs = _recipe_inputs(rec, ops_by_label, hidden)
+    inputs = _recipe_inputs(rec, ops_by_label, hidden, params)
     output = _saved_single_output(op, hidden)
     outputs = (output,) if int(attrs["num_outputs"]) == 1 else tuple(output)
     kind = str(attrs["kind"])
@@ -771,11 +767,13 @@ _UNSET: Any = object()
 
 
 def _recipe_inputs(
-    rec: OpRecipe, ops_by_label: Mapping[str, Any], hidden: Mapping[str, Any]
+    rec: OpRecipe, ops_by_label: Mapping[str, Any], hidden: Any, params: Mapping[str, Any]
 ) -> list[Any]:
     """Primitive inputs: decoded literals plus each occurrence's loaded parent payload."""
 
-    label = rec.output_slots[0]
+    import jax.numpy as jnp
+
+    label, refs = rec.output_slots[0], {tuple(path): addr for path, addr in rec.param_refs}
     inputs: list[Any] = [_UNSET] * int(rec.attrs["num_inputs"])
     for path, value in rec.literals:
         inputs[_position(path, len(inputs), label)] = _decode(value)
@@ -785,7 +783,9 @@ def _recipe_inputs(
             raise ReplayRefusal(
                 "slots", f"unknown parent {occurrence.parent_label}", op_label=label
             )
-        payload = _saved_single_output(parent, hidden)
+        address = refs.get(tuple(occurrence.arg_path))
+        loaded = params.get(address) if address is not None else None
+        payload = _saved_single_output(parent, hidden) if loaded is None else jnp.asarray(loaded)
         position = _position(occurrence.arg_path, len(inputs), label)
         inputs[position] = payload[element] if element >= 0 else payload
     if any(value is _UNSET for value in inputs):
