@@ -115,7 +115,7 @@ def _mean_ablate(spec: Any, tf: Any) -> Callable[[Any], Any]:
     """
 
     source = spec.args[0] if spec.args else None
-    if source is not None and type(source).__name__ == "Population":
+    if "population_identity" in _kwargs(spec):
         raise BackendUnsupportedError(
             "the tf backend applies tl.mean_ablate to the site itself, a TensorFlow "
             "tensor or a NumPy array; a Population source is averaged by torch hooks. "
