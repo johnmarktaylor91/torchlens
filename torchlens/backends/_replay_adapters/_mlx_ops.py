@@ -9,7 +9,6 @@ MLX itself is imported inside functions.
 from __future__ import annotations
 
 import inspect
-import weakref
 from collections.abc import Callable, Iterator, Sequence
 from typing import Any
 
@@ -70,37 +69,30 @@ def _layer_classes() -> dict[str, type[Any]]:
     return {name: cls for name, cls in classes.items() if isinstance(cls, type)}
 
 
-_FUNCTION_INDEX: dict[int, str] = {}
-_ALLOWLIST_CACHE: list[frozenset[str]] = []
-
-
 def _function_index() -> dict[int, str]:
-    """``id(original callable) -> identity`` over the function-like ops (cached)."""
+    """``id(original callable) -> identity`` over the function-like ops.
 
-    if not _FUNCTION_INDEX:
-        # Built whole, then published: a failure mid-build must not leave a
-        # partial index that silently refuses later ops as unlisted.
-        index: dict[int, str] = {}
-        for kind, (owner, names) in _owners().items():
-            for name in names if owner is not None else ():
-                func = _original(owner, name)
-                if func is not None:
-                    index.setdefault(id(func), f"{kind}.{name}")
-        _FUNCTION_INDEX.update(index)
-    return _FUNCTION_INDEX
+    Rebuilt per call: the module keeps no state between traces.
+    """
+
+    index: dict[int, str] = {}
+    for kind, (owner, names) in _owners().items():
+        for name in names if owner is not None else ():
+            func = _original(owner, name)
+            if func is not None:
+                index.setdefault(id(func), f"{kind}.{name}")
+    return index
 
 
 def op_allowlist() -> frozenset[str]:
-    """The closed set of MLX op identities a recipe may name (cached)."""
+    """The closed set of MLX op identities a recipe may name."""
 
-    if not _ALLOWLIST_CACHE:
-        names = {"constant", "input"}
-        for kind, (owner, attrs) in _owners().items():
-            if owner is not None:
-                names.update(f"{kind}.{name}" for name in attrs if _original(owner, name))
-        names.update(f"layer.{name}" for name in _layer_classes())
-        _ALLOWLIST_CACHE.append(frozenset(names))
-    return _ALLOWLIST_CACHE[0]
+    names = {"constant", "input"}
+    for kind, (owner, attrs) in _owners().items():
+        if owner is not None:
+            names.update(f"{kind}.{name}" for name in attrs if _original(owner, name))
+    names.update(f"layer.{name}" for name in _layer_classes())
+    return frozenset(names)
 
 
 def _identity(capture: Any) -> str | None:
@@ -132,10 +124,6 @@ def _resolve(identity: str) -> tuple[Any, type[Any] | None]:
 
 # ------------------------------------------------------------ capture lookup
 
-_INDEX_CACHE: weakref.WeakKeyDictionary[Any, tuple[int, int, dict[str, Any]]] = (
-    weakref.WeakKeyDictionary()
-)
-
 
 def _captures(trace: Any) -> list[Any]:
     """The trace's runtime replay captures."""
@@ -144,22 +132,10 @@ def _captures(trace: Any) -> list[Any]:
 
 
 def _capture_index(trace: Any) -> dict[str, Any]:
-    """Raw output label to capture, rebuilt when the capture list changes."""
+    """Raw output label to capture, built from the current capture list."""
 
     captures = getattr(trace, "_mlx_op_captures", None) or ()
-    key = (id(captures), len(captures))
-    try:
-        cached = _INDEX_CACHE.get(trace)
-    except TypeError:
-        cached = None
-    if cached is not None and cached[:2] == key:
-        return cached[2]
-    index = {label: capture for capture in captures for label in capture.labels_raw}
-    try:
-        _INDEX_CACHE[trace] = (*key, index)
-    except TypeError:
-        pass
-    return index
+    return {label: capture for capture in captures for label in capture.labels_raw}
 
 
 def _label_of(op: Any) -> str:

@@ -61,8 +61,13 @@ _PLAIN_TYPES = (type(None), bool, int, float, complex, str)
 # ------------------------------------------------------------------- recipes
 
 
-class _NotData(Exception):
-    """A capture leaf has no data-only encoding (the recipe is refused)."""
+_NOT_DATA = "not_data"
+
+
+def _not_data(detail: str) -> ReplayRefusal:
+    """The refusal for a capture leaf with no data-only encoding."""
+
+    return ReplayRefusal(_NOT_DATA, detail)
 
 
 class _Leaf:
@@ -117,7 +122,7 @@ def _array_literal(value: Any) -> dict[str, Any]:
 
     dtype = _dtype_name(value.dtype)
     if dtype is None or dtype == "bfloat16" or value.size > _MAX_ARRAY_LITERAL:
-        raise _NotData(f"unlabeled {value.dtype} array of {value.size} values has no data form")
+        raise _not_data(f"unlabeled {value.dtype} array of {value.size} values has no data form")
     host = np.array(value)
     return {"dtype": dtype, "shape": tuple(host.shape), "data": tuple(host.ravel().tolist())}
 
@@ -153,7 +158,7 @@ class _RecipeBuilder:
                 self.constant_refs.append((path, label))
             return _Leaf("in")
         if isinstance(node, _ReplaySlot):
-            raise _NotData("template slot has no recorded parent label")
+            raise _not_data("template slot has no recorded parent label")
         address = self._direct_param_address(node)
         if address is not None:
             self.param_refs.append((path, address))
@@ -180,12 +185,12 @@ class _RecipeBuilder:
         if isinstance(node, slice):
             parts = (node.start, node.stop, node.step)
             if not all(p is None or type(p) is int for p in parts):
-                raise _NotData("slice with non-integer bounds")
+                raise _not_data("slice with non-integer bounds")
             return {"slice": parts}
         identity = _identity(self.capture) if self.capture.func is not None else None
         if path == (0,) and identity is not None and identity.startswith("layer."):
             return {"module": self.module_spec(node, self.owner)}
-        raise _NotData(f"argument leaf of type {type(node).__name__} has no data form")
+        raise _not_data(f"argument leaf of type {type(node).__name__} has no data form")
 
     def _direct_param_address(self, node: Any) -> str | None:
         """Address of a parameter passed straight to an op (unique shape match)."""
@@ -197,7 +202,7 @@ class _RecipeBuilder:
         owned = [p for p in matches if p.module_address == self.owner]
         candidates = owned or matches
         if len(candidates) != 1:
-            raise _NotData(f"parameter leaf address ambiguous ({len(candidates)} candidates)")
+            raise _not_data(f"parameter leaf address ambiguous ({len(candidates)} candidates)")
         return str(candidates[0].address)
 
     def module_spec(self, module: Any, address: str) -> dict[str, Any]:
@@ -205,7 +210,7 @@ class _RecipeBuilder:
 
         cls = _layer_classes().get(type(module).__name__)
         if cls is None or type(module) is not cls:
-            raise _NotData(f"module class {type(module).__name__} is not allowlisted")
+            raise _not_data(f"module class {type(module).__name__} is not allowlisted")
         return {
             "class": cls.__name__,
             "state": {key: _encode_attr(value) for key, value in vars(module).items()},
@@ -232,7 +237,7 @@ class _RecipeBuilder:
             return {kind: tuple(self._item(v, _join(address, i)) for i, v in enumerate(value))}
         if type(value) is dict:
             return {"dict": {k: self._item(v, _join(address, k)) for k, v in value.items()}}
-        raise _NotData(f"module item of type {type(value).__name__} has no data form")
+        raise _not_data(f"module item of type {type(value).__name__} has no data form")
 
 
 def _encode_attr(value: Any) -> dict[str, Any]:
@@ -248,7 +253,7 @@ def _encode_attr(value: Any) -> dict[str, Any]:
     identity = _function_index().get(id(value)) if callable(value) else None
     if identity is not None:
         return {"fn": identity}
-    raise _NotData(f"module attribute of type {type(value).__name__} has no data form")
+    raise _not_data(f"module attribute of type {type(value).__name__} has no data form")
 
 
 def _constant_labels(trace: Any) -> frozenset[str]:
@@ -289,7 +294,9 @@ def _recipe_or_reason(trace: Any, op: Any) -> OpRecipe | str:
     builder = _RecipeBuilder(trace, capture)
     try:
         args, kwargs = _walk_call(capture, builder.leaf, builder.other)
-    except _NotData as exc:
+    except ReplayRefusal as exc:
+        if exc.reason != _NOT_DATA:
+            raise
         return str(exc)
     module = capture.args[0] if identity.startswith("layer.") else None
     random = identity.partition(".")[2] in _RANDOM_LAYERS and getattr(module, "training", False)
@@ -336,7 +343,9 @@ def live_param_payloads(trace: Any) -> dict[str, Any]:
         builder = _RecipeBuilder(trace, capture)
         try:
             _walk_call(capture, builder.leaf, builder.other)
-        except _NotData:
+        except ReplayRefusal as exc:
+            if exc.reason != _NOT_DATA:
+                raise
             continue
         payloads.update(builder.payloads)
     return payloads
@@ -403,7 +412,7 @@ class _Binder:
 
         import mlx.nn as nn
 
-        cls = _layer_classes().get(spec.get("class", ""))
+        cls: Any = _layer_classes().get(spec.get("class", ""))
         if cls is None:
             raise self.error(f"module class {spec.get('class')!r} is not allowlisted")
         module = cls.__new__(cls)
