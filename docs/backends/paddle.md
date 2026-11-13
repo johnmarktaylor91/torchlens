@@ -163,7 +163,8 @@ the captured output before it publishes any gradient.
 
 A `tl.grad(site)` clause edits the gradient arriving at the site's output, as on
 PyTorch, and may sit in the same spec as activation edits. Paddle records no backward
-pass during capture, so the clause is armed on the finished trace and applied when
+pass during capture (only `trace.backward` on a `backward_ready=True` trace records one),
+so the clause is armed on the finished trace and applied when
 derived gradients are computed. Input and parameter gradients come from `paddle.grad`
 with the edit registered as a gradient hook on the site output. The edited gradient at
 each op (`trace.autograd.intermediate_derived_grads`, with

@@ -17,7 +17,8 @@ are in [Performance: choosing a fast path](guides/fast_paths.md).
 
 Backend note: `backend=None` preserves the torch eager default, and EVERY non-PyTorch backend
 auto-routes genuine framework models (MLX, JAX, tinygrad, Paddle, TensorFlow).
-`tl.record()` (sparse recording) and true backward capture are torch-only in backend v1. Backend-neutral
+True backward capture (`trace.backward`) records on torch, JAX, TensorFlow and PaddlePaddle; MLX
+and tinygrad refuse it with `backward_capture_unsupported`. Backend-neutral
 metadata lives on `Trace.provenance.backend`, `Trace.options.module_identity_mode`, `Trace.provenance.param_source`,
 `Trace.autograd.derived_grads`, `Trace.autograd.intermediate_derived_grads`, `Trace.payload_load_status`,
 `Trace.validation_replay_status`, `dtype_ref`, `device_ref`, `backend_address`, and
@@ -57,9 +58,9 @@ mechanism and records real values, real taken-branch control flow, op-level reco
 Keras/`tf.Module` module stacks. Graph-only FuncGraph fallback is the static-mode design for
 compiled/SavedModel-style entries. SHIPPED for eager entries: static-label `intervene=`
 (two-level writable layer, fail-closed site reachability) and leaf + exact T1 intermediate
-derived gradients via `tl.backends.tf.GradOptions`. Still deferred: `stop_after=`/`recipes=`, true
-backward capture, and value-dependent predicates (graph-only captures also refuse
-`grad_options` typed).
+derived gradients via `tl.backends.tf.GradOptions`, and true backward capture on
+`backward_ready=True` captures (`trace.backward(loss_fn)`). Still deferred: `stop_after=`/`recipes=`
+and value-dependent predicates (graph-only captures also refuse `grad_options` typed).
 JAX `array_payloads` saves round-trip typed PRNG keys and fully addressable single-host sharded
 arrays by value. `jax_named_sharding` metadata is a reconstructible JSON-primitive contract,
 but default load stays value-only; explicit re-sharding goes through `PayloadLoadHints` /

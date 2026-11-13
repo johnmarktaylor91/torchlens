@@ -17,10 +17,10 @@ reruns the Yes and Partial cells so the table cannot quietly go stale.
 | Framework | Select | Extract | Inspect | Visualize | Intervene | Compare | Debug | Save and load | Gradients |
 |---|---|---|---|---|---|---|---|---|---|
 | PyTorch | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
-| JAX | Partial (1) | Partial (3) | Yes | Partial (4) | Partial (5) | Yes | Partial (7) | Yes | Yes |
-| TensorFlow | Partial (1) | Partial (3) | Yes | Partial (4) | Partial (6) | Yes | Partial (7) | Yes | Yes |
+| JAX | Partial (1) | Partial (3) | Yes | Yes | Partial (5) | Yes | Partial (7) | Yes | Yes |
+| TensorFlow | Partial (1) | Partial (3) | Yes | Yes | Partial (6) | Yes | Partial (7) | Yes | Yes |
 | MLX | Partial (1) | Partial (3) | Yes | Partial (4) | Partial (6) | Yes | Partial (7) | Yes | Yes |
-| PaddlePaddle | Partial (1) | Partial (3) | Yes | Partial (4) | Partial (8) | Yes | Partial (7) | Yes | Yes |
+| PaddlePaddle | Partial (1) | Partial (3) | Yes | Yes | Partial (8) | Yes | Partial (7) | Yes | Yes |
 | tinygrad | Partial (1) | Partial (2) | Yes | Partial (4) | Partial (6) | Yes | Partial (7) | Yes | Yes |
 
 1. You can select operations by function, by module, or both. Selecting by influence (which

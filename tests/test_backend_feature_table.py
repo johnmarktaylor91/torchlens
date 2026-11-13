@@ -132,6 +132,9 @@ class _Subject:
     x_nan: Any
     act_func: str
     gradients: Callable[[], None]
+    # Builds a trace after one native ``trace.backward``; set only where the backend
+    # records backward, and required for a non-PyTorch Visualize cell that says Yes.
+    backward: Callable[[], Any] | None = None
 
     def trace(self, inputs: Any = None, **kwargs: Any) -> Any:
         """Capture the model on ``inputs`` (default ``x``) with this subject's backend."""
@@ -229,7 +232,7 @@ def _jax_subject() -> _Subject:
         assert len(trace.autograd.derived_grads) > 0
         assert len(trace.autograd.intermediate_derived_grads) > 0
 
-    return _Subject(
+    subject = _Subject(
         "jax",
         Net(nnx.Rngs(0)),
         jnp.asarray(x),
@@ -238,6 +241,8 @@ def _jax_subject() -> _Subject:
         "max",
         gradients,
     )
+    subject.backward = lambda: subject.trace().backward(lambda out: jnp.sum(out * out))
+    return subject
 
 
 def _tf_subject() -> _Subject:
@@ -271,6 +276,9 @@ def _tf_subject() -> _Subject:
             input_grad_argnums=(0,),
             intermediate_grads=True,
         ),
+    )
+    subject.backward = lambda: subject.trace(capture=CaptureOptions(backward_ready=True)).backward(
+        lambda out: tf.reduce_sum(out * out)
     )
     return subject
 
@@ -341,6 +349,9 @@ def _paddle_subject() -> _Subject:
             input_grad_argnums=(0,),
             intermediate_grads=True,
         ),
+    )
+    subject.backward = lambda: subject.trace(capture=CaptureOptions(backward_ready=True)).backward(
+        lambda out: paddle.sum(out * out)
     )
     return subject
 
@@ -427,6 +438,15 @@ def _inspect(subject: _Subject, tmp_path: Path) -> None:
 def _visualize(subject: _Subject, tmp_path: Path) -> None:
     subject.trace().draw(str(tmp_path / "graph"))
     assert any(path.name.startswith("graph") for path in tmp_path.iterdir())
+    if subject.backend is None or _table()[(subject.backend, "Visualize")][0] != "Yes":
+        return
+    # Yes on a non-PyTorch row means the backward pass draws too, alone and with the forward.
+    assert subject.backward is not None, f"{subject.backend}: a Yes Visualize cell needs backward"
+    trace = subject.backward()
+    assert trace.autograd.has_backward_pass
+    for graph in ("backward", "combined"):
+        drawn = trace.draw(str(tmp_path / graph), graph=graph, file_format="svg", rolled=False)
+        assert "digraph" in drawn.dot, f"{subject.backend}: no {graph} graph"
 
 
 def _intervene(subject: _Subject, tmp_path: Path) -> None:

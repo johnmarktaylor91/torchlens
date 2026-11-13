@@ -6,10 +6,12 @@ to a runtime-only sidecar diary, then projected into `BackwardPass`, `GradFn`, `
 per-op gradient records. Saved `.tlspec` files persist the projections and tensor blobs, not the
 live diary.
 
-Backend status: torch and JAX record true backward passes. On JAX, `trace.backward(loss_fn)` takes
-a callable that maps `trace.output` to a real floating-point scalar, and records one `GradFn` per
-backward equation JAX's own derivative rules emit (see the JAX notes below). MLX and TensorFlow
-declare backward capture unsupported. JAX, tinygrad, and Paddle also expose derived
+Backend status: torch, JAX, TensorFlow and PaddlePaddle record true backward passes. On JAX,
+`trace.backward(loss_fn)` takes a callable that maps `trace.output` to a real floating-point
+scalar, and records one `GradFn` per backward equation JAX's own derivative rules emit (see the
+JAX notes below); TensorFlow and PaddlePaddle record a pass on traces captured with
+`backward_ready=True` (see the TensorFlow and Paddle notes below). MLX and tinygrad declare
+backward capture unsupported. JAX, tinygrad, Paddle, TensorFlow and MLX also expose derived
 gradients: leaf gradients from a second backend AD execution over declared leaves, not
 `GradFn`/`GradFnCall` records or live backward hooks.
 
@@ -321,11 +323,17 @@ records through `trace.autograd.intermediate_derived_grads` plus read-only `op.a
 Paddle exposes `trace.autograd.derived_grads`, populated by `tl.backends.paddle.GradOptions` through a
 second guarded Paddle AD pass over module params and selected inputs, and can optionally expose
 exact saved-op records through `trace.autograd.intermediate_derived_grads` plus read-only
-`op.autograd.derived_grad`. Paddle traces keep `has_backward_pass=False`; this is not true backward
-capture. TensorFlow currently defers true backward capture and T1/intermediate derived gradients;
-TF traces are forward eager-capture records only. `trace.backward(...)`,
-`trace.autograd.backward_passes`, `trace.saved_grad_ops`, and `op.autograd.grads` raise on MLX, tinygrad,
-Paddle, and TensorFlow traces.
+`op.autograd.derived_grad`. Derived gradients alone leave `has_backward_pass=False`; they are not
+true backward capture. `trace.backward(...)`, `trace.autograd.backward_passes`,
+`trace.saved_grad_ops`, and `op.autograd.grads` raise on MLX and tinygrad traces.
+TensorFlow records a backward pass on eager traces captured with `backward_ready=True`: each
+gradient rule TensorFlow runs becomes a `GradFn` linked to its forward op. PaddlePaddle records
+one on traces captured with `backward_ready=True` by walking Paddle's dygraph grad nodes from the
+loss, one `GradFn` per node, with gradients read from Paddle's own hooks. On JAX, TensorFlow and
+PaddlePaddle a recorded pass sets `has_backward_pass`, passes the same metadata invariants as on
+torch for its records (every `GradFn` belongs to a recorded pass, the pass numbers run
+`1..num_backward_passes`), and draws with `trace.draw(graph="backward")` and
+`trace.draw(graph="combined")`.
 JAX records a backward pass by rebuilding the captured forward from its saved equations under one
 named scope per op, taking `jax.vjp`, and running the pullback's jaxpr. Each backward equation is
 linked to the forward op whose scope emitted it; the `GradFn` class name is the JAX rule that ran
