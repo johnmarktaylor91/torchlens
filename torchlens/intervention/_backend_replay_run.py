@@ -19,6 +19,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from .._errors import InvalidArgumentError
 from .._state import pause_logging
 from ._backend_replay import (
     ReplayStep,
@@ -37,6 +38,7 @@ from ._replay_context import (
     _replay_site_key,
 )
 from ._replay_finish import ReplaySummary, finish_replay
+from .errors import HookValueError
 
 if TYPE_CHECKING:
     from .._data_classes.op import Op
@@ -78,12 +80,12 @@ def check_native_value(trace: Trace, slot: str, original: Any, result: Any) -> N
     """
 
     if _framework_of(result) != _framework_of(original):
-        raise refuse(
-            f"the edit at {slot!r} produced a {type(result).__module__}.{type(result).__name__}, "
-            f"but this {trace_backend(trace)} trace holds "
-            f"{type(original).__module__}.{type(original).__name__} values; no conversion "
-            "between backends is defined",
-            "backend_replay_foreign_value",
+        raise HookValueError(
+            f"intervention replacement is not a {trace_backend(trace)} array at {slot!r}; "
+            f"expected {type(original).__module__}.{type(original).__name__}, got "
+            f"{type(result).__module__}.{type(result).__name__}. No conversion between "
+            "backends is defined; patch from a trace captured on the same backend.",
+            code="intervention_replacement_invalid",
             remedy="patch from a trace captured on the same backend",
         )
 
@@ -104,10 +106,12 @@ def _refuse_entry(trace: Trace, adapter: Any, entry: NormalizedHookEntry) -> Non
     """Refuse an edit the backend engine cannot apply (a gradient edit, an unported helper)."""
 
     if entry.signal == "backward":
-        raise refuse(
-            f"gradient edits are not replayed on a finished {trace_backend(trace)} trace",
-            "backend_replay_gradient_edit",
+        raise InvalidArgumentError(
+            f"gradient edits are not replayed on a finished {trace_backend(trace)} trace; "
+            "replay re-executes forward ops only",
+            code="replay_gradient_edit_unsupported",
             remedy="apply gradient edits with tl.grad sites on a fresh capture",
+            argument="site",
         )
     helper = entry.helper_spec
     if helper is None or helper.name in {"zero_ablate", "patch_from"}:
@@ -116,7 +120,7 @@ def _refuse_entry(trace: Trace, adapter: Any, entry: NormalizedHookEntry) -> Non
         raise refuse(
             f"the {helper.name!r} helper has no replay application on the "
             f"{trace_backend(trace)} backend yet",
-            "backend_replay_helper_unsupported",
+            code="backend_replay_helper_unsupported",
             remedy="write the edit as a callable on the backend's arrays: "
             "fork.do(site, lambda out, ctx: ...)",
         )

@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 
 from torchlens.intervention._backend_replay import ReplayStep, ReplayWalk, propagate
-from torchlens.intervention.errors import ReplayPreconditionError
+from torchlens.intervention.errors import HookValueError, ReplayPreconditionError
 
 
 class _NumpyAdapter:
@@ -140,20 +140,20 @@ def test_unchanged_guard_replays() -> None:
     assert bool(walk.overlay["flag"]) is True
 
 
-def test_layout_change_refuses() -> None:
+def test_edit_with_another_shape_fails_the_payload_gate() -> None:
     steps, payloads = _graph()
     walk = _walk(_NumpyAdapter(), payloads, {"y": lambda v: v[:3]})
-    with pytest.raises(ReplayPreconditionError) as caught:
+    with pytest.raises(HookValueError) as caught:
         propagate(walk, steps)
-    assert caught.value.fields["code"] == "backend_replay_layout_changed"
+    assert caught.value.fields["code"] == "intervention_replacement_invalid"
 
 
-def test_dtype_change_refuses() -> None:
+def test_edit_with_another_dtype_fails_the_payload_gate() -> None:
     steps, payloads = _graph()
     walk = _walk(_NumpyAdapter(), payloads, {"y": lambda v: v.astype(np.float32)})
-    with pytest.raises(ReplayPreconditionError) as caught:
+    with pytest.raises(HookValueError) as caught:
         propagate(walk, steps)
-    assert caught.value.fields["code"] == "backend_replay_layout_changed"
+    assert caught.value.fields["code"] == "intervention_replacement_invalid"
 
 
 def test_wrong_output_arity_refuses() -> None:
@@ -162,7 +162,7 @@ def test_wrong_output_arity_refuses() -> None:
     walk = _walk(_NumpyAdapter(), payloads, {"y": lambda v: v + 1.0})
     with pytest.raises(ReplayPreconditionError) as caught:
         propagate(walk, steps)
-    assert caught.value.fields["code"] == "backend_replay_output_arity"
+    assert caught.value.fields["code"] == "backend_replay_op_unreplayable"
 
 
 def test_preserved_origin_value_stands_as_given() -> None:

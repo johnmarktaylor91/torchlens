@@ -27,7 +27,7 @@ from torchlens.intervention import _backend_adapter_lookup, _backend_replay
 from torchlens.intervention._replay import _reconstruct_args_from_template, _template_for_site
 from torchlens.intervention._replay_context import _replay_site_key
 from torchlens.intervention._replay_sites import _unmet_log_precondition
-from torchlens.intervention.errors import ReplayPreconditionError
+from torchlens.intervention.errors import HookValueError, ReplayPreconditionError
 
 
 class _Net(nn.Module):
@@ -38,6 +38,19 @@ class _Net(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         h = torch.relu(self.fc(x))
         return torch.tanh(h * h) + h
+
+
+class _GuardNet(nn.Module):
+    """Picks a branch with a recorded zero-dimensional bool (a data-dependent guard)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.fc = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        h = torch.relu(self.fc(x)) + 0.5
+        flag = h.sum() > 0
+        return torch.where(flag, h, -h)
 
 
 def _make_adapter() -> ModuleType:
@@ -155,9 +168,9 @@ def test_donor_from_another_framework_is_refused(fake_backend: ModuleType) -> No
     clean = _as_fake(_capture())
     relu = _first(clean, "relu")
     foreign = np.zeros(tuple(_op(clean, relu).out.shape), dtype=np.float32)
-    with pytest.raises(ReplayPreconditionError) as caught:
+    with pytest.raises(HookValueError) as caught:
         clean.fork().do(relu, lambda out, *, ctx: foreign)
-    assert caught.value.fields["code"] == "backend_replay_foreign_value"
+    assert caught.value.fields["code"] == "intervention_replacement_invalid"
 
 
 def test_differentiable_replay_is_refused(fake_backend: ModuleType) -> None:
@@ -170,6 +183,24 @@ def test_differentiable_replay_is_refused(fake_backend: ModuleType) -> None:
             intervention=InterventionOptions(differentiable=True),
         )
     assert caught.value.fields["code"] == "backend_replay_not_differentiable"
+
+
+def test_changed_guard_refuses_and_leaves_the_fork_unchanged(fake_backend: ModuleType) -> None:
+    torch.manual_seed(0)
+    clean = _as_fake(tl.trace(_GuardNet(), torch.randn(2, 4)))
+    fork = clean.fork()
+    before = _output(fork).clone()
+    with pytest.raises(ReplayPreconditionError) as caught:
+        fork.do(tl.func("relu"), lambda out, *, ctx: out - 100.0)
+    assert caught.value.fields["code"] == "backend_replay_guard_changed"
+    assert torch.equal(_output(fork), before)
+
+
+def test_unchanged_guard_replays(fake_backend: ModuleType) -> None:
+    torch.manual_seed(0)
+    clean = _as_fake(tl.trace(_GuardNet(), torch.randn(2, 4)))
+    edited = clean.fork().do(tl.func("relu"), lambda out, *, ctx: out * 2.0)
+    assert _backend_replay.verify_backend_replay(edited) == []
 
 
 def test_edited_fork_passes_the_replay_check(fake_backend: ModuleType) -> None:

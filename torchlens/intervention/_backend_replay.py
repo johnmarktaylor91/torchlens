@@ -41,7 +41,7 @@ from ..backends._replay_adapters import ReplayRefusal
 from ._backend_adapter_lookup import backend_adapter, trace_backend
 from ._replay_context import _replay_site_key
 from ._replay_sites import _is_passthrough_replacement, _is_source_record
-from .errors import ReplayPreconditionError
+from .errors import HookValueError, ReplayPreconditionError
 
 if TYPE_CHECKING:
     from .._data_classes.op import Op
@@ -56,7 +56,7 @@ RERUN_REMEDY = (
 _NEUTRAL_HELPERS = frozenset({"zero_ablate"})
 
 
-def refuse(message: str, code: str, *, remedy: str = RERUN_REMEDY) -> ReplayPreconditionError:
+def refuse(message: str, *, code: str, remedy: str = RERUN_REMEDY) -> ReplayPreconditionError:
     """Build the coded refusal every check in this module raises."""
 
     return ReplayPreconditionError(message, code=code, remedy=remedy)
@@ -85,28 +85,36 @@ def _resolve_key(trace: Trace, label: str, *, owner: str) -> str:
     if site is None:
         raise refuse(
             f"the replay recipe of {owner!r} names {label!r}, which is not an op of this trace",
-            "backend_replay_recipe_unknown_label",
+            code="backend_replay_op_unreplayable",
             remedy="capture the trace again; the recipe does not match its graph",
         )
     return _replay_site_key(site)
 
 
-def _is_guard(site: Op) -> bool:
-    """Whether a site's value steers control flow (a recorded scalar bool)."""
+def _is_guard(adapter: Any, site: Op) -> bool:
+    """Whether a site's value can steer control flow.
 
-    return bool(getattr(site, "is_scalar_bool", False) or getattr(site, "is_terminal_bool", False))
+    A site the capture marked as a scalar or terminal bool is a guard, and so
+    is any op whose recorded value is a zero-dimensional bool array (the value
+    a Python ``if`` or a framework condition reads), even when the backend
+    left the marks unset.
+    """
+
+    if getattr(site, "is_scalar_bool", False) or getattr(site, "is_terminal_bool", False):
+        return True
+    shape, dtype = host_layout(adapter, site.out)
+    return shape == () and dtype == "bool"
 
 
 def _step_for_site(trace: Trace, adapter: Any, site: Op) -> ReplayStep:
     """Describe one cone site as a replay step, refusing an op the adapter cannot replay."""
 
     key = _replay_site_key(site)
-    guard = _is_guard(site)
     if _is_passthrough_replacement(site):
         parent = _resolve_key(trace, tuple(site.parents)[0], owner=key)
-        return ReplayStep(site, (key,), (parent,), "passthrough", guard)
+        return ReplayStep(site, (key,), (parent,), "passthrough", False)
     if _is_source_record(site) or not tuple(getattr(site, "parents", ()) or ()):
-        return ReplayStep(site, (key,), (), "source", guard)
+        return ReplayStep(site, (key,), (), "source", False)
     reason = adapter.can_replay(trace, site)
     try:
         recipe = None if reason is not None else adapter.recipe(trace, site)
@@ -116,11 +124,11 @@ def _step_for_site(trace: Trace, adapter: Any, site: Op) -> ReplayStep:
         raise refuse(
             f"{key!r} cannot be replayed on the {trace_backend(trace)} backend: "
             f"{reason or 'the adapter has no replay recipe for it'}",
-            "backend_replay_op_unreplayable",
+            code="backend_replay_op_unreplayable",
         )
     slots = tuple(_resolve_key(trace, slot, owner=key) for slot in recipe.output_slots) or (key,)
     occurrences = tuple(_resolve_key(trace, label, owner=key) for label in recipe.parent_labels)
-    return ReplayStep(site, slots, occurrences, "op", guard)
+    return ReplayStep(site, slots, occurrences, "op", _is_guard(adapter, site))
 
 
 def trace_steps(trace: Trace, adapter: Any, cone: Sequence[Op]) -> list[ReplayStep]:
@@ -189,13 +197,13 @@ def _step_outputs(walk: ReplayWalk, step: ReplayStep) -> tuple[Any, ...]:
         outputs = tuple(walk.adapter.forward(walk.trace, step.op, parents))
     except ReplayRefusal as exc:
         raise refuse(
-            f"{step.slots[0]!r} cannot be replayed: {exc}", "backend_replay_op_unreplayable"
+            f"{step.slots[0]!r} cannot be replayed: {exc}", code="backend_replay_op_unreplayable"
         ) from exc
     if len(outputs) != len(step.slots):
         raise refuse(
             f"replaying {step.slots[0]!r} returned {len(outputs)} values for "
             f"{len(step.slots)} output slots",
-            "backend_replay_output_arity",
+            code="backend_replay_op_unreplayable",
             remedy="report this: the adapter and the recorded graph disagree",
         )
     return outputs
@@ -208,22 +216,32 @@ def host_layout(adapter: Any, value: Any) -> tuple[tuple[int, ...], str]:
     return tuple(getattr(host, "shape", ())), str(getattr(host, "dtype", type(host).__name__))
 
 
-def check_layout(walk: ReplayWalk, slot: str, value: Any) -> None:
+def check_layout(walk: ReplayWalk, slot: str, value: Any, *, edited: bool) -> None:
     """Refuse a replay value whose shape or dtype differs from the captured one.
 
-    Off PyTorch a replay keeps every op's recorded metadata, so a changed
-    layout (a shape-changing edit, or shape-dependent code downstream of one)
-    goes through a fresh capture instead.
+    Off PyTorch a replay keeps every op's recorded metadata. An edit result
+    with another layout fails the payload gate every edit door shares
+    (``intervention_replacement_invalid``); a downstream op whose layout
+    changed (shape-dependent code reached by the edit) goes through a fresh
+    capture instead.
     """
 
     captured = host_layout(walk.adapter, walk.payload(slot))
     replayed = host_layout(walk.adapter, value)
-    if captured != replayed:
-        raise refuse(
-            f"replaying {slot!r} produced shape and dtype {replayed}, but the trace recorded "
-            f"{captured}; a finished-trace edit keeps every recorded layout",
-            "backend_replay_layout_changed",
+    if captured == replayed:
+        return
+    if edited:
+        raise HookValueError(
+            f"intervention replacement has the wrong shape or dtype at {slot!r}; expected "
+            f"{captured}, got {replayed}. Return a value with the recorded shape and dtype.",
+            code="intervention_replacement_invalid",
+            remedy="return a value with the recorded shape and dtype",
         )
+    raise refuse(
+        f"replaying {slot!r} produced shape and dtype {replayed}, but the trace recorded "
+        f"{captured}; a finished-trace edit keeps every recorded layout",
+        code="backend_replay_layout_changed",
+    )
 
 
 def check_guard(walk: ReplayWalk, step: ReplayStep, slot: str, value: Any) -> None:
@@ -233,7 +251,7 @@ def check_guard(walk: ReplayWalk, step: ReplayStep, slot: str, value: Any) -> No
         raise refuse(
             f"the edit changes {slot!r}, a recorded condition that steers control flow; "
             "replaying down the recorded branch would describe a run that does not happen",
-            "backend_replay_guard_changed",
+            code="backend_replay_guard_changed",
         )
 
 
@@ -252,7 +270,7 @@ def propagate(walk: ReplayWalk, steps: Sequence[ReplayStep]) -> ReplayWalk:
             if slot in walk.origins:
                 value = walk.origins[slot]
             value, records = walk.edit(step, slot, value)
-            check_layout(walk, slot, value)
+            check_layout(walk, slot, value, edited=bool(records) or slot in walk.origins)
             check_guard(walk, step, slot, value)
             walk.overlay[slot] = value
             if records:
@@ -282,7 +300,7 @@ def verify_backend_replay(trace: Trace, labels: Sequence[str] | None = None) -> 
     if adapter is None:
         raise refuse(
             f"no replay adapter is built for the {trace_backend(trace)} backend",
-            "backend_replay_no_adapter",
+            code="backend_replay_no_adapter",
             remedy="validate with tl.validate on a fresh capture",
         )
     sites = [trace._layer_dict_all_keys[label] for label in labels or trace.op_labels]
