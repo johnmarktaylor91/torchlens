@@ -42,6 +42,13 @@ TRACE_PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
     "_tf_init_op_labels": FieldPolicy.DROP,
     "_tf_op_captures": FieldPolicy.DROP,
     "_tf_validation_result": FieldPolicy.DROP,
+    # Live native-backward state a backward_ready capture retains for a later
+    # trace.backward(): a tape, scope or pinned captures, never portable. A loaded
+    # trace has none, and its backward() refuses.
+    "_tf_backward_state": FieldPolicy.DROP,
+    "_paddle_backward_state": FieldPolicy.DROP,
+    "_tinygrad_backward_state": FieldPolicy.DROP,
+    "_jax_backward_captures": FieldPolicy.DROP,
     # JAX capture scratch the v11 groups lane moved behind provenance/options
     # views: written by the JAX backend, read back by it, never portable.
     "_provenance_jax_closed_jaxpr": FieldPolicy.DROP,
