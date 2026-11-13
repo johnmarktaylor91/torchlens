@@ -6910,7 +6910,7 @@
       ],
       "torchlens/_utils/collections.py": [
         "tests/test_autograd_grad_view_write_replay.py",
-        "tests/test_capture_unification_p3a.py",
+        "tests/test_autograd_saved_reader_soundness.py",
         "tests/test_livecheck_module_exit_only.py",
         "tests/test_plain_emit_soundness.py",
         "tests/test_thin_emit_soundness.py",
@@ -10351,14 +10351,14 @@
         "tests/test_sanctioned_empty_omission.py"
       ],
       "torchlens/backends/torch/_functorch_check.py": [
+        "tests/test_autograd_saved_bytes.py",
+        "tests/test_autograd_saved_reader_soundness.py",
         "tests/test_capopts_truth_failed_capture_release.py",
         "tests/test_fastlog/test_dispatch_smoke.py",
         "tests/test_model_prep_hardening.py",
         "tests/test_module_entry_search_cuts.py",
         "tests/test_perf_gate.py",
-        "tests/test_release_model.py",
-        "tests/test_tl_lifecycle.py",
-        "tests/test_validation_hardening.py"
+        "tests/test_release_model.py"
       ],
       "torchlens/backends/torch/_fused_norm_writes.py": [
         "tests/test_capture_guard_transactionality.py",
@@ -10668,7 +10668,7 @@
       "torchlens/backends/torch/_ops_autograd.py": [
         "tests/test_arg_kwargs_extraction.py",
         "tests/test_autograd_saved_bytes.py",
-        "tests/test_completeness_witness.py",
+        "tests/test_autograd_saved_reader_soundness.py",
         "tests/test_flops3_rules.py",
         "tests/test_legacy_tensor_constructors.py",
         "tests/test_scoped_patching_escape_detection.py",
@@ -11194,14 +11194,14 @@
         "tests/test_wrap_state_compat.py"
       ],
       "torchlens/backends/torch/_user_grad_fn.py": [
+        "tests/test_autograd_saved_reader_soundness.py",
         "tests/test_capture_targets.py",
         "tests/test_fresh_payload_path.py",
         "tests/test_inplace_view_grad_fn_rebase.py",
         "tests/test_inplace_view_sibling_rebind_guards.py",
         "tests/test_livecheck_module_exit_only.py",
         "tests/test_plain_emit_soundness.py",
-        "tests/test_thin_emit_soundness.py",
-        "tests/test_valmem5_saved_value_aliases.py"
+        "tests/test_thin_emit_soundness.py"
       ],
       "torchlens/backends/torch/_view_writeback.py": [
         "tests/test_arg_observation_plans.py",
