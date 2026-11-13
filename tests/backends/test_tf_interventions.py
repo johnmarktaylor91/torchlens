@@ -237,15 +237,15 @@ def test_tf_value_dependent_condition_applies() -> None:
 
 
 def test_tf_unsupported_helper_refuses_typed() -> None:
-    """Helpers without a TensorFlow implementation refuse typed."""
+    """Helpers without a TensorFlow application refuse typed."""
 
     x = tf.constant([1.0, -1.0, 2.0])
-    with pytest.raises(BackendUnsupportedError, match="no TensorFlow implementation"):
+    with pytest.raises(BackendUnsupportedError, match="no application for intervention helper"):
         tl.trace(
             _relu_plus_ten,
             x,
             backend="tf",
-            intervene=tl.when(tl.func("relu"), tl.mean_ablate(dim=None)),
+            intervene=tl.when(tl.func("relu"), tl.add_noise(0.1, seed=0)),
         )
 
 
