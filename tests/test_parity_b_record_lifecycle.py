@@ -23,7 +23,7 @@ from torch import nn
 import torchlens as tl
 from torchlens.errors import PredicateError, RecorderStateError, TraceCaptureError
 from torchlens.recording import RecordContext, Recorder
-from torchlens.recording._backend_recorder import BackendRecorder
+from torchlens.recording._backend_recorder import backend_recorder_factory
 
 pytestmark = [pytest.mark.backend_parity]
 
@@ -66,7 +66,7 @@ def test_repeated_passes_follow_each_pass_topology() -> None:
 
     model = _Branchy().eval()
     producer = FakeProducer()
-    with BackendRecorder(model, producer=producer, save=_ops) as recorder:
+    with backend_recorder_factory(producer)(model, save=_ops) as recorder:
         outputs = [recorder(x) for x in _inputs()]
     with Recorder(model, save=_ops) as torch_recorder:
         torch_outputs = [torch_recorder(x) for x in _inputs()]
@@ -149,9 +149,11 @@ def test_forward_failure_partial_matches_torch(mode: str) -> None:
 def test_forward_failure_raise_mode_matches_torch() -> None:
     """The default disposition raises torch's error type, chained from the model's."""
 
-    with fake_backend(FakeProducer()):
-        with pytest.raises(TraceCaptureError, match="intentional forward boom") as info:
-            tl.record(_FailingAfterOps(), torch.tensor(1.0), save=_ops, backend=FAKE_BACKEND)
+    with (
+        fake_backend(FakeProducer()),
+        pytest.raises(TraceCaptureError, match="intentional forward boom") as info,
+    ):
+        tl.record(_FailingAfterOps(), torch.tensor(1.0), save=_ops, backend=FAKE_BACKEND)
     assert type(info.value.__cause__) is RuntimeError
     assert not hasattr(info.value, "partial_recording")
 
@@ -160,9 +162,8 @@ def test_failed_recorder_refuses_another_pass() -> None:
     """After a returned partial the recorder is failed, as the torch recorder is."""
 
     options = tl.options.RecordingOptions(on_forward_error="return_partial")
-    with BackendRecorder(
-        _FailingAfterOps(), producer=FakeProducer(), save=_ops, recording=options
-    ) as recorder:
+    build = backend_recorder_factory(FakeProducer())
+    with build(_FailingAfterOps(), save=_ops, recording=options) as recorder:
         assert recorder(torch.tensor(1.0)) is None
         with pytest.raises(RecorderStateError, match="Recorder is in a failed state"):
             recorder(torch.tensor(1.0))

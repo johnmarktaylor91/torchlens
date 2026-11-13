@@ -19,7 +19,7 @@ from torch import nn
 import torchlens as tl
 from torchlens.errors import BackendUnsupportedError, RecorderStateError
 from torchlens.recording import CaptureSpec, RecordContext
-from torchlens.recording._backend_recorder import BackendRecorder
+from torchlens.recording._backend_recorder import backend_recorder_factory
 
 pytestmark = [pytest.mark.backend_parity]
 
@@ -87,9 +87,11 @@ _TORCH_PATH_OPTIONS = {
 @pytest.mark.parametrize("option", sorted(_TORCH_PATH_OPTIONS))
 def test_torch_path_options_refuse_instead_of_being_ignored(option: str) -> None:
     kwargs, code = _TORCH_PATH_OPTIONS[option]
-    with fake_backend(FakeProducer()) as producer:
-        with pytest.raises(BackendUnsupportedError) as info:
-            tl.record(_model(), torch.ones(1, 4), save=_ops, backend=FAKE_BACKEND, **kwargs)
+    with (
+        fake_backend(FakeProducer()) as producer,
+        pytest.raises(BackendUnsupportedError) as info,
+    ):
+        tl.record(_model(), torch.ones(1, 4), save=_ops, backend=FAKE_BACKEND, **kwargs)
     assert info.value.fields["code"] == code
     assert producer.passes == 0
 
@@ -120,9 +122,8 @@ def test_capture_spec_fields_without_a_codec_step_refuse(spec: CaptureSpec) -> N
     def save(ctx: RecordContext) -> CaptureSpec | bool:
         return spec if ctx.kind == "op" else False
 
-    with fake_backend(FakeProducer()):
-        with pytest.raises(BackendUnsupportedError) as info:
-            tl.record(_model(), torch.ones(1, 4), save=save, backend=FAKE_BACKEND)
+    with fake_backend(FakeProducer()), pytest.raises(BackendUnsupportedError) as info:
+        tl.record(_model(), torch.ones(1, 4), save=save, backend=FAKE_BACKEND)
     assert info.value.fields["code"] == "trace_option_unsupported"
 
 
@@ -151,11 +152,12 @@ class _ContractBreaker(FakeProducer):
 @pytest.mark.parametrize("breach", ["undelivered", "double_delivery", "emit_after_stop"])
 def test_producer_contract_breaches_refuse(breach: str) -> None:
     stop_after = (lambda ctx: True) if breach == "emit_after_stop" else None
-    with pytest.raises(RecorderStateError):
-        with BackendRecorder(
-            _model(), producer=_ContractBreaker(breach), save=_ops, stop_after=stop_after
-        ) as recorder:
-            recorder(torch.ones(1, 4))
+    build = backend_recorder_factory(_ContractBreaker(breach))
+    with (
+        pytest.raises(RecorderStateError),
+        build(_model(), save=_ops, stop_after=stop_after) as recorder,
+    ):
+        recorder(torch.ones(1, 4))
 
 
 def test_event_kinds_outside_the_interface_refuse() -> None:
