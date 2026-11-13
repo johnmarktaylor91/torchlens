@@ -429,7 +429,7 @@ def bind_recipes(trace: Any, recipes: Mapping[str, OpRecipe]) -> None:
         raw = _check_recipe(label, item, final_to_raw, ops_by_raw)
         by_raw[raw] = TinygradUOpCapture(*_capture_fields(item, raw, ops_by_raw, final_to_raw))
     for raw, op in ops_by_raw.items():
-        if raw not in by_raw and getattr(op, "parents", ()):
+        if raw not in by_raw and getattr(op, "parents", None):
             raise ReplayRefusal("slots", "op has no recipe", op_label=op.label)
     trace.tinygrad_uop_captures = tuple(by_raw[raw] for raw in ops_by_raw if raw in by_raw)
 
@@ -466,7 +466,8 @@ def _capture_fields(
     for occurrence in item.inputs:
         path = occurrence.arg_path
         parent_raw = final_to_raw.get(occurrence.parent_label)
-        if len(path) != 1 or type(path[0]) is not int or parent_raw not in ops_by_raw:
+        bad_path = len(path) != 1 or type(path[0]) is not int
+        if bad_path or parent_raw is None or parent_raw not in ops_by_raw:
             raise ReplayRefusal("shape", "bad parent occurrence", op_label=label)
         occurrences.append((path[0], parent_raw))
     uop = _rebuild_uop(item, occurrences, ops_by_raw)
