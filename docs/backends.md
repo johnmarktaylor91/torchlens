@@ -17,11 +17,11 @@ reruns the Yes and Partial cells so the table cannot quietly go stale.
 | Framework | Select | Extract | Inspect | Visualize | Intervene | Compare | Debug | Save and load | Gradients |
 |---|---|---|---|---|---|---|---|---|---|
 | PyTorch | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
-| JAX | Partial (1) | Partial (2) | Partial (4) | Partial (5) | No (6) | Yes | Partial (8) | Yes | Partial (9) |
-| TensorFlow | Partial (1) | Partial (3) | Yes | Partial (5) | Partial (7) | Yes | Partial (8) | Yes | Yes |
-| MLX | Partial (1) | Partial (3) | Yes | Partial (5) | Partial (7) | Yes | Partial (8) | Yes | Yes |
-| PaddlePaddle | Partial (1) | Partial (3) | Yes | Partial (5) | Partial (7) | Yes | Partial (8) | Yes | Yes |
-| tinygrad | Partial (1) | Partial (2) | Yes | Partial (5) | Partial (7) | Yes | Partial (8) | Yes | Yes |
+| JAX | Partial (1) | Partial (2) | Yes | Partial (4) | No (5) | Yes | Partial (7) | Yes | Yes |
+| TensorFlow | Partial (1) | Partial (3) | Yes | Partial (4) | Partial (6) | Yes | Partial (7) | Yes | Yes |
+| MLX | Partial (1) | Partial (3) | Yes | Partial (4) | Partial (6) | Yes | Partial (7) | Yes | Yes |
+| PaddlePaddle | Partial (1) | Partial (3) | Yes | Partial (4) | Partial (6) | Yes | Partial (7) | Yes | Yes |
+| tinygrad | Partial (1) | Partial (2) | Yes | Partial (4) | Partial (6) | Yes | Partial (7) | Yes | Yes |
 
 1. You can select operations by function, by module, or both. Selecting by influence (which
    later units a given unit can reach) works only on PyTorch; on the other frameworks it refuses
@@ -30,24 +30,19 @@ reruns the Yes and Partial cells so the table cannot quietly go stale.
    repeated recording (`tl.record`) work only on PyTorch.
 3. You can save only the operations you choose and stop the forward pass early. Fast repeated
    recording (`tl.record`) works only on PyTorch.
-4. Each operation's values, shape, function and module are recorded, but not the line of source
-   code that ran it.
-5. The forward graph draws, including the collapsed overview. There is no backward pass to draw.
+4. The forward graph draws, including the collapsed overview. There is no backward pass to draw.
    On MLX this is a framework limit: MLX builds its backward pass inside C++, so TorchLens
    cannot list the backward operations. Gradient values for every recorded operation are
    available.
-6. Edits are not available yet; asking for one raises an error.
-7. Edits work during a new run, on operations chosen by function, by module or by a condition on
+5. Edits are not available yet; asking for one raises an error.
+6. Edits work during a new run, on operations chosen by function, by module or by a condition on
    their values (`tl.where` or a plain callable). On tinygrad the operations must be chosen by
    function or by module; a condition on their values raises an error. You cannot edit a
    finished trace or patch in activations from another run; asking for either raises an error
    that names the framework.
-8. The NaN finder and the dead-unit counter work. Guessing a model's input shape works only on
+7. The NaN finder and the dead-unit counter work. Guessing a model's input shape works only on
    PyTorch, and on a convolution output the dead-unit counter needs the channel axis passed as
    `dim`.
-9. Gradients of a loss with respect to inputs, weights and each operation work when the model
-   is a plain function of its weights. Flax and Equinox modules (captured as module trees)
-   refuse them for now.
 
 Compare means comparing two runs on the same framework, for example two inputs through one
 model. Comparing a run from one framework with a run from another (a PyTorch trace against an
@@ -162,9 +157,8 @@ expose that point decides what they support:
   callback capture, with static selectors or value-dependent conditions. Graph-only entries
   (`tf.function` bodies, SavedModels) refuse both.
 - **JAX** evaluates its recorded jaxpr one equation at a time with concrete values, and the
-  interpreter can replace an equation's outputs (its gradient checks already do). That is the edit
-  point, but edits through it are not built yet, so `intervene=` and `stop_after=` refuse with
-  typed errors.
+  interpreter can replace an equation's outputs. That is the edit point. The edits are built but
+  not switched on yet, so `intervene=` and `stop_after=` still refuse with typed errors.
 - **tinygrad** builds a lazy graph whose values appear only after `realize()`. `intervene=`
   runs the forward twice: the first run matches a static selector (by function, label or module)
   against the finished ops, and the second applies the edit lazily to the Tensor calls that
@@ -469,8 +463,10 @@ What it does:
   and region seams pass. `jax_control_flow="reject"` restores the nested-primitive rejection and
   `"region"` forces regions. Nested JIT calls with closed constants, effects, donated inputs or
   explicit shardings are rejected.
-- Readable closure arrays are recorded as constant sources. For derived gradients, pass them as
-  explicit parameter or input leaves.
+- Readable closure arrays are recorded as constant sources; derived gradients hold them fixed.
+- Inputs may be positional arrays, keyword arrays passed through `input_kwargs=`, or both.
+- Each op records the user source lines that ran it, as on PyTorch (`op.source.frames`,
+  `save_source_context`, `source_context_lines`).
 - Refused: transformed root callables (`jax.jit`, `jax.vmap`, `jax.grad`) and capture from inside
   them, unsupported nested-jaxpr primitives, callback effects, value-dependent `save=` predicates,
   `followed_by` and `preceded_by`, `intervene=`, `stop_after=`, streaming, `save_grads=` and
@@ -510,8 +506,9 @@ pass, then checks each attached boundary with an independent boundary-replacemen
 difference; requests above the cap fail. Only records with provenance `status == "exact"` reach
 `trace.autograd.intermediate_derived_grads` and `op.autograd.derived_grad`; oracle failures and
 non-float or control outputs are skipped. If the producer cannot run on the installed JAX, leaf
-`derived_grads` stay intact and the intermediate accessor is empty. Flax and Equinox modules
-(`module_identity_mode="pytree_module"`) refuse derived gradients. Full page: [JAX](backends/jax.md).
+`derived_grads` stay intact and the intermediate accessor is empty. Flax and Equinox module roots
+(`module_identity_mode="pytree_module"`) also take derived gradients; their parameters are keyed
+by module address in `trace.params`. Full page: [JAX](backends/jax.md).
 
 ## tinygrad
 
