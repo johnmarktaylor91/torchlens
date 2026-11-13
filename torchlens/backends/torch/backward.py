@@ -69,6 +69,9 @@ from ..._utils.tensor_utils import synchronize_pending_cpu_async_copies
 from ...errors import ConfigurationError
 from ...recording._exceptions import InvalidStorageError, RecorderStateError
 from ...recording._types import CaptureSpec
+from ...report import (
+    _backward_attribution,  # noqa: F401  (registers the BackwardPass attribution providers)
+)
 from ._autograd_grad_boundary import (
     record_autograd_backward_boundary,
     record_autograd_grad_boundary,

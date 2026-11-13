@@ -38,6 +38,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .._capture.flops import DISPATCH_COUNTING_CONVENTION
+from .._data_classes._backward_providers import register_backward_provider
 from .._utils import _torch_compat
 from ..backends.torch._backward_dispatch import shared_backward_partners
 
@@ -579,3 +580,9 @@ def executed_flops_record_problem(record: Any) -> tuple[str, str] | None:
         if problem is not None:
             return problem
     return _record_coherence_problem(record)
+
+
+# BackwardPass reads these through the leaf registry (no import back).
+register_backward_provider("attribute_census", attribute_census)
+register_backward_provider("executed_flops_record", executed_flops_record)
+register_backward_provider("attribution_from_record", attribution_from_record)

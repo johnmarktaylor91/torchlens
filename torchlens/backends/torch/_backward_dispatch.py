@@ -32,6 +32,7 @@ from typing import Any, TypeVar
 import torch
 
 from ..._capture.flops import compute_dispatched_op_flops, dispatch_op_family
+from ..._data_classes._backward_providers import register_backward_provider
 from ..._utils._dispatch_modes import _TorchLensDispatchMode
 from ..._utils._torch_compat import get_current_autograd_node_fn
 from ._aten_capture import _capture_backward_aten
@@ -312,3 +313,6 @@ __all__ = [
 # A higher-order operator's backward (``cond``, ``while_loop``, ``map``, ``scan``) reaches
 # the Python key with this mode active; without a rule for its type the operator raises.
 register_witness_hop_rules(_BackwardCensusMode)
+
+# BackwardPass.aten_ops reads the records through the leaf registry (no import back).
+register_backward_provider("recorded_ops", recorded_ops)

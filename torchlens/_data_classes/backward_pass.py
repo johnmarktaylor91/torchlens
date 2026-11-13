@@ -18,6 +18,7 @@ from .._quantities import Duration
 from .._utils._display_bounded import RecordTuple
 from .._utils._display_records import backward_repr, backward_str
 from ._accessor_base import Accessor
+from ._backward_providers import backward_provider, optional_backward_provider
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
 
 if TYPE_CHECKING:
@@ -168,9 +169,8 @@ class BackwardPass:
         ops = self.aten_ops
         if trace is None or ops is None:
             return None
-        from ..report._backward_attribution import attribute_census, executed_flops_record
-
-        return executed_flops_record(attribute_census(trace, self, ops))
+        census = backward_provider("attribute_census")(trace, self, ops)
+        return backward_provider("executed_flops_record")(census)
 
     def __tl_state_restore__(self, mapping: dict[str, Any]) -> None:
         """Install a state mapping through the cell descriptors (hook)."""
@@ -254,9 +254,8 @@ class BackwardPass:
         trace = self._source_trace
         if trace is None:
             return None
-        from ..backends.torch._backward_dispatch import recorded_ops
-
-        ops = recorded_ops(trace, self.pass_number)
+        recorded_ops = optional_backward_provider("recorded_ops")
+        ops = None if recorded_ops is None else recorded_ops(trace, self.pass_number)
         return None if ops is None else RecordTuple(ops, "BackwardAtenOps", "calls")
 
     @property
@@ -272,14 +271,12 @@ class BackwardPass:
         """
         trace = self._source_trace
         ops = self.aten_ops
-        from ..report._backward_attribution import attribute_census, attribution_from_record
-
         if trace is not None and ops is not None:
-            return attribute_census(trace, self, ops)
+            return backward_provider("attribute_census")(trace, self, ops)
         record = self._executed_flops_record
         if record is None:
             return None
-        return attribution_from_record(trace, self.pass_number, record)
+        return backward_provider("attribution_from_record")(trace, self.pass_number, record)
 
     @property
     def ordinal_index(self) -> int:
