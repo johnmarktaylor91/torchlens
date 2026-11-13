@@ -441,7 +441,9 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # conditional relabel epilogue plus intervention/halt predicate
     # intermediate-grad dual-spelling resolution here as on jax/tinygrad;
     # merged tree measures 2753. Next 50-line step above it.
-    "torchlens/backends/paddle/backend.py": 2800,
+    # 2800 -> 2650 (2026-11-12 paddle parity lane): source frames and source
+    # leaves (buffers, closure constants) moved to their own modules; 2650 measured.
+    "torchlens/backends/paddle/backend.py": 2650,
     "torchlens/_runnable/state.py": 2850,
     "torchlens/_capture/arg_positions.py": 2650,
     "torchlens/backends/jax/jaxpr.py": 2550,

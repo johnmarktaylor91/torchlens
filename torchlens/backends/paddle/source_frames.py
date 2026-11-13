@@ -36,24 +36,20 @@ _Survivor = tuple[FrameType, CodeType, int, int]
 #: ``paddle.nn.Layer`` (the analogue of torch's ``_call_impl``).
 _MACHINERY_NAMES = frozenset({"__call__", "_dygraph_call_func"})
 
-#: ``co_filename`` of the module defining ``paddle.nn.Layer``, filled on first use.
-_LAYER_FILE: list[str] = []
-
 
 def _layer_file() -> str:
     """Return the source file of the module that defines ``paddle.nn.Layer``.
 
     Frames are matched by file and function name, not by code object: a
     capture may patch ``Layer.__call__``, so the attribute is not the code
-    object the original call machinery runs.
+    object the original call machinery runs. Read per walk (a module lookup)
+    rather than cached in module state.
     """
 
-    if not _LAYER_FILE:
-        import paddle
+    import paddle
 
-        module = sys.modules[paddle.nn.Layer.__module__]
-        _LAYER_FILE.append(str(getattr(module, "__file__", "") or ""))
-    return _LAYER_FILE[0]
+    module = sys.modules[paddle.nn.Layer.__module__]
+    return str(getattr(module, "__file__", "") or "")
 
 
 def _is_machinery(code: CodeType, layer_file: str) -> bool:

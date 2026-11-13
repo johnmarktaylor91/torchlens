@@ -527,7 +527,7 @@ class PaddleBackend:
         )
         self._param_write_guard = ParameterWriteGuard.capture(model, self._param_address_by_id)
         self._source_leaves = PaddleSourceLeaves.capture(
-            model, self.paddle, self._param_address_by_id
+            model, self.paddle, self._param_address_by_id, PaddleOpCapture
         )
         # R07: the try owns the wrap call itself -- a raise anywhere between
         # wrapper install and the forward (source labeling) used to strand the
@@ -1114,7 +1114,7 @@ class PaddleBackend:
         if events is None:
             events = CaptureEvents()
             trace.capture_events = events
-        record_source_leaves(self, trace, events, args, kwargs, PaddleOpCapture)
+        record_source_leaves(self, trace, events, args, kwargs)
         reserved = events.reserve_label_block(paddle_layer_type(op_name), len(outputs))
         func_call_id = events.func_call_id_counter + 1
         events.func_call_id_counter = func_call_id

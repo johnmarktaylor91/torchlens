@@ -51,16 +51,25 @@ class PaddleSourceLeaves:
     initial_values:
         ``address -> pre-forward copy`` of each buffer, taken before the
         wrappers are installed (``Trace._buffer_initial_values`` channel).
+    capture_cls:
+        ``PaddleOpCapture``, the validation record type of a closure
+        constant, passed in so this module does not import the backend
+        module that imports it.
     """
 
     closure: dict[int, Any] = field(default_factory=dict)
     buffers: dict[int, tuple[str, Any]] = field(default_factory=dict)
     buffer_guard: ParameterWriteGuard = field(default_factory=ParameterWriteGuard)
     initial_values: dict[str, Any] = field(default_factory=dict)
+    capture_cls: type | None = None
 
     @classmethod
     def capture(
-        cls, model: object, paddle: Any, param_address_by_id: Mapping[int, str]
+        cls,
+        model: object,
+        paddle: Any,
+        param_address_by_id: Mapping[int, str],
+        capture_cls: type,
     ) -> PaddleSourceLeaves:
         """Find the source leaves of ``model`` before the forward runs."""
 
@@ -75,7 +84,8 @@ class PaddleSourceLeaves:
             model, paddle.Tensor, layer_type, exclude_ids={*param_address_by_id, *buffers}
         )
         initial_values = {address: buffer.clone() for address, buffer in buffers.values()}
-        return cls(closure, buffers, ParameterWriteGuard.of_tensors(buffers), initial_values)
+        guard = ParameterWriteGuard.of_tensors(buffers)
+        return cls(closure, buffers, guard, initial_values, capture_cls)
 
     def written_markers(self, trace: Any) -> list[str]:
         """Trace markers for every registered buffer the forward changed."""
@@ -92,7 +102,6 @@ def record_source_leaves(
     events: CaptureEvents,
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
-    capture_cls: type,
 ) -> None:
     """Record each unlabeled buffer or proven closure constant among an op's inputs.
 
@@ -107,9 +116,6 @@ def record_source_leaves(
         The capture's event accumulator.
     args, kwargs:
         The op call's arguments.
-    capture_cls:
-        ``PaddleOpCapture``, passed in so this module does not import the
-        backend module that imports it.
     """
 
     leaves: PaddleSourceLeaves = backend._source_leaves
@@ -130,7 +136,7 @@ def record_source_leaves(
             continue
         if id(tensor) in backend._param_address_by_id:
             continue
-        _emit_constant(backend, trace, events, tensor, capture_cls)
+        _emit_constant(backend, trace, events, tensor, leaves.capture_cls)
 
 
 def _event_input(
@@ -184,7 +190,7 @@ def _emit_buffer(
 
 
 def _emit_constant(
-    backend: Any, trace: Any, events: CaptureEvents, tensor: object, capture_cls: type
+    backend: Any, trace: Any, events: CaptureEvents, tensor: object, capture_cls: Any
 ) -> None:
     """Append one closure-constant op event and its validation record."""
 
