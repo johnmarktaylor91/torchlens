@@ -713,7 +713,7 @@ torchlens/attribution/_text.py	1089
 torchlens/attribution/_text.py::_resolve_baseline	160
 torchlens/attribution/_text.py::_resolve_target	178
 torchlens/attribution/_text.py::text	284
-torchlens/backends/_default_specs.py	1291
+torchlens/backends/_default_specs.py	1289
 torchlens/backends/_default_specs.py::_simple_leaves	72
 torchlens/backends/_default_specs.py::_tf_can_handle	79
 torchlens/backends/_default_specs.py::register_default_backend_specs	191
@@ -807,9 +807,9 @@ torchlens/backends/tf/op_callback_capture.py::TFEagerCaptureSession._record_cont
 torchlens/backends/tf/validation.py	1076
 torchlens/backends/tf/validation.py::_validate_self_consistency	85
 torchlens/backends/tf/validation.py::validate_tf_trace_detailed	80
-torchlens/backends/tinygrad/backend.py	3070
-torchlens/backends/tinygrad/backend.py::TinygradBackend._append_event	176
-torchlens/backends/tinygrad/backend.py::TinygradBackend._attach_derived_grads	90
+torchlens/backends/tinygrad/backend.py	3005
+torchlens/backends/tinygrad/backend.py::TinygradBackend._append_event	168
+torchlens/backends/tinygrad/backend.py::TinygradBackend._attach_derived_grads	88
 torchlens/backends/tinygrad/backend.py::TinygradBackend._derive_intermediate_grads_no_realize	74
 torchlens/backends/tinygrad/backend.py::TinygradBackend._replay_uop_from_trace_graph	71
 torchlens/backends/tinygrad/backend.py::TinygradBackend.capture_trace	280

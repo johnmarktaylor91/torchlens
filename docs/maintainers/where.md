@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1769 modules, 708519 lines, 0 modules without a docstring.
+85 packages, 1774 modules, 709562 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -54,13 +54,13 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.attribution` | Input-attribution methods for TorchLens. | 31 | 15152 |
 | `torchlens.attribution._graph` | Attribution graphs: direct linear effects between transcoder features, errors, tokens and logits. | 7 | 2550 |
 | `torchlens.attribution._onebackward` | One-backward attribution reads: one backward pass seeded at gradient edges resolved from existing op fields, returned as a :class:'ReadTa... | 11 | 3881 |
-| `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 24 | 7552 |
-| `torchlens.backends._protocols` | Per-backend ''BackendProtocol'' objects, kept import-light. | 8 | 928 |
+| `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 24 | 7545 |
+| `torchlens.backends._protocols` | Per-backend ''BackendProtocol'' objects, kept import-light. | 8 | 931 |
 | `torchlens.backends.jax` | JAX backend preview exports. | 17 | 9645 |
 | `torchlens.backends.mlx` | Technical-preview MLX backend for TorchLens. | 17 | 6951 |
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6595 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8577 |
-| `torchlens.backends.tinygrad` | tinygrad backend preview. | 11 | 4583 |
+| `torchlens.backends.tinygrad` | tinygrad backend preview. | 16 | 5630 |
 | `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 138 | 59358 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8876 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2741 |
@@ -1332,7 +1332,7 @@ One-backward attribution reads: one backward pass seeded at gradient edges resol
 
 ### `torchlens.backends`
 
-Backend Protocol and public registry exports for TorchLens adapters. (24 modules, 7552 lines)
+Backend Protocol and public registry exports for TorchLens adapters. (24 modules, 7545 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1340,7 +1340,7 @@ Backend Protocol and public registry exports for TorchLens adapters. (24 modules
 | `_backend_names` | The canonical default-backend name, split out of :mod:'torchlens.backends.registry'. | 20 |
 | `_backend_protocol` | The one backend protocol every TorchLens backend fills, torch included. | 521 |
 | `_constants` | The shared constants rule every preview backend's finalize step applies. | 589 |
-| `_default_specs` | Default public backend specs registered by TorchLens. | 1291 |
+| `_default_specs` | Default public backend specs registered by TorchLens. | 1289 |
 | `_default_specs_tf` | TensorFlow / Keras runtime probes used by the default backend specs. | 102 |
 | `_entry_refusals` | Typed, coded refusals raised by the framework backends' public entry points. | 197 |
 | `_errors` | Backend registry error hierarchy (leaf module: no registry import). | 251 |
@@ -1353,7 +1353,7 @@ Backend Protocol and public registry exports for TorchLens adapters. (24 modules
 | `_intervention_evidence` | Which backends write the intervention evidence a Trace's pristine reading uses. | 31 |
 | `_invariants` | Run the metadata-invariant tripwire from a backend's validate path. | 23 |
 | `_module_returns` | Recorded module returns: how a preview backend hands module-call outputs to the finalizer. | 234 |
-| `_options` | Shared backend trace-option defaulting and rejection helpers. | 790 |
+| `_options` | Shared backend trace-option defaulting and rejection helpers. | 785 |
 | `_protocol` | Backend Protocol for unified TorchLens capture. | 354 |
 | `_root_frames` | The root call's frame in preview op module stacks. | 76 |
 | `_scorecard_rows` | ''backend_scorecard:<name>'' rows for ''tl.report.doctor''. | 206 |
@@ -1363,7 +1363,7 @@ Backend Protocol and public registry exports for TorchLens adapters. (24 modules
 
 ### `torchlens.backends._protocols`
 
-Per-backend ''BackendProtocol'' objects, kept import-light. (8 modules, 928 lines)
+Per-backend ''BackendProtocol'' objects, kept import-light. (8 modules, 931 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1373,7 +1373,7 @@ Per-backend ''BackendProtocol'' objects, kept import-light. (8 modules, 928 line
 | `mlx_wrapped_state` | Import-light probe of the MLX wrapper state for the protocol shell. | 19 |
 | `paddle` | Paddle preview ''BackendProtocol'' shell (delegating; eager dygraph). | 154 |
 | `tf` | TensorFlow preview ''BackendProtocol'' (delegating; eager). | 130 |
-| `tinygrad` | tinygrad preview ''BackendProtocol'' shell (delegating; lazy, realize-once). | 137 |
+| `tinygrad` | tinygrad preview ''BackendProtocol'' shell (delegating; lazy, realize-once). | 140 |
 | `torch` | Torch's ''BackendProtocol'' object: the reference, by delegation. | 209 |
 
 ### `torchlens.backends.jax`
@@ -1467,20 +1467,25 @@ TensorFlow backend preview exports. (13 modules, 8577 lines)
 
 ### `torchlens.backends.tinygrad`
 
-tinygrad backend preview. (11 modules, 4583 lines)
+tinygrad backend preview. (16 modules, 5630 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | tinygrad backend preview. | 7 |
-| `_captures` | Capture records the tinygrad backend keeps for validation and derived gradients. | 61 |
-| `_derived_grads` | Derived-gradient helpers for the tinygrad preview backend. | 268 |
+| `_capture_state` | Per-capture state of the tinygrad backend: call keywords, source lines, edits. | 158 |
+| `_captures` | Capture records the tinygrad backend keeps for validation and derived gradients. | 67 |
+| `_derived_grads` | Derived-gradient helpers for the tinygrad preview backend. | 280 |
+| `_edit_plan` | Resolution of ''trace(intervene=tl.when(...))'' to a tinygrad edit. | 136 |
+| `_edits` | Static-selector edits applied during a tinygrad capture. | 349 |
 | `_execution_guard` | Execution guard for tinygrad preview capture. | 78 |
-| `_module_tree` | tinygrad object-module tree, call frames, and the module returns each call records. | 151 |
+| `_module_tree` | tinygrad object-module tree, call frames, and the module returns each call records. | 155 |
+| `_observer` | Tensor-API observation for the tinygrad capture. | 160 |
 | `_raw_labels` | Resolve materialized tinygrad op labels back to their raw capture labels. | 37 |
-| `_realize_once` | Realize-once capture: every recorded tinygrad value comes from one evaluation. | 379 |
+| `_realize_once` | Realize-once capture: every recorded tinygrad value comes from one evaluation. | 395 |
 | `_rules` | tinygrad adoption of the shared backend rules: typed refusals, named verdicts, constants. | 323 |
-| `_uop_graph` | UOp-graph walks the tinygrad capture records ops from. | 171 |
-| `backend` | UOp-snapshot tinygrad backend preview. | 3070 |
+| `_source_lines` | User source lines for the ops of a tinygrad capture. | 191 |
+| `_uop_graph` | UOp-graph walks the tinygrad capture records ops from. | 251 |
+| `backend` | UOp-snapshot tinygrad backend preview. | 3005 |
 | `capabilities` | Registry-backed capability exports for the tinygrad backend preview. | 38 |
 
 ### `torchlens.backends.torch`
