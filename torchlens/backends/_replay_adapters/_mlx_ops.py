@@ -46,7 +46,7 @@ def _owners() -> dict[str, tuple[Any, tuple[str, ...]]]:
     import mlx.nn as nn
 
     activations = w.mlx_activations_module(nn)
-    nn_names = ("relu", "gelu", "sigmoid", "tanh", "softmax", "silu")
+    nn_names: tuple[str, ...] = ("relu", "gelu", "sigmoid", "tanh", "softmax", "silu")
     nn_names += w.mlx_activation_function_names(activations) if activations else ()
     array_names = (*w.MLX_ARRAY_DUNDER_OPS, *w.MLX_ARRAY_METHOD_OPS, *w.MLX_ARRAY_PROPERTY_OPS)
     return {
@@ -57,7 +57,7 @@ def _owners() -> dict[str, tuple[Any, tuple[str, ...]]]:
     }
 
 
-def _layer_classes() -> dict[str, type]:
+def _layer_classes() -> dict[str, type[Any]]:
     """Allowlisted ``mlx.nn`` layer classes by class name."""
 
     import mlx.nn as nn
@@ -115,7 +115,7 @@ def _identity(capture: Any) -> str | None:
     return _function_index().get(id(capture.func))
 
 
-def _resolve(identity: str) -> tuple[Any, type | None]:
+def _resolve(identity: str) -> tuple[Any, type[Any] | None]:
     """The callable (and layer class) an allowlisted identity names."""
 
     if identity in ("constant", "input"):

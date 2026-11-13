@@ -185,9 +185,9 @@ class _RecipeBuilder:
             if not all(p is None or type(p) is int for p in parts):
                 raise _NotData("slice with non-integer bounds")
             return {"slice": parts}
-        if path == (0,) and self.capture.func is not None and _identity(self.capture):
-            if _identity(self.capture).startswith("layer."):
-                return {"module": self.module_spec(node, self.owner)}
+        identity = _identity(self.capture) if self.capture.func is not None else None
+        if path == (0,) and identity is not None and identity.startswith("layer."):
+            return {"module": self.module_spec(node, self.owner)}
         raise _NotData(f"argument leaf of type {type(node).__name__} has no data form")
 
     def _direct_param_address(self, node: Any) -> str | None:
