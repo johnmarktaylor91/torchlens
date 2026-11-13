@@ -37,6 +37,7 @@ from _hermetic_counters import quiet_gc
 
 import torchlens as tl
 import torchlens.backends.torch.ops as torch_ops
+from torchlens.backends.torch import _thin_emit
 
 _TORCHLENS_ROOT = os.path.dirname(tl.__file__)
 _BUILD_OPCODES = frozenset(
@@ -122,8 +123,22 @@ def _measure(
     """Trace the tiny GPT-2 generate once with ``install``'s hook on; return the window.
 
     ``install`` sets the hook and returns its remover. The trace is held until
-    the hook is off, so its teardown is not counted.
+    the hook is off, so its teardown is not counted. Today's emit is pinned: the
+    window counts ops and the commit scope at its freeze, which the thin emit's
+    rows skip (they are checked against today's in ``tests/test_thin_emit_soundness.py``).
     """
+
+    previous_thin = _thin_emit.set_thin_emit_enabled(False)
+    try:
+        return _measure_today_emit(monkeypatch, install)
+    finally:
+        _thin_emit.set_thin_emit_enabled(previous_thin)
+
+
+def _measure_today_emit(
+    monkeypatch: pytest.MonkeyPatch, install: Callable[[_Window], Callable[[], None]]
+) -> _Window:
+    """The body of :func:`_measure`, with today's emit already pinned."""
 
     fn, ids, kw = _tiny_gpt2_generate()
     tl.trace(fn, ids, input_kwargs=kw)  # warm one-time instrumentation

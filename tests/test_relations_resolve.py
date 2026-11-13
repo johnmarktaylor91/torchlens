@@ -40,6 +40,7 @@ from torchlens.backends.torch import (
     _ops_predicate_events,
     _ops_row_journal,
     _relations_resolve as rr,
+    _thin_record,
 )
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -70,6 +71,8 @@ class _Shadow:
         self._has_input = rr.has_input_ancestor
         monkeypatch.setattr(_ops_predicate_events, "defer_ancestry", self._defer)
         monkeypatch.setattr(_ops_row_journal, "_fill_items", self._fill_items)
+        # The thin emit's appender binds the same filler by name: shadow its rows too.
+        monkeypatch.setattr(_thin_record, "_fill_items", self._fill_items)
         monkeypatch.setattr(_ops_emission, "has_input_ancestor", self._witness_bit)
 
     def _parent_sets(self, record: Any) -> tuple[frozenset[str], frozenset[str]]:

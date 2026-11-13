@@ -11169,8 +11169,10 @@
       "torchlens/backends/torch/_thin_record.py": [
         "tests/test_capture_core_floor_shadow.py",
         "tests/test_capture_fields_dict_prune.py",
+        "tests/test_capture_row_commit_cost.py",
         "tests/test_capture_row_journal.py",
         "tests/test_plain_emit_soundness.py",
+        "tests/test_relations_resolve.py",
         "tests/test_thin_emit_soundness.py"
       ],
       "torchlens/backends/torch/_thin_settle.py": [
