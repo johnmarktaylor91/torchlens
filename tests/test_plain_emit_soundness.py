@@ -8,6 +8,8 @@ over the field differential's whole surface (labels, call ids, version-counter
 verdicts, alias semantics, buffer records, reprs and tables), and the model state
 the two forwards leave must match. The two direct tests pin the bare-output alias
 check and the top-level argument hash tokens to the generic helpers they shortcut.
+The thin emit (``_thin_emit``) is off here: it serves the same calls ahead of
+``emit_plain_output`` and has its own two-path test (``test_thin_emit_soundness``).
 """
 
 from __future__ import annotations
@@ -25,7 +27,7 @@ from torch import nn
 import torchlens as tl
 from torchlens import _state
 from torchlens._ir.intervention import FunctionEventInput
-from torchlens.backends.torch import _arg_hash, _ops_exhaustive, aliasing
+from torchlens.backends.torch import _arg_hash, _ops_exhaustive, _thin_emit, aliasing
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "tools"))
@@ -35,6 +37,15 @@ from field_diff_lib.mask import Mask  # noqa: E402
 from field_diff_lib.surface import snapshot_trace  # noqa: E402
 
 Build = Callable[[], nn.Module]
+
+
+@pytest.fixture(autouse=True)
+def _thin_emit_off() -> Any:
+    """Send every admitted call to today's emit, whose plain-output body is under test."""
+
+    previous = _thin_emit.set_thin_emit_enabled(False)
+    yield
+    _thin_emit.set_thin_emit_enabled(previous)
 
 
 def _dump(trace: Any) -> dict[str, Any]:

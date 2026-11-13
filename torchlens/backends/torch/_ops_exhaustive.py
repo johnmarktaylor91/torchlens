@@ -6,9 +6,11 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from ..._capture.session import CaptureSession
 from ..._capture.stop import evaluate_halt_stop
 from ..._data_classes.internal_types import FuncExecutionContext
 from ..._data_classes.op import (
+    _OP_STORE_LAYOUT,
     Op,
 )
 from ..._ir.events import (
@@ -28,8 +30,11 @@ from ..._utils.tensor_utils import (
     safe_copy,
 )
 from ._completeness_origins import internal_scalar_read
+from ._ops_descriptive_fields import _set_descriptive_fields
 from ._ops_freeze_refs import _module_frames_from_fields
 from ._ops_row_journal import _OUTPUT_REQUIRES_GRAD
+from ._thin_emit import ThinHelpers, make_thin_emit
+from ._thin_settle import plain_session
 from ._user_grad_fn import stamp_user_grad_fn
 from .aliasing import (
     detect_torch_alias_contract,
@@ -354,16 +359,43 @@ def plain_single_output(
         or output_entries[0].container_spec is not None
     ):
         return False
-    trace_dict = trace.__dict__
-    return not (
-        getattr(trace, "track_device_memory", False)
-        or trace_dict.get("_predicate_save_options") is not None
-        or trace._options_aten_ops == "values"
-        or trace_dict.get("track_nonfinite")
-        or trace_dict.get("_echo_session") is not None
-        or trace._options_on_nonfinite
-        or _should_keep_alias_mutation_contract(trace)
-    ) and _output_should_be_logged(out_orig, is_bottom_level_func)
+    return plain_session(trace, _should_keep_alias_mutation_contract) and _output_should_be_logged(
+        out_orig, is_bottom_level_func
+    )
+
+
+_BOUND_THIN: dict[str, Any] = {}
+"""The thin emit bound to this package's helpers (key ``"thin"``), built on first use."""
+
+
+def bound_thin_emit() -> Callable[[Any, tuple[Any, ...], int], bool]:
+    """Return the thin emit bound to the capture helpers (``_thin_emit.make_thin_emit``).
+
+    The cycle side binds the thin path's helpers, so the ``_thin_*`` modules import
+    nothing from the capture import cycle; ``commit_admitted`` passes the result to
+    ``_call_plan.commit_fast_call``.
+    """
+
+    thin = _BOUND_THIN.get("thin")
+    if thin is None:
+        thin = _BOUND_THIN["thin"] = make_thin_emit(
+            ThinHelpers(
+                _build_shared_fields_dict,
+                _output_entries_with_autograd_stats,
+                _log_output_tensor_info,
+                _pop_tensor_live_fire_results,
+                _tag_tensor_and_track_variations,
+                _emit_exhaustive_operation_events,
+                _should_keep_alias_mutation_contract,
+                _save_activation_fields,
+                _seal_parent_edge_truth,
+                _build_edge_use_records,
+                CaptureSession,
+                _OP_STORE_LAYOUT,
+                _set_descriptive_fields,
+            )
+        )
+    return thin
 
 
 def emit_plain_output(
@@ -726,6 +758,7 @@ def _collect_tensor_values(value: Any) -> list[torch.Tensor]:
 # imports its siblings once every definition above exists.
 from ._ops_activations import (  # noqa: E402
     _log_output_tensor_info,
+    _save_activation_fields,
 )
 from ._ops_arguments import (  # noqa: E402
     _build_edge_use_records,
@@ -739,6 +772,7 @@ from ._ops_capture_records import (  # noqa: E402
 )
 from ._ops_finalize import (  # noqa: E402
     _make_layer_log_entry,
+    _seal_parent_edge_truth,
 )
 from ._ops_interventions import (  # noqa: E402
     _pop_tensor_live_fire_results,

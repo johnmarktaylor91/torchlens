@@ -515,19 +515,24 @@ def _multi_output_admitted(out: Any, args: tuple[Any, ...], kwargs: dict[str, An
 
 
 def commit_fast_call(
-    emit: Callable[..., Any],
+    emits: tuple[Callable[..., Any], Callable[[Any, tuple[Any, ...], int], bool] | None],
     trace: Any,
     call: tuple[Any, ...],
     func_call_id: int,
     window: tuple[Any, list[torch.Tensor]],
 ) -> Any:
-    """Emit one admitted bottom-level call through today's emit and return its output.
+    """Emit one admitted bottom-level call and return its output.
+
+    The thin emit, when given, logs a plain single output in a plain session and
+    answers True; every other call goes to today's emit.
 
     Parameters
     ----------
-    emit:
-        Today's output emit (``log_function_output_tensors``), passed in by the
-        wrapper so this module stays outside the capture import cycle.
+    emits:
+        ``(emit, thin)``: today's output emit (``log_function_output_tensors``)
+        and the bound thin emit (``_thin_emit.make_thin_emit``) or ``None``, passed
+        in by the wrapper so this module stays outside the capture import cycle;
+        ``None`` sends every call to ``emit``.
     trace:
         Active capture trace.
     call:
@@ -547,13 +552,15 @@ def commit_fast_call(
         The call's output: a tensor, or a tuple or list of tensors.
     """
 
+    emit, thin = emits
     cow_state_ptrs, tensors = window
     if cow_state_ptrs is not None:
         arm_deferred_payload_window(cow_state_ptrs)
     runtime = trace._wrapper_runtime_ws
     runtime.fast_scan = (call[2], tensors)
     try:
-        emit(trace, *call, True, func_call_id)
+        if thin is None or not thin(trace, call, func_call_id):
+            emit(trace, *call, True, func_call_id)
     finally:
         runtime.fast_scan = None
         if cow_state_ptrs is not None:

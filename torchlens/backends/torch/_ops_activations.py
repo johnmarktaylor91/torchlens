@@ -42,6 +42,7 @@ from ._completeness_origins import internal_scalar_read
 from ._ops_fresh_payload import fresh_plain_payload_eligible, save_fresh_plain_activation
 from ._ops_function_family import NAME_FAMILY, name_family
 from ._same_object_handoff import pop_same_object_mutation, reference_payload_source
+from ._thin_settle import OUTPUT_CALL_DEFAULTS
 from ._user_grad_fn import pop_op_grad_fn
 from .tensor_tracking import (
     _append_module_suffix_to_equivalence_class,
@@ -225,7 +226,6 @@ def _log_output_tensor_info(
         keep_alias_contract: ``_should_keep_alias_mutation_contract(self)``, read once per call.
     """
     layer_type = fields_dict["type"]
-    indiv_param_barcodes = list(parent_param_ops.keys())
     self._raw_graph_ws.layer_counter += 1
     self._raw_graph_ws.raw_layer_type_counter[layer_type] += 1
     raw_index = self._raw_graph_ws.layer_counter
@@ -240,7 +240,7 @@ def _log_output_tensor_info(
         # same weight+bias tensors are the same layer on different ops.
         output_index = i if fields_dict["in_multi_output"] else None
         equivalence_class = _make_raw_param_group_barcode(
-            indiv_param_barcodes,
+            list(parent_param_ops.keys()),
             layer_type,
             output_index=output_index,
         )
@@ -399,11 +399,10 @@ def _log_output_tensor_info(
         fields_dict["is_scalar_bool"] = False
         fields_dict["bool_value"] = None
 
-    # General info
     fields_dict["_label_raw"] = _label_raw
     fields_dict["raw_index"] = raw_index
-    fields_dict["step_index"] = None
-    fields_dict["_tracing_finished"] = False
+    if "_construction_done" in fields_dict:  # else deferred: a thin row's settle takes the table
+        fields_dict.update(OUTPUT_CALL_DEFAULTS)
 
     # Other labeling info. The final labels, ``recurrent_ops``, ``num_passes``,
     # ``lookup_keys`` and ``source_trace`` are set by postprocess, not stored here.
@@ -412,9 +411,6 @@ def _log_output_tensor_info(
     fields_dict["type_index"] = type_index
 
     # Saved tensor info
-    fields_dict["out"] = None
-    fields_dict["transformed_out"] = None
-    fields_dict["has_saved_activation"] = False
     fields_dict["activation_transform"] = self._options_activation_transform
     # Collective boundary nodes carry their portable collective_boundary_v1
     # payload in the reserved "collective" annotations namespace; the wrapper
@@ -437,24 +433,11 @@ def _log_output_tensor_info(
                 session.register_annotation_copy(fields_dict["annotations"]["collective"])
     else:
         fields_dict["annotations"] = {}
-    fields_dict["is_edited"] = False
-    fields_dict["fire_results"] = ()
-    fields_dict["has_saved_args"] = False
-    fields_dict["saved_args"] = None
-    fields_dict["saved_kwargs"] = None
     (
         fields_dict["shape"],
         fields_dict["dtype"],
         fields_dict["activation_memory"],
     ) = _read_output_shape_dtype_memory(t, _label_raw)
-    fields_dict["transformed_out_shape"] = None
-    fields_dict["transformed_out_dtype"] = None
-    fields_dict["transformed_activation_memory"] = None
-    fields_dict["visualizer_path"] = None
-    # Not measured is None, never a fabricated 0 (observe item 15); the
-    # track_device_memory commit-site projection overwrites when sampled.
-    fields_dict["bytes_delta_at_call"] = None
-    fields_dict["bytes_peak_at_call"] = None
     (
         fields_dict["autograd_memory"],
         fields_dict["num_autograd_tensors"],

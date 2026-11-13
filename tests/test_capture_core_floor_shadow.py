@@ -12,13 +12,23 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from typing import Any
 
+import pytest
 import torch
 
 import torchlens as tl
 from benchmarks import capture_core_cost as cost, capture_core_floor_shadow as shadow
-from torchlens.backends.torch import _call_plan, _ops_emission, wrappers
+from torchlens.backends.torch import _call_plan, _ops_emission, _thin_emit, wrappers
 
 _EMIT = _ops_emission.log_function_output_tensors
+
+
+@pytest.fixture(autouse=True)
+def _thin_emit_off() -> Iterator[None]:
+    """Pin today's emit: the shadow times ``log_function_output_tensors``, which the thin emit skips."""
+
+    previous = _thin_emit.set_thin_emit_enabled(False)
+    yield
+    _thin_emit.set_thin_emit_enabled(previous)
 
 
 def _warm_chain() -> tuple[torch.nn.Module, torch.Tensor]:

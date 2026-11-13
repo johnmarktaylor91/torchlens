@@ -175,6 +175,10 @@ pins the high-risk members against exception and interruption paths.
 
 _INSTALL_STATE_AND_CACHES = frozenset(
     {
+        # Whether the thin emit serves admitted plain calls: read from the
+        # environment at import (TORCHLENS_THIN_EMIT); only tests flip it, through
+        # set_thin_emit_enabled, and restore it (install-time fact).
+        ("torchlens/backends/torch/_thin_emit.py", "_ENABLED"),
         # Backend protocol shells resolve their spec through one lookup hook that
         # the registry installs once at import (install-time fact, never rebound).
         ("torchlens/backends/_backend_protocol.py", "_spec_lookup"),
@@ -1128,6 +1132,9 @@ _PROCESS_CACHES = frozenset(
         ("torchlens/_ir/op_record_scatter.py", "_PORTABLE_BLOB_REF"),
         ("torchlens/_ir/op_record_scatter.py", "_MATERIALIZE_RESOLVE_DTYPE"),
         ("torchlens/intervention/_module_boundary.py", "_OPS_INTERVENTIONS"),
+        # The thin emit closure bound once to the capture helpers on first use;
+        # the helpers are module functions already held by sys.modules.
+        ("torchlens/backends/torch/_ops_exhaustive.py", "_BOUND_THIN"),
     }
 )
 """Process-lifetime memos holding strong references.

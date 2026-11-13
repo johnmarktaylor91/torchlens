@@ -3554,6 +3554,7 @@ docs-md	docs/maintainers/where.md	1838
 docs-md	docs/maintainers/where.md	184
 docs-md	docs/maintainers/where.md	1841
 docs-md	docs/maintainers/where.md	1840
+docs-md	docs/maintainers/where.md	1843
 docs-md	docs/maintainers/where.md	185
 docs-md	docs/maintainers/where.md	1858
 docs-md	docs/maintainers/where.md	186
@@ -3986,12 +3987,12 @@ docs-md	docs/maintainers/where.md	556
 docs-md	docs/maintainers/where.md	557
 docs-md	docs/maintainers/where.md	56
 docs-md	docs/maintainers/where.md	560
-docs-md	docs/maintainers/where.md	561
 docs-md	docs/maintainers/where.md	563
 docs-md	docs/maintainers/where.md	564
 docs-md	docs/maintainers/where.md	565
 docs-md	docs/maintainers/where.md	566
 docs-md	docs/maintainers/where.md	567
+docs-md	docs/maintainers/where.md	568
 docs-md	docs/maintainers/where.md	569
 docs-md	docs/maintainers/where.md	5690
 docs-md	docs/maintainers/where.md	570
@@ -4056,6 +4057,7 @@ docs-md	docs/maintainers/where.md	649
 docs-md	docs/maintainers/where.md	65
 docs-md	docs/maintainers/where.md	651
 docs-md	docs/maintainers/where.md	653
+docs-md	docs/maintainers/where.md	65313
 docs-md	docs/maintainers/where.md	6537
 docs-md	docs/maintainers/where.md	656
 docs-md	docs/maintainers/where.md	66
@@ -4109,6 +4111,7 @@ docs-md	docs/maintainers/where.md	727495
 docs-md	docs/maintainers/where.md	727660
 docs-md	docs/maintainers/where.md	727377
 docs-md	docs/maintainers/where.md	728
+docs-md	docs/maintainers/where.md	728040
 docs-md	docs/maintainers/where.md	73
 docs-md	docs/maintainers/where.md	730
 docs-md	docs/maintainers/where.md	731
@@ -10785,6 +10788,7 @@ test-names	tests/test_stoch_edits_population.py	32
 test-names	tests/test_surgery_live_bind.py	68
 test-names	tests/test_surgery_live_regions.py	50_
 test-names	tests/test_surgery_visuals_realism.py	50_
+test-names	tests/test_thin_emit_soundness.py	100
 test-names	tests/test_tlspec_envelope_state_contract.py	3_0_
 test-names	tests/test_tlspec_runnable_escape_matrix.py	14_
 test-names	tests/test_tlspec_runnable_escape_witness.py	10_

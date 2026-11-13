@@ -37,6 +37,7 @@ from torch import nn
 PHASE_MARKERS: tuple[tuple[str, str, str], ...] = (
     ("backends/torch/wrappers.py", "wrapped_func", "wrapper"),
     ("backends/torch/_ops_emission.py", "log_function_output_tensors", "wrapper.emit"),
+    ("backends/torch/_thin_emit.py", "thin_emit", "wrapper.emit"),
     ("backends/torch/_ops_finalize.py", "_make_layer_log_entry", "wrapper.emit.make_entry"),
     (
         "backends/torch/_ops_shared_fields.py",
@@ -56,6 +57,7 @@ TAG_MARKERS: tuple[tuple[str, str, str], ...] = (
     ("backends/torch/wrappers.py", "wrapped_func", "wrapper_calls"),
     ("backends/torch/_ops_emission.py", "log_function_output_tensors", "emit_calls"),
     ("_capture/projections.py", "commit_op", "commit_ops"),
+    ("backends/torch/_thin_record.py", "commit_thin", "commit_ops"),  # the thin emit's commit
     ("_capture/run.py", "_run_forward", "run_forward"),
     ("_postprocess/__init__.py", "_postprocess_body", "postprocess_body"),
     ("_postprocess/_materialize.py", "materialize_from_events", "materialize"),

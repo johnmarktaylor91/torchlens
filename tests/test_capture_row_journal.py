@@ -27,9 +27,22 @@ import torchlens._postprocess as postprocess_module
 from torchlens._ir import _row_journal
 from torchlens._ir.op_record import OpRecord, OpRecordAttributeError, record_with_path_updates
 from torchlens._ir.refs import journal_record
-from torchlens.backends.torch import _ops_row_journal
+from torchlens.backends.torch import _ops_row_journal, _thin_emit
 from torchlens.backends.torch._ops_container_base import _op_record_from_log
 from torchlens.errors import TraceCaptureError
+
+
+@pytest.fixture(autouse=True)
+def _thin_emit_off() -> Iterator[None]:
+    """Pin today's emit: these tests spy on its commit (``commit_row_record``).
+
+    The thin emit appends its rows without that commit; its rows are checked
+    against today's in ``tests/test_thin_emit_soundness.py``.
+    """
+
+    previous = _thin_emit.set_thin_emit_enabled(False)
+    yield
+    _thin_emit.set_thin_emit_enabled(previous)
 
 
 class _TinyTransformer(nn.Module):

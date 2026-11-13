@@ -21,9 +21,10 @@ How calls are attributed (deterministic; no timing):
   ``module_handling`` (the forward runner, the session forward, module entry
   and exit records); the user forward that ``decorated_forward`` calls, and a
   module call (``nn.Module.__call__``) TorchLens makes, return to ``model_code``;
-* the emit (``log_function_output_tensors``) opens ``emit_rest``; inside it the
-  first marker of :data:`SECTION_MARKERS` reached opens that section, which
-  keeps every call beneath it (the outermost section wins).
+* the emit (``log_function_output_tensors``, or the thin emit ``thin_emit``)
+  opens ``emit_rest``; inside it the first marker of :data:`SECTION_MARKERS`
+  reached opens that section, which keeps every call beneath it (the outermost
+  section wins).
 
 A lane that moves a section's work into a new function adds the function's
 name to that section's markers in the same change; otherwise the work shows
@@ -129,6 +130,7 @@ SECTION_MARKERS: dict[str, tuple[str, ...]] = {
 _RUN_FORWARD = ("_capture/run.py", "_run_forward")
 _WRAPPER = ("backends/torch/wrappers.py", "wrapped_func")
 _EMIT_NAME = "log_function_output_tensors"
+_THIN_EMIT = ("backends/torch/_thin_emit.py", "thin_emit")
 _MODULE_FORWARD = ("backends/torch/model_prep.py", "decorated_forward")
 _OUTPUT = ("backends/torch/_ops_activations.py", "_log_output_tensor_info")
 _LABEL = ("_utils/_tensor_label.py", ("get_tensor_label", "set_tensor_label"))
@@ -167,7 +169,7 @@ def _make_classifier() -> Callable[[Any], tuple[int, str | None, bool, bool]]:
             kind = _K_RUN
         elif name == _WRAPPER[1] and path.endswith(_WRAPPER[0]):
             kind = _K_WRAP
-        elif name == _EMIT_NAME:
+        elif name == _EMIT_NAME or (name == _THIN_EMIT[1] and path.endswith(_THIN_EMIT[0])):
             kind = _K_EMIT
         elif name == _MODULE_FORWARD[1] and path.endswith(_MODULE_FORWARD[0]):
             kind = _K_MODFWD
