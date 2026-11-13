@@ -180,7 +180,7 @@ def _labels(trace: Any, pass_number: int) -> dict[str, Any]:
     return {
         "calls": sorted(recorded.calls),
         "grads": sorted(recorded.grads),
-        "grad_fn_labels": sorted(str(fn.op_label) for fn in trace._grad_fn_logs.values()),
+        "grad_fns": [(fn.class_name, fn.op_label) for fn in trace._grad_fn_logs.values()],
         "ops": [
             (op.label, op.layer_label, getattr(op, "_label_raw", None)) for op in trace._layer_list
         ],
@@ -190,7 +190,9 @@ def _labels(trace: Any, pass_number: int) -> dict[str, Any]:
 def _assert_valid(trace: Any, pass_number: int) -> BackwardCheckResult:
     result = check_pass(trace, pass_number)
     findings = [dataclasses.astuple(f) for f in result.findings]
-    assert result.passed, (findings, result.nodes_checked, _labels(trace, pass_number))
+    if not result.passed:
+        print(findings, _labels(trace, pass_number))  # shown in the failure report
+    assert result.passed, findings
     assert result.leaves_checked > 0
     return result
 
