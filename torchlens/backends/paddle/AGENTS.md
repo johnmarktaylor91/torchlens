@@ -1,6 +1,6 @@
 # backends/paddle/ - Implementation Guide
 
-Paddle preview backend: eager dygraph wrapper capture. It fills the backend protocol (`maturity="preview"`, no `capture_backend`); its
+Paddle backend: eager dygraph wrapper capture. It fills the backend protocol (no `capture_backend`); its
 `BackendSpec` in `../default_specs.py` and its protocol shell in
 `../_protocols/paddle.py` are the capability truth (contract: `../AGENTS.md`).
 

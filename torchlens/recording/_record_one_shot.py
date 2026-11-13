@@ -137,7 +137,7 @@ def _require_torch_fastlog_backend(backend: Any) -> None:
             )
         raise BackendUnsupportedError(
             "tl.record() is torch-only in backend v1. Use tl.trace(..., backend='jax') "
-            "for the JAX full-save preview.",
+            "for full-save JAX capture.",
             code=refusal_code_for_capability("fastlog"),
             backend=str(backend_spec.name),
         )

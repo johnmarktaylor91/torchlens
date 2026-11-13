@@ -1,4 +1,4 @@
-"""Live intervention runtime for the technical-preview Paddle backend.
+"""Live intervention runtime for the Paddle backend.
 
 Paddle dygraph is eager: the capture wrapper holds the concrete output of every
 wrapped call before the caller sees it, so ``trace(intervene=...)`` and
@@ -118,7 +118,7 @@ class PaddleInterventionRuntime:
             universe != "activation" for universe, _branch in split_site_branches(selector)
         ):
             raise BackendUnsupportedError(
-                "paddle backend preview supports forward interventions only; the site "
+                "the paddle backend supports forward interventions only; the site "
                 f"{selector!r} addresses a gradient, which needs true backward capture "
                 "that paddle does not declare. Use the PyTorch backend for gradient edits.",
                 code=PADDLE_REFUSAL_BACKWARD,
@@ -312,7 +312,7 @@ class PaddleInterventionRuntime:
 
         if decision.isolate:
             raise BackendUnsupportedError(
-                "paddle backend preview does not support isolate=True intervention "
+                "the paddle backend does not support isolate=True intervention "
                 "decisions; backend isolation is a torch capture feature.",
                 code=PADDLE_REFUSAL_OPTION,
                 option="isolate",
@@ -391,7 +391,7 @@ class PaddleInterventionRuntime:
             return _replace
         supported = ", ".join(_PADDLE_SUPPORTED_HELPER_NAMES)
         raise BackendUnsupportedError(
-            f"paddle backend preview has no adapter for intervention helper "
+            f"the paddle backend has no adapter for intervention helper "
             f"{name!r}; supported builtin helpers: {supported}. Pass a callable "
             "hook operating on paddle.Tensor values, or use the PyTorch backend.",
             code=PADDLE_REFUSAL_OPTION,

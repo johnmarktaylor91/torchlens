@@ -149,7 +149,7 @@ def _unmet_log_precondition(log: Trace) -> str | None:
         backend = str(log._provenance_backend or TORCH_BACKEND_NAME)
         if backend != TORCH_BACKEND_NAME:
             return (
-                f"the {backend} preview backend cannot edit or patch a finished trace: replay "
+                f"the {backend} backend cannot edit or patch a finished trace: replay "
                 "needs per-op argument templates, which only PyTorch captures record; stage "
                 f"the edit in a new run: tl.trace(model, inputs, backend={backend!r}, "
                 "intervene=...)"

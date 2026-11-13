@@ -891,7 +891,7 @@ class _BundleAllowlistPolicy:
                 ):
                     return obj
                 raise pickle.UnpicklingError(
-                    "Blocked non-preview-owned type resolved via a preview-backend "
+                    "Blocked foreign type resolved via a non-PyTorch backend array "
                     f"namespace during bundle metadata unpickle: {module}.{name} "
                     f"resolved to a type owned by {type_module!r}."
                 )
@@ -902,7 +902,7 @@ class _BundleAllowlistPolicy:
             ):
                 return obj
             raise pickle.UnpicklingError(
-                "Blocked disallowed preview-backend global during bundle metadata "
+                "Blocked disallowed non-PyTorch backend global during bundle metadata "
                 f"unpickle: {module}.{name}."
             )
 

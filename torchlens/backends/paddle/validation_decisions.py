@@ -1,4 +1,4 @@
-"""Per-op validation decisions for the Paddle preview backend.
+"""Per-op validation decisions for the Paddle backend.
 
 The protocol contract (``BackendProtocol.validate``) asks every backend for a
 status object whose failed form names the first offending op and a reason from

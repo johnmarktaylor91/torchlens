@@ -1,4 +1,4 @@
-"""Derived-gradient leaf helpers for the technical-preview Paddle backend.
+"""Derived-gradient leaf helpers for the Paddle backend.
 
 Leaf discovery over inputs and parameters, the tensor-state snapshots the
 replay restores, the record builder and the float checks they share.

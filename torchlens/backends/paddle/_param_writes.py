@@ -1,4 +1,4 @@
-"""Paddle parameter-write guard for the preview capture.
+"""Paddle parameter-write guard for Paddle capture.
 
 The coverage oracle credits an unlabeled op input that IS a registered
 parameter of the captured tree as a known pre-forward source. That credit is

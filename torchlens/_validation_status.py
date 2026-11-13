@@ -641,7 +641,7 @@ _VALIDATION_REASON_DEFINITIONS: dict[str, str] = {
     ),
     "no_replayable_function": (
         "no callable can re-execute the op: capture recorded none for a computational "
-        "op, or the preview backend could not reconstruct or re-invoke the saved call"
+        "op, or the backend could not reconstruct or re-invoke the saved call"
     ),
     "constant_producer_leaf": "a recorded constant: a leaf with a saved payload and nothing upstream",
     "constant_parent_payload": (

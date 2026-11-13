@@ -1,4 +1,4 @@
-"""Technical-preview Paddle implementation of the capture backend Protocol."""
+"""Paddle implementation of the capture backend Protocol."""
 
 from __future__ import annotations
 
@@ -282,7 +282,7 @@ class PaddleOpCapture:
 
 
 class PaddleBackend:
-    """Paddle eager op-wrapping backend preview."""
+    """Paddle eager op-wrapping backend."""
 
     name = "paddle"
     supports_backward_capture = False
@@ -416,7 +416,7 @@ class PaddleBackend:
         facet_recipes = _default_if_missing(extra_kwargs.pop("facets", None), None)
         if grad_options is not None and (intervene is not None or halt is not None):
             raise BackendUnsupportedError(
-                "paddle backend preview cannot combine grad_options with trace(intervene=...) "
+                "the paddle backend cannot combine grad_options with trace(intervene=...) "
                 "or trace(stop_after=...): derived-gradient replay re-executes the forward "
                 "without interventions, so the matched intermediates would misrepresent the "
                 "intervened capture. Capture derived gradients in a separate plain trace.",
@@ -431,7 +431,7 @@ class PaddleBackend:
         _reject_extra_kwargs(extra_kwargs)
         if random_seed is not None:
             raise BackendUnsupportedError(
-                "paddle backend preview does not support random_seed; use paddle.seed(...) "
+                "the paddle backend does not support random_seed; use paddle.seed(...) "
                 "outside tl.trace or pass explicit RNG state through the model/input surface.",
                 code=PADDLE_REFUSAL_SEED,
             )
@@ -1837,13 +1837,13 @@ class PaddleBackend:
         in_dynamic_mode = getattr(paddle, "in_dynamic_mode", None)
         if callable(in_dynamic_mode) and not in_dynamic_mode():
             raise BackendUnsupportedError(
-                "Paddle backend preview requires Paddle dygraph mode.",
+                "The Paddle backend requires Paddle dygraph mode.",
                 code=PADDLE_REFUSAL_RUNTIME_MODE,
             )
         in_pir_mode = getattr(paddle, "in_pir_mode", None)
         if callable(in_pir_mode) and in_pir_mode():
             raise BackendUnsupportedError(
-                "Paddle backend preview does not support PIR mode.",
+                "The Paddle backend does not support PIR mode.",
                 code=PADDLE_REFUSAL_RUNTIME_MODE,
             )
 

@@ -1,4 +1,4 @@
-"""Paddle function-call interception for technical-preview capture."""
+"""Paddle function-call interception for Paddle capture."""
 
 from __future__ import annotations
 
@@ -753,14 +753,14 @@ def _raise_denied(op_name: str) -> None:
     base_name = op_name.rsplit(".", 1)[-1]
     if base_name in _SCALAR_ESCAPE_NAMES:
         raise BackendUnsupportedError(
-            "tensor-derived Python scalar/control escape is unsupported in the paddle preview; "
+            "tensor-derived Python scalar/control escape is unsupported in the paddle backend; "
             "keep it as a paddle.Tensor or pass it as an explicit input",
             code=PADDLE_REFUSAL_SCALAR_ESCAPE,
         )
     if base_name in _RNG_NAMES or "rand" in base_name or base_name in {"normal", "uniform"}:
         raise BackendUnsupportedError(
-            "Paddle stochastic operations are unsupported in the preview; pass stochastic values "
-            "as explicit inputs.",
+            "Paddle stochastic operations are unsupported in the Paddle backend; pass "
+            "stochastic values as explicit inputs.",
             code=PADDLE_REFUSAL_STOCHASTIC,
         )
     raise BackendUnsupportedError(

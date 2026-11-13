@@ -114,7 +114,7 @@ def raise_if_no_backward_capture(trace: Any, *, plural_subject: str) -> None:
         )
     raise InvalidArgumentError(
         f"{backend} traces do not expose {plural_subject} because they do not "
-        f"capture true backward graphs, and the {backend} preview declares no "
+        f"capture true backward graphs, and the {backend} backend declares no "
         "derived-gradient surface",
         code="backend_unsupported",
         remedy="use the PyTorch backend for backward capture",

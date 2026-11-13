@@ -1,4 +1,4 @@
-"""Paddle model preparation helpers for technical-preview capture.
+"""Paddle model preparation helpers for Paddle capture.
 
 Besides discovering the layer tree and installing per-session forward hooks, the post-hook
 records each layer call's returned leaves into the tree's ``module_returns`` ledger (labels read

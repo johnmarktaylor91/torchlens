@@ -1,4 +1,4 @@
-"""Registry-backed capability exports for the Paddle backend preview."""
+"""Registry-backed capability exports for the Paddle backend."""
 
 from __future__ import annotations
 

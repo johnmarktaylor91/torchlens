@@ -1,4 +1,4 @@
-"""Replay-validation helpers for the technical-preview Paddle backend."""
+"""Replay-validation helpers for the Paddle backend."""
 
 from __future__ import annotations
 

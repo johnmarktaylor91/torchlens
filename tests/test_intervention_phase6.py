@@ -374,7 +374,7 @@ def test_replay_refusal_names_the_preview_backend(backend: str) -> None:
     message = _unmet_log_precondition(cast(Any, preview_log))
 
     assert message is not None
-    assert f"the {backend} preview backend cannot edit or patch a finished trace" in message
+    assert f"the {backend} backend cannot edit or patch a finished trace" in message
     assert "every other" not in message
 
 

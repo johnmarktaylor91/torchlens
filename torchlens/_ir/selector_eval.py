@@ -717,7 +717,7 @@ def _match_site_capture(subject: Any, *, selector: BaseSelector) -> bool:
             "tl.site(...) on the capture lane needs the live site-key "
             "minter, which tl.trace arms automatically when save=/"
             "intervene= contains a site selector. This capture surface "
-            "did not arm it (tl.record and preview backends do not "
+            "did not arm it (tl.record and the non-PyTorch backends do not "
             "support live site keys yet). Address the finished trace "
             "post hoc (trace[selector] / do), or use tl.trace with "
             "the site selector in save=/intervene=."

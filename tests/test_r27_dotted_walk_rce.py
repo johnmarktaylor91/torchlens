@@ -144,7 +144,9 @@ def test_preview_backend_dotted_walk_escape_denied() -> None:
     sys.modules["mlx.core"] = fake_core
     try:
         payload = _stop_global_pickle("mlx.core", "subprocess.Popen")
-        with pytest.raises(pickle.UnpicklingError, match="non-preview-owned"):
+        with pytest.raises(
+            pickle.UnpicklingError, match="foreign type resolved via a non-PyTorch backend"
+        ):
             SafeBundleUnpickler(io.BytesIO(payload)).load()
     finally:
         sys.modules.pop("mlx.core", None)
