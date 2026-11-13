@@ -117,6 +117,10 @@ def split_outputs(result: Any, tree: Any) -> Any:
     if not isinstance(ledger, JaxReturnLedger) or ledger.extended_jaxpr is None:
         return result
     ledger.extended_jaxpr = None
+    if getattr(result, "halt_frontier", None) is not None:
+        # A halted run never reaches the extra outputs; no module return is recorded.
+        ledger.release()
+        return result
     kept = len(result.outputs) - len(ledger.leaves)
     ledger.extra_values = tuple(result.outputs[kept:])
     producer_by_id = {

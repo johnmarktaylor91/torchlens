@@ -19,18 +19,41 @@ This module imports nothing from the backend's import cycle.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import replace
 from typing import Any
 
-from ..._ir.selector_eval import selector_contains_kind
+from ..._capture._stop_after_policy import settle_unfired_stop_after
+from ..._capture.outcome import StopRequest
+from ..._ir.selector_eval import module_union_addresses, selector_contains_kind
+from ..._output_slot import returned, stopped
+from ..._selection import selectors
+from .._options import pop_stop_directive
+from ._interp_hooks import InterpreterHooks
 
 _ALIAS_RETRY_KINDS = ("label", "contains", "regex")
 
 
-def selector_matches(selector: Any, ctx: Any) -> bool:
-    """Evaluate a stop selector on one record context, with the short-label alias retry."""
+def resolve_stop_selector(halt: Any) -> Any:
+    """Return the selector for a ``stop_after=`` value (a bare callable becomes ``tl.where``).
 
+    A selector passes through; any other value is returned unchanged for the caller's
+    typed refusal, as on MLX.
+    """
+
+    if isinstance(halt, (selectors.BaseSelector, type)) or not callable(halt):
+        return halt
+    return selectors.WhereSelector(halt)
+
+
+def selector_matches(selector: Any, ctx: Any) -> bool:
+    """Evaluate a stop selector on one record context, with the short-label alias retry.
+
+    Module selectors match module exits, not equations, so they never match here.
+    """
+
+    if module_union_addresses(selector) is not None:
+        return False
     if bool(selector(ctx)):
         return True
     if getattr(ctx, "layer_type", None) is None or getattr(ctx, "type_index", None) is None:
@@ -88,20 +111,30 @@ class JaxHaltSite:
         return self._frontier_index is not None and capture.index == self._frontier_index
 
 
-def frontier_output(result: Any) -> Any:
-    """Return the frontier equation's output (one value, or a tuple for several)."""
+def finish_halted(result: Any, session: Any) -> tuple[Any, Any]:
+    """Finish a halted run: settle edits, make the frontier outputs the run's outputs.
 
-    values = tuple(result.halt_frontier.output_values)
-    return values[0] if len(values) == 1 else values
+    Parameters
+    ----------
+    result
+        Interpreter result with a ``halt_frontier``.
+    session
+        The capture's ``JaxEquationSession`` (its ``finish`` rewraps edited captures).
+
+    Returns
+    -------
+    tuple[Any, Any]
+        The result whose ``outputs`` are the frontier capture's output values, and the
+        frontier output (one value, or a tuple for several).
+    """
+
+    result, _ = session.finish(result, None)
+    values = tuple(result.captures[-1].output_values)
+    output = values[0] if len(values) == 1 else values
+    return replace(result, outputs=values), output
 
 
-def stamp_halted_trace(
-    trace: Any,
-    site: JaxHaltSite,
-    *,
-    stopped: Callable[[str | None], Any],
-    stop_request: Callable[..., Any],
-) -> None:
+def stamp_halted_trace(trace: Any, site: JaxHaltSite) -> None:
     """Give a halted trace torch's stop fields.
 
     Parameters
@@ -110,19 +143,78 @@ def stamp_halted_trace(
         Trace under capture.
     site
         The halt site that matched (its ``label`` is the frontier label).
-    stopped
-        ``torchlens._output_slot.stopped`` (passed in to keep this module a leaf).
-    stop_request
-        ``torchlens._capture.outcome.StopRequest``.
     """
 
     label = site.label
     # Latch first, as torch's evaluate_halt does, so the settlement stamp sees the stop.
-    trace.__dict__["_stop_requested"] = stop_request(
-        kind="halt", reason=label, boundary_label=label
-    )
+    trace.__dict__["_stop_requested"] = StopRequest(kind="halt", reason=label, boundary_label=label)
     trace.is_stopped = True
     trace.stop_reason = label
     trace._graph_stop_frontier = label
     trace._output_slot = stopped(label)
     trace.transformed_output = None
+
+
+class JaxStop:
+    """The ``stop_after=`` plan for one JAX capture (inactive when none was requested).
+
+    The backend calls :meth:`pop` before rejecting extra kwargs, passes
+    :meth:`interpreter_kwargs` to the interpreter, calls :meth:`finish` on the interpreter
+    result and :meth:`stamp_output` where it sets the output slot.
+
+    Parameters
+    ----------
+    stop_site
+        The public ``stop_after=`` value, or ``None``.
+    """
+
+    def __init__(self, stop_site: Any) -> None:
+        """Resolve the stop selector."""
+
+        self.stop_site = stop_site
+        self.selector = resolve_stop_selector(stop_site)
+        self.site: JaxHaltSite | None = None
+        self.halted = False
+
+    @classmethod
+    def pop(cls, kwargs: dict[str, Any]) -> JaxStop:
+        """Pop the stop directive from ``kwargs``; leave an unsupported value for rejection."""
+
+        stop = cls(pop_stop_directive(kwargs))
+        if stop.selector is not None and not isinstance(stop.selector, selectors.BaseSelector):
+            kwargs["stop_after"] = stop.stop_site
+        return stop
+
+    def interpreter_kwargs(self, session: Any) -> dict[str, Any]:
+        """Return the interpreter's ``equation_hook`` and ``hooks`` for this capture."""
+
+        if self.selector is None:
+            return {"equation_hook": session.hook, "hooks": InterpreterHooks(session=session)}
+        self.site = JaxHaltSite(session, self.selector)
+        hooks = InterpreterHooks(session=session, halt=self.site.check)
+        return {"equation_hook": self.site.hook, "hooks": hooks}
+
+    def finish(self, result: Any, session: Any, output: Any) -> tuple[Any, Any]:
+        """Finish the run: a halted run's outputs are the frontier capture's outputs."""
+
+        if result.halt_frontier is None:
+            return session.finish(result, output)
+        self.halted = True
+        return finish_halted(result, session)
+
+    def stamp_output(self, trace: Any, output: Any, output_transform: Any) -> None:
+        """Set the output slot (``stopped`` when halted, else ``returned``); settle the stop.
+
+        A selector that never fired refuses (``stop_after_never_fired``) and an unfired
+        callable is recorded, as on PyTorch.
+        """
+
+        if self.halted and self.site is not None:
+            stamp_halted_trace(trace, self.site)
+        else:
+            trace._output_slot = returned(output)
+            trace.transformed_output = (
+                output_transform(output) if callable(output_transform) else None
+            )
+        selector_shaped = self.stop_site is not None and self.stop_site is self.selector
+        settle_unfired_stop_after(trace, self.stop_site, selector_shaped=selector_shaped)

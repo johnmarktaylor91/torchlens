@@ -624,6 +624,52 @@ def _interpret_control_flow(
     partial unroll's captures) when the unroll cap is exceeded.
     """
 
+    captures = loop_kwargs["captures"]
+    start = len(captures)
+    try:
+        return _dispatch_control_flow(
+            eqn,
+            jax_control_flow,
+            loop_kwargs=loop_kwargs,
+            region_kwargs=region_kwargs,
+            control_capture_indices=control_capture_indices,
+        )
+    finally:
+        stacks = (
+            region_kwargs["inherited_module_stack"],
+            region_kwargs["inherited_module_call_stack"],
+        )
+        _stamp_synthetic_stacks(captures, start, stacks)
+
+
+_SYNTHETIC_CONTROL_KINDS = frozenset({"cond_decision", "scan_read", "scan_stack", "while_decision"})
+
+
+def _stamp_synthetic_stacks(captures: Any, start: int, stacks: tuple[Any, Any]) -> None:
+    """Give the scan, cond and while captures from ``start`` on the equation's module scope.
+
+    Synthetic captures (slice reads, stacks and branch/loop decisions) carry no name
+    stack of their own; they belong to the module that ran the control-flow equation.
+    """
+
+    if not stacks[0]:
+        return
+    for index in range(start, len(captures)):
+        capture = captures[index]
+        if capture.kind in _SYNTHETIC_CONTROL_KINDS and not capture.module_stack:
+            captures[index] = replace(capture, module_stack=stacks[0], module_call_stack=stacks[1])
+
+
+def _dispatch_control_flow(
+    eqn: Any,
+    jax_control_flow: str,
+    *,
+    loop_kwargs: dict[str, Any],
+    region_kwargs: dict[str, Any],
+    control_capture_indices: tuple[int, ...],
+) -> tuple[Any, ...]:
+    """Run one control-flow equation in the requested mode (see ``_interpret_control_flow``)."""
+
     name = eqn.primitive.name
     kwargs = {**loop_kwargs, "control_capture_indices": control_capture_indices}
     if name == "cond":
@@ -1507,7 +1553,8 @@ def _is_strict_rejected_attributed_primitive(eqn: Any) -> bool:
 
     ``jit``/``pjit`` calls, ``cond``, ``scan`` and ``while`` inside attributed modules are
     interpreted with the enclosing module scope threaded into their nested jaxprs.
-    Rematerialization, custom-VJP regions and ``shard_map`` stay refused.
+    Rematerialization (``jax.checkpoint``), custom-VJP regions and ``shard_map`` stay
+    refused.
 
     Parameters
     ----------
@@ -1520,7 +1567,7 @@ def _is_strict_rejected_attributed_primitive(eqn: Any) -> bool:
         True when the primitive is outside the attributed-module surface.
     """
 
-    return eqn.primitive.name in {"custom_vjp_call", "remat2", "shard_map"}
+    return eqn.primitive.name in {"checkpoint", "custom_vjp_call", "remat2", "shard_map"}
 
 
 def _raise_attributed_strict_error(
