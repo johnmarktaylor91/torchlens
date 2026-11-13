@@ -262,9 +262,17 @@ def _shape_dtype_memory(value: Any) -> tuple[Any, Any, Any]:
     return shape, str(value.dtype), int(value.nbytes)
 
 
-def _op_grad_events(
-    program: Program, run: BackwardRun, reached: _Reached, pass_index: int, stamp: float
-) -> list[OpGradObserved]:
+@dataclass(frozen=True)
+class _Solved:
+    """One backward pass's program, JAX run and reach, read together by the journal."""
+
+    program: Program
+    run: BackwardRun
+    reached: _Reached
+
+
+def _op_grad_events(solved: _Solved, pass_index: int, stamp: float) -> list[OpGradObserved]:
+    program, run, reached = solved.program, solved.run, solved.reached
     events = []
     for node in program.nodes:
         if not reached.has(node.label):
@@ -304,13 +312,9 @@ def _param_address(trace: Any, node: ProgramNode) -> str | None:
 
 
 def _param_grad_events(
-    trace: Any,
-    program: Program,
-    run: BackwardRun,
-    reached: _Reached,
-    pass_index: int,
-    stamp: float,
+    trace: Any, solved: _Solved, pass_index: int, stamp: float
 ) -> list[ParamGradObserved]:
+    program, run, reached = solved.program, solved.run, solved.reached
     events = []
     for node in program.nodes:
         address = _param_address(trace, node)
@@ -332,14 +336,8 @@ def _param_grad_events(
     return events
 
 
-def _journal(
-    trace: Any,
-    program: Program,
-    run: BackwardRun,
-    reached: _Reached,
-    fired: tuple[ProgramNode, ...],
-    started: float,
-) -> None:
+def _journal(trace: Any, solved: _Solved, fired: tuple[ProgramNode, ...], started: float) -> None:
+    program, run, reached = solved.program, solved.run, solved.reached
     _ensure_stream(trace)
     pass_index = next_backward_pass_index(trace)
     stamp = time.time()
@@ -356,8 +354,8 @@ def _journal(
         )
         for node in reversed(fired)
     )
-    events.extend(_op_grad_events(program, run, reached, pass_index, stamp))
-    events.extend(_param_grad_events(trace, program, run, reached, pass_index, stamp))
+    events.extend(_op_grad_events(solved, pass_index, stamp))
+    events.extend(_param_grad_events(trace, solved, pass_index, stamp))
     events.append(_end_event(pass_index, run.duration))
     for event in events:
         journal_backward_event(trace, event)
@@ -430,7 +428,7 @@ def _record(trace: Any, loss: Any, backward_kwargs: Mapping[str, Any]) -> str | 
     problem = _forward_problem(program, run) or _link_problem(fired, run)
     if problem is not None:
         return problem
-    _journal(trace, program, run, reached, fired, started)
+    _journal(trace, _Solved(program, run, reached), fired, started)
     return None
 
 
