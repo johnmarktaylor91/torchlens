@@ -356,6 +356,7 @@
       ],
       "torchlens/_capture/_recorded_tensor.py": [
         "tests/test_descriptive_resolve.py",
+        "tests/test_exception_taxonomy.py",
         "tests/test_view_write_call_alias_edges.py"
       ],
       "torchlens/_capture/_retention.py": [
@@ -9991,7 +9992,7 @@
       ],
       "torchlens/backends/torch/_arg_hash.py": [
         "tests/test_arg_hash_determinism.py",
-        "tests/test_backward_grad_integrity.py",
+        "tests/test_backward_p1_triggers.py",
         "tests/test_capture_int_param_and_storage.py",
         "tests/test_equivalence_resolve.py",
         "tests/test_implicit_boundary_tightening.py",
@@ -10067,13 +10068,13 @@
         "tests/test_wrapper_teardown_hygiene.py"
       ],
       "torchlens/backends/torch/_backward_markers.py": [
-        "tests/test_aten_values.py",
+        "tests/test_backward_grad_integrity.py",
         "tests/test_backward_intervention.py",
+        "tests/test_backward_p1_triggers.py",
         "tests/test_checkpoint_invocation_tokens.py",
         "tests/test_flops2_backward_attribution.py",
         "tests/test_flops4_multiroot_markers.py",
         "tests/test_implicit_boundary_tightening.py",
-        "tests/test_saved_tensors_hooks_capture.py",
         "tests/test_wrapper_teardown_hygiene.py"
       ],
       "torchlens/backends/torch/_backward_memory.py": [
@@ -10298,8 +10299,8 @@
       ],
       "torchlens/backends/torch/_equivalence_resolve.py": [
         "tests/test_adversarial_scaling_gates.py",
-        "tests/test_backward_grad_integrity.py",
         "tests/test_backward_p1_triggers.py",
+        "tests/test_boundary_multipass_readers.py",
         "tests/test_capture_targets.py",
         "tests/test_equivalence_resolve.py",
         "tests/test_fresh_payload_path.py",
@@ -10944,7 +10945,6 @@
       "torchlens/backends/torch/_parent_arg_containers.py": [
         "tests/test_arg_hash_determinism.py",
         "tests/test_backward.py",
-        "tests/test_backward_grad_integrity.py",
         "tests/test_backward_p1_triggers.py",
         "tests/test_equivalence_resolve.py",
         "tests/test_implicit_boundary_tightening.py",
@@ -11148,7 +11148,7 @@
       ],
       "torchlens/backends/torch/_tensor_grad_hook.py": [
         "tests/test_arg_hash_determinism.py",
-        "tests/test_backward_grad_integrity.py",
+        "tests/test_backward.py",
         "tests/test_backward_hook_install.py",
         "tests/test_backward_p1_triggers.py",
         "tests/test_equivalence_resolve.py",

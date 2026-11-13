@@ -18,7 +18,28 @@ from collections.abc import Callable
 from contextvars import ContextVar
 from typing import Any
 
-from .tensor_tracking import _current_backward_graph_task_id
+from ..._utils._torch_compat import get_current_graph_task_id_fn
+
+
+def _current_backward_graph_task_id() -> int | None:
+    """Return PyTorch's current autograd-engine invocation id when available.
+
+    Returns
+    -------
+    int | None
+        Engine graph-task id inside a backward hook, or ``None`` when the
+        installed torch build exposes no such capability.
+    """
+
+    resolver = get_current_graph_task_id_fn()
+    if resolver is None:
+        return None
+    try:
+        task_id = resolver()
+    except (AttributeError, RuntimeError):
+        return None
+    return int(task_id) if isinstance(task_id, int) and task_id >= 0 else None
+
 
 _Marker = tuple[int, int, int, int, int | None]
 """``(node object id, call index, pass index, owner trace id, engine graph-task id)``."""

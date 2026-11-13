@@ -226,17 +226,17 @@ def test_backward_graph_task_id_routes_through_torch_compat(
     """
 
     from torchlens._utils import _torch_compat
-    from torchlens.backends.torch import tensor_tracking
+    from torchlens.backends.torch import _backward_markers
 
     assert hasattr(_torch_compat, "HAS_CURRENT_GRAPH_TASK_ID")
     assert "HAS_CURRENT_GRAPH_TASK_ID" in _torch_compat._CAPABILITY_ATTRS
 
     # Routing: the hook-side helper must consume the compat accessor, not a
     # private inline torch._C probe.
-    monkeypatch.setattr(tensor_tracking, "get_current_graph_task_id_fn", lambda: lambda: 42)
-    assert tensor_tracking._current_backward_graph_task_id() == 42
-    monkeypatch.setattr(tensor_tracking, "get_current_graph_task_id_fn", lambda: None)
-    assert tensor_tracking._current_backward_graph_task_id() is None
+    monkeypatch.setattr(_backward_markers, "get_current_graph_task_id_fn", lambda: lambda: 42)
+    assert _backward_markers._current_backward_graph_task_id() == 42
+    monkeypatch.setattr(_backward_markers, "get_current_graph_task_id_fn", lambda: None)
+    assert _backward_markers._current_backward_graph_task_id() is None
 
 
 @pytest.mark.parametrize("save_mode", ["reference", "view"])

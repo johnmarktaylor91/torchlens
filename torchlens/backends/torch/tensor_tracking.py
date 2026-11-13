@@ -26,7 +26,6 @@ from ..._utils._tensor_label import (
     mutated_parameter_label,
     set_param_meta,
 )
-from ..._utils._torch_compat import get_current_graph_task_id_fn
 from ..._utils.display import _record_phase_timing
 from ..._utils.hashing import make_random_barcode
 from ..._utils.tensor_utils import SaveMode, safe_copy
@@ -35,6 +34,7 @@ from ._arg_hash import (
     _get_hash_from_args as _get_hash_from_args,  # re-exported
     observe_arg_inputs,
 )
+from ._backward_markers import _current_backward_graph_task_id
 from ._completeness_origins import internal_scalar_read
 from ._equivalence_resolve import resolve_equivalence_class
 from ._graph_pins import _STATE_BOUNDARY_GRAD_FNS
@@ -685,26 +685,6 @@ def _ensure_backward_pass_for_tensor_hook(trace: "Trace") -> int:
         )
     )
     return pass_index
-
-
-def _current_backward_graph_task_id() -> int | None:
-    """Return PyTorch's current autograd-engine invocation id when available.
-
-    Returns
-    -------
-    int | None
-        Engine graph-task id inside a backward hook, or ``None`` when the
-        installed torch build exposes no such capability.
-    """
-
-    resolver = get_current_graph_task_id_fn()
-    if resolver is None:
-        return None
-    try:
-        task_id = resolver()
-    except (AttributeError, RuntimeError):
-        return None
-    return int(task_id) if isinstance(task_id, int) and task_id >= 0 else None
 
 
 def _emit_tensor_grad_event(

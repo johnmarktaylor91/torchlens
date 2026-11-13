@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1853 modules, 730057 lines, 0 modules without a docstring.
+85 packages, 1853 modules, 730058 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -61,7 +61,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6537 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8522 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 10 | 4482 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 170 | 66689 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 170 | 66690 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8876 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2741 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 28 | 9426 |
@@ -1545,7 +1545,7 @@ tinygrad backend preview. (10 modules, 4482 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (170 modules, 66689 lines)
+Torch backend implementation package for TorchLens capture. (170 modules, 66690 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1558,7 +1558,7 @@ Torch backend implementation package for TorchLens capture. (170 modules, 66689 
 | `_autograd_grad_boundary` | Shared facts about the in-forward autograd boundary ops. | 499 |
 | `_autograd_grad_marker` | Markers for TorchLens's in-forward ''autograd.grad'' and ''autograd.backward'' recorders. | 50 |
 | `_backward_dispatch` | Executed-backward dispatch census: the ATen calls of a backward that ran. | 314 |
-| `_backward_markers` | The GradFn-call marker stack and the one resolver of the executing node. | 148 |
+| `_backward_markers` | The GradFn-call marker stack and the one resolver of the executing node. | 169 |
 | `_backward_memory` | Device and host memory readings that bracket a captured backward pass. | 58 |
 | `_backward_roots` | Autograd-entry roots: flattening and per-capture ownership. | 129 |
 | `_bool_check_records` | One capture record per conditional test of a reused bool tensor. | 155 |
@@ -1717,7 +1717,7 @@ Torch backend implementation package for TorchLens capture. (170 modules, 66689 
 | `rescue` | Rescue re-run: recover escaped ops with a TorchFunctionMode net. | 933 |
 | `sources` | Log torch capture source tensors. | 782 |
 | `structure_only_belt` | Structure-only teaching-refusal belts. | 656 |
-| `tensor_tracking` | Track torch tensor provenance, family links, and equivalence classes. | 1428 |
+| `tensor_tracking` | Track torch tensor provenance, family links, and equivalence classes. | 1408 |
 | `wrappers` | Lazy torch function wrapping for capture-time operation interception. | 2680 |
 
 ### `torchlens.bridge`
