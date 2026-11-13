@@ -38,6 +38,7 @@ _utils.introspection	1
 _utils.tensor_utils	2
 attribution._layer	0
 backends._finalize	6
+backends.jax._edits	10
 backends.jax.backend	16
 backends.mlx.backend	3
 backends.mlx.interventions	6
