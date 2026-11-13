@@ -115,7 +115,10 @@ EXPECTED_GATED_CAPABILITIES: dict[str, dict[str, bool]] = {
     "jax": {
         "backward_capture": False,
         "fastlog": False,
-        "can_intervene": False,
+        # Lifted 2026-11 (pp-b-jax-int): live intervene= edits equation outputs
+        # in the jaxpr interpreter (tests/test_parity_b_jax_int_flip.py);
+        # stop_after= refuses typed in the backend.
+        "can_intervene": True,
         "rng_replay": False,
         "has_streaming": False,
         "structure_only_capture": False,

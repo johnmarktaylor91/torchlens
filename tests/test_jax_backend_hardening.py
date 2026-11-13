@@ -1054,13 +1054,11 @@ def test_jax_rejects_callback_effects() -> None:
     ("kwargs", "pattern"),
     (
         ({"save": ["tanh"]}, "full-save only"),
+        # can_intervene is True (intervene= edits equation outputs); stop_after=
+        # refuses typed in the backend until partial-capture finalization lands.
+        ({"stop_after": tl.func("tanh")}, r"trace\(stop_after=\.\.\.\) is not supported"),
         # Gated options refuse through the central capability gate, whose
         # canonical message names the owning flag and the refused option.
-        (
-            {"intervene": tl.when(tl.func("tanh"), tl.zero_ablate())},
-            "can_intervene=False.*intervene",
-        ),
-        ({"stop_after": tl.func("tanh")}, "can_intervene=False.*stop_after"),
         ({"save_grads": True}, "backward_capture=False.*save_grads"),
     ),
 )
@@ -1199,7 +1197,7 @@ def test_jax_capability_flags_match_preview_contract() -> None:
     assert spec.capabilities.backward_capture is False
     assert spec.capabilities.has_validation_replay is True
     assert spec.capabilities.fastlog is False
-    assert spec.capabilities.can_intervene is False
+    assert spec.capabilities.can_intervene is True
     assert spec.capabilities.payload_materialization is True
     assert spec.capabilities.input_container_structure == "paths_only"
     assert spec.capabilities.output_container_structure == "paths_only"
@@ -1260,9 +1258,9 @@ def test_jax_builtin_output_pytree_container_reconstructs() -> None:
 
 
 def test_jax_end_to_end_interventions_flip_applies_the_edit() -> None:
-    """Review probe, live: interventions=True flipped in place on the registered JAX
-    spec must apply the edit at trace() -- never return a trace with the
-    intervention silently ignored.
+    """Live: the registered JAX spec declares can_intervene=True, and trace()
+    applies the edit -- never returns a trace with the intervention silently
+    ignored.
     """
 
     import jax.numpy as jnp
@@ -1283,16 +1281,12 @@ def test_jax_end_to_end_interventions_flip_applies_the_edit() -> None:
 
         return jnp.tanh(x @ jnp.ones((4, 3)))
 
-    spec = tl.backends.spec("jax")
-    object.__setattr__(spec.capabilities, "can_intervene", True)
-    try:
-        trace = tl.trace(
-            cast(Any, model),
-            jnp.ones((1, 4)),
-            backend="jax",
-            intervene=tl.when(tl.func("tanh"), tl.zero_ablate()),
-        )
-        np.testing.assert_allclose(np.asarray(trace[trace.output_layers[0]].out), 0.0)
-        assert trace.validate_forward_pass([])
-    finally:
-        object.__setattr__(spec.capabilities, "can_intervene", False)
+    assert tl.backends.spec("jax").capabilities.can_intervene is True
+    trace = tl.trace(
+        cast(Any, model),
+        jnp.ones((1, 4)),
+        backend="jax",
+        intervene=tl.when(tl.func("tanh"), tl.zero_ablate()),
+    )
+    np.testing.assert_allclose(np.asarray(trace[trace.output_layers[0]].out), 0.0)
+    assert trace.validate_forward_pass([])
