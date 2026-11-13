@@ -32,6 +32,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any
 
+from ..._ir.capture_events import CaptureEvents
 from ..._ir.events import (
     BackwardPassEnd,
     BackwardPassStart,
@@ -40,15 +41,14 @@ from ..._ir.events import (
     OpGradObserved,
     ParamGradObserved,
 )
+from ...errors import RunCapabilityUnavailableError
 from .._backward_neutral import journal_backward_event, next_backward_pass_index, set_pass_roots
 from .._replay_adapters import jax as jax_adapter
 from .._reverse_engine import EngineNode, ReplayGraph
-from . import _refuse
 from ._jax_program import (
     BackwardRun,
     Program,
     ProgramNode,
-    ProgramRefusal,
     build_program,
     run_backward,
     scope_groups,
@@ -62,6 +62,9 @@ __all__ = (
 )
 
 _EMPTY_SOURCE: Mapping[str, object | None] = MappingProxyType({})
+_CODE = "run_capability_unavailable"  # RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE
+_DETECTION_STAGE = "native_backward_capture"
+_STREAM_NAMES = ("event_stream", "_capture_events", "capture_events")
 
 
 @contextmanager
@@ -78,16 +81,39 @@ def backward_ready_scope(session: Any) -> Iterator[None]:
 
 
 def retain_backward_state(trace: Any, session: Any) -> None:
-    """Keep the equation captures a later ``record_backward`` rebuilds the program from.
+    """Keep what a later ``record_backward`` needs: the captures and an event stream.
 
-    A capture that drops captures to save memory calls this at the end of a
-    backward-ready forward; the captures it pins are the ones the validator
-    already holds for a full capture.
+    The capture calls this at the end of a backward-ready forward, before it
+    releases its event stream. The equation captures it pins are the ones the
+    validator already holds; the stream is where backward events are journaled.
     """
 
     del session
     captures = tuple(getattr(trace, "jax_equation_captures", None) or ())
     trace.__dict__["_jax_backward_captures"] = captures
+    stream = getattr(trace, "capture_events", None)
+    if stream is not None:
+        trace._capture_events = stream
+
+
+def _stream(trace: Any) -> Any:
+    for name in _STREAM_NAMES:
+        stream = getattr(trace, name, None)
+        if stream is not None:
+            return stream
+    return None
+
+
+def _ensure_stream(trace: Any) -> None:
+    """Give a trace whose capture released its stream a fresh backward journal.
+
+    The forward records are already built, and backward records are built
+    from backward events only, so an empty stream loses nothing. Only called
+    on a trace with no backward pass yet (see ``_call_problem``).
+    """
+
+    if _stream(trace) is None:
+        trace._capture_events = CaptureEvents()
 
 
 def _captures_present(trace: Any) -> bool:
@@ -97,23 +123,25 @@ def _captures_present(trace: Any) -> bool:
     return bool(getattr(trace, "jax_equation_captures", None))
 
 
-def _check_call(trace: Any, loss: Any, backward_kwargs: Mapping[str, Any]) -> None:
+def _call_problem(trace: Any, loss: Any, backward_kwargs: Mapping[str, Any]) -> str | None:
+    """Why this ``backward`` call cannot run, or ``None``."""
+
     if backward_kwargs:
         names = ", ".join(sorted(backward_kwargs))
-        raise _refuse(
-            f"backward() on a JAX trace takes no keyword arguments (got {names}): JAX's "
-            "pullback has no engine options."
-        )
+        return f"it takes no keyword arguments (got {names}): JAX's pullback has no engine options"
     if not callable(loss):
-        raise _refuse(
-            "backward() on a JAX trace needs loss as a callable mapping trace.output to a "
-            "scalar: a JAX array computed after capture has no link to the captured program."
+        return (
+            "loss must be a callable mapping trace.output to a scalar: a JAX array computed "
+            "after capture has no link to the captured program"
         )
     if not _captures_present(trace):
-        raise _refuse(
-            "backward() on this JAX trace is unavailable: its equation captures were not "
-            "kept, so the program cannot be rebuilt. Capture the trace again in this session."
+        return (
+            "its equation captures were not kept, so the program cannot be rebuilt. Capture "
+            "the trace again in this session"
         )
+    if _stream(trace) is None and int(trace._num_backward_passes or 0):
+        return "its event stream was released after earlier backward passes. Capture it again"
+    return None
 
 
 @dataclass(frozen=True)
@@ -184,19 +212,19 @@ def _fired(program: Program, reached: _Reached) -> tuple[ProgramNode, ...]:
     )
 
 
-def _check_links(fired: tuple[ProgramNode, ...], run: BackwardRun) -> dict[int, list[str]]:
-    """Every backward equation group must belong to a fired node; returns the groups."""
+def _link_problem(fired: tuple[ProgramNode, ...], run: BackwardRun) -> str | None:
+    """Every backward equation group must belong to a fired node; else why not."""
 
     groups, problems = scope_groups(run.backward_jaxpr)
     known = {node.capture.index for node in fired}
     stray = sorted(set(groups) - known)
-    if problems or stray:
-        detail = "; ".join(problems) or f"equations scoped to captures {stray}"
-        raise _refuse(
-            "JAX's backward program does not link one to one with the recorded ops "
-            f"({detail}), so its records would be a guess. No backward pass was recorded."
-        )
-    return groups
+    if not (problems or stray):
+        return None
+    detail = "; ".join(problems) or f"equations scoped to captures {stray}"
+    return (
+        "JAX's backward program does not link one to one with the recorded ops "
+        f"({detail}), so its records would be a guess"
+    )
 
 
 def _rule_name(node: ProgramNode) -> str:
@@ -302,11 +330,16 @@ def _param_grad_events(
     return events
 
 
-def _journal(trace: Any, program: Program, run: BackwardRun, started: float) -> None:
+def _journal(
+    trace: Any,
+    program: Program,
+    run: BackwardRun,
+    reached: _Reached,
+    fired: tuple[ProgramNode, ...],
+    started: float,
+) -> None:
+    _ensure_stream(trace)
     pass_index = next_backward_pass_index(trace)
-    reached = _reached(program, run)
-    fired = _fired(program, reached)
-    _check_links(fired, run)
     stamp = time.time()
     events: list[Any] = [_start_event(pass_index, started)]
     events.extend(_discoveries(fired))
@@ -367,13 +400,36 @@ def _end_event(pass_index: int, duration: float) -> BackwardPassEnd:
     )
 
 
-def _forward_unchanged(program: Program, run: BackwardRun) -> None:
+def _forward_problem(program: Program, run: BackwardRun) -> str | None:
     for node in program.nodes:
         if not jax_adapter.close(node.op.out, run.forward[node.label]):
-            raise _refuse(
-                f"the rebuilt JAX program does not reproduce op {node.label!r}, so its "
-                "backward would not be the captured program's. No backward pass was recorded."
+            return (
+                f"the rebuilt program does not reproduce op {node.label!r}, so its backward "
+                "would not be the captured program's"
             )
+    return None
+
+
+def _record(trace: Any, loss: Any, backward_kwargs: Mapping[str, Any]) -> str | None:
+    """Run and journal one pass; return why it cannot be recorded, or ``None``."""
+
+    problem = _call_problem(trace, loss, backward_kwargs)
+    if problem is not None:
+        return problem
+    started = time.time()
+    program = build_program(trace)
+    if isinstance(program, str):
+        return program
+    run = run_backward(program, loss)
+    if isinstance(run, str):
+        return run
+    reached = _reached(program, run)
+    fired = _fired(program, reached)
+    problem = _forward_problem(program, run) or _link_problem(fired, run)
+    if problem is not None:
+        return problem
+    _journal(trace, program, run, reached, fired, started)
+    return None
 
 
 def record_backward(trace: Any, loss: Callable[[Any], Any], **backward_kwargs: Any) -> None:
@@ -395,15 +451,14 @@ def record_backward(trace: Any, loss: Callable[[Any], Any], **backward_kwargs: A
         does not link one to one with the recorded ops.
     """
 
-    _check_call(trace, loss, backward_kwargs)
-    started = time.time()
-    try:
-        program = build_program(trace)
-        run = run_backward(program, trace, loss)
-    except ProgramRefusal as exc:
-        raise _refuse(f"backward() on this JAX trace is unavailable: {exc}") from exc
-    _forward_unchanged(program, run)
-    _journal(trace, program, run, started)
+    problem = _record(trace, loss, backward_kwargs)
+    if problem is not None:
+        raise RunCapabilityUnavailableError(
+            f"backward() on this JAX trace is unavailable: {problem}. No backward pass was "
+            "recorded.",
+            code=_CODE,
+            detection_stage=_DETECTION_STAGE,
+        )
 
 
 def _graph(program: Program) -> ReplayGraph:
@@ -434,6 +489,8 @@ def validation_inputs(trace: Any, recorded: Any) -> tuple[ReplayGraph, dict[str,
     """
 
     program = build_program(trace)
+    if isinstance(program, str):
+        return ReplayGraph(nodes=(), value={}.__getitem__), {}
     calls = dict(recorded.calls)
     for label in program.output_labels:
         grad = recorded.grads.get(label)

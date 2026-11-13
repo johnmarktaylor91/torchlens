@@ -4,8 +4,8 @@ The forward is rebuilt from the trace's kept equation captures: every captured
 equation is bound again through the validator's own replay
 (``jax.jaxpr.replay_equation``) inside ``jax.named_scope("tlb_<capture index>")``.
 ``jax.vjp`` of that program gives JAX's pullback; ``jax.make_jaxpr`` of the
-pullback is the backward program JAX runs, and the existing interpreter's
-no-capture evaluator runs it. Each backward equation carries the scope of the
+pullback is the backward program, and JAX's own jaxpr evaluator
+(``jax.extend.core.jaxpr_as_fun``) runs exactly that program. Each backward equation carries the scope of the
 forward equation whose rule emitted it (``transpose(jvp(tlb_7))``), which links
 it to its forward op.
 
@@ -26,18 +26,13 @@ from dataclasses import dataclass
 from typing import Any
 
 from .._replay_adapters import jax as jax_adapter
-from ..jax.jaxpr import (
-    _evaluate_closed_jaxpr_no_capture,
-    _jax_zero_tap,
-    replay_equation,
-)
+from ..jax.jaxpr import _jax_zero_tap, replay_equation
 
 __all__ = (
     "BackwardRun",
     "Occurrence",
     "Program",
     "ProgramNode",
-    "ProgramRefusal",
     "build_program",
     "program_function",
     "run_backward",
@@ -46,10 +41,6 @@ __all__ = (
 
 TLB_SCOPE = re.compile(r"tlb_(\d+)")
 """Scope tag of a rebuilt forward equation, by capture index."""
-
-
-class ProgramRefusal(ValueError):
-    """The trace cannot be rebuilt as a differentiable program (message says why)."""
 
 
 @dataclass(frozen=True)
@@ -150,13 +141,13 @@ def _occurrences(plan: Any, values: Mapping[str, Any], taps: _TapCounter) -> tup
     return tuple(occurrences)
 
 
-def _node_for(trace: Any, op: Any, values: dict[str, Any], taps: _TapCounter) -> ProgramNode:
-    """The program node of one op; raises ``ProgramRefusal`` when it cannot be rebuilt."""
+def _node_for(trace: Any, op: Any, values: dict[str, Any], taps: _TapCounter) -> ProgramNode | str:
+    """The program node of one op, or why it cannot be rebuilt."""
 
     plan = jax_adapter._plan_or_reason(trace, op)
     label = jax_adapter._parent_label(op)
     if isinstance(plan, str):
-        raise ProgramRefusal(f"op {label!r} cannot be rebuilt for backward: {plan}")
+        return f"op {label!r} cannot be rebuilt for backward: {plan}"
     values[label] = op.out
     occurrences = _occurrences(plan, values, taps) if plan.kind != "source" else ()
     return ProgramNode(
@@ -165,7 +156,7 @@ def _node_for(trace: Any, op: Any, values: dict[str, Any], taps: _TapCounter) ->
 
 
 def _output_treedef(trace: Any, output_ops: Sequence[Any]) -> Any:
-    """The tree structure of ``trace.output``, its leaves matched to the output ops."""
+    """The tree structure of ``trace.output`` (leaves matched to the output ops), or why not."""
 
     import jax
 
@@ -174,32 +165,38 @@ def _output_treedef(trace: Any, output_ops: Sequence[Any]) -> Any:
         leaf is not op.out and not jax_adapter.close(leaf, op.out)
         for leaf, op in zip(leaves, output_ops, strict=False)
     ):
-        raise ProgramRefusal(
+        return (
             "the trace's output leaves do not match its output ops one to one, so a loss "
             "callable of trace.output cannot be differentiated"
         )
     return treedef
 
 
-def build_program(trace: Any) -> Program:
+def build_program(trace: Any) -> Program | str:
     """Rebuild ``trace``'s forward from its kept equation captures.
 
-    Raises
-    ------
-    ProgramRefusal
-        When an op cannot be rebuilt (opaque region, missing capture, effect) or
-        the output leaves do not match the output ops.
+    Returns the program, or why it cannot be rebuilt: an op the adapter cannot
+    plan (opaque region, missing capture, effect) or output leaves that do not
+    match the output ops.
     """
 
     taps = _TapCounter()
     values: dict[str, Any] = {}
-    nodes = tuple(_node_for(trace, op, values, taps) for op in trace._layer_list)
+    nodes = []
+    for op in trace._layer_list:
+        node = _node_for(trace, op, values, taps)
+        if isinstance(node, str):
+            return node
+        nodes.append(node)
     output_ops = tuple(trace.output_ops)
+    treedef = _output_treedef(trace, output_ops)
+    if isinstance(treedef, str):
+        return treedef
     return Program(
-        nodes=nodes,
+        nodes=tuple(nodes),
         leaves=tuple(n.label for n in nodes if n.kind == "source" and n.out_taps[0] is not None),
         output_labels=tuple(jax_adapter._parent_label(op) for op in output_ops),
-        output_treedef=_output_treedef(trace, output_ops),
+        output_treedef=treedef,
         out_tap_slots=tuple(taps.out_slots),
         edge_tap_count=taps.edges,
         by_label={node.label: node for node in nodes},
@@ -326,28 +323,26 @@ def _seed_dependent(closed: Any) -> list[bool]:
     return [type(var).__name__ != "Literal" and id(var) in live for var in jaxpr.outvars]
 
 
-def run_backward(program: Program, trace: Any, loss: Callable[[Any], Any]) -> BackwardRun:
+def run_backward(program: Program, loss: Callable[[Any], Any]) -> BackwardRun | str:
     """Differentiate ``loss(trace.output)`` through the rebuilt program and run its pullback.
 
-    Raises
-    ------
-    ProgramRefusal
-        When the loss is not a real scalar.
+    Returns what ran, or why it cannot run (the loss is not a real scalar).
     """
 
     import jax
     import jax.numpy as jnp
+    from jax.extend.core import jaxpr_as_fun
 
     sources = {n.label: n.op.out for n in program.nodes if n.kind == "source"}
     function = program_function(program, sources, loss)
     value, pullback, forward = jax.vjp(function, *_primals(program, sources), has_aux=True)
     if getattr(value, "shape", None) != () or not _is_inexact(value):
-        raise ProgramRefusal("the loss callable must return a real floating-point scalar")
+        return "the loss callable must return a real floating-point scalar"
     seed = jnp.ones_like(value)
     closed, out_shape = jax.make_jaxpr(pullback, return_shape=True)(seed)
     structure = jax.tree.structure(out_shape)
     started = time.perf_counter()
-    flat = jax.block_until_ready(_evaluate_closed_jaxpr_no_capture(closed, [seed]))
+    flat = jax.block_until_ready(jaxpr_as_fun(closed)(seed))
     duration = time.perf_counter() - started
     leaf_cts, out_cts, edge_cts = jax.tree.unflatten(structure, list(flat))
     _leaf_dep, out_dep, _edge_dep = jax.tree.unflatten(structure, _seed_dependent(closed))
@@ -367,6 +362,20 @@ def _eqn_scopes(eqn: Any) -> set[int]:
     return {int(match) for match in TLB_SCOPE.findall(str(eqn.source_info.name_stack))}
 
 
+def _eqn_group(eqn: Any, group_of_var: Mapping[int, int | None]) -> tuple[int | None, str | None]:
+    """The forward capture index one backward equation belongs to, and any problem."""
+
+    scopes = _eqn_scopes(eqn)
+    if len(scopes) > 1:
+        return None, f"{eqn.primitive.name} carries scopes {sorted(scopes)}"
+    group = next(iter(scopes), None)
+    if group is not None and eqn.primitive.name == "add_any":
+        sources = {group_of_var.get(id(var), -1) for var in eqn.invars}
+        if sources != {group}:
+            return None, None
+    return group, None
+
+
 def scope_groups(closed: Any) -> tuple[dict[int, list[str]], list[str]]:
     """Backward primitives per forward capture index, and the problems found.
 
@@ -380,14 +389,9 @@ def scope_groups(closed: Any) -> tuple[dict[int, list[str]], list[str]]:
     group_of_var: dict[int, int | None] = {}
     problems: list[str] = []
     for eqn in closed.jaxpr.eqns:
-        scopes = _eqn_scopes(eqn)
-        group = next(iter(scopes)) if len(scopes) == 1 else None
-        if len(scopes) > 1:
-            problems.append(f"{eqn.primitive.name} carries scopes {sorted(scopes)}")
-        if group is not None and eqn.primitive.name == "add_any":
-            sources = {group_of_var.get(id(var), "outside") for var in eqn.invars}
-            if sources != {group}:
-                group = None
+        group, problem = _eqn_group(eqn, group_of_var)
+        if problem is not None:
+            problems.append(problem)
         for var in eqn.outvars:
             group_of_var[id(var)] = group
         if group is not None:

@@ -210,7 +210,7 @@ def test_second_backward_adds_a_second_pass() -> None:
     assert sorted(trace._backward_pass_logs) == [1, 2]
     (op,) = _input_ops(trace)
     expected = jax.grad(lambda v: program(v) * 3.0)(_x(3))
-    assert get_adapter("jax").close(expected, op.grad)
+    assert get_adapter("jax").close(expected, op.autograd.grad_for(bwd=2))
 
 
 def test_non_callable_loss_is_refused() -> None:
