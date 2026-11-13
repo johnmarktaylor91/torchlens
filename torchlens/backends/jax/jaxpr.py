@@ -10,8 +10,20 @@ from typing import Any, Literal, TypeAlias, cast
 from ..._ir.events import JaxEquationKind
 from .. import _entry_refusals as _refusals
 from ..registry import BackendUnsupportedError
+from ._interp_hooks import (
+    HookedCaptures,
+    InterpreterHalt,
+    InterpreterHooks,
+    binds_as_primitive,
+    dead_after,
+)
+from ._module_stacks import (
+    _frame_stacks,
+    _scoped_inner,
+    module_call_stack_from_eqn,
+    module_stack_from_eqn,
+)
 from ._source_path_components import _normalize_jax_source_path_component
-from .modules import decode_module_call_scope, decode_module_scope
 
 SAFE_JIT_NAMES = frozenset(
     {
@@ -201,6 +213,10 @@ class JaxCaptureResult:
         Stable JAX outvar-string keys mapped to flattened capture indexes.
     inlined_call_primitives
         Names of pure call primitives expanded during interpretation.
+    released_capture_indices
+        Captures the retention policy did not keep.
+    halt_frontier
+        The capture a halt check matched (outputs are then empty), else ``None``.
     """
 
     outputs: tuple[Any, ...]
@@ -208,6 +224,8 @@ class JaxCaptureResult:
     captures: tuple[JaxRuntimeCapture, ...]
     outvar_key_to_capture_index: Mapping[str, int]
     inlined_call_primitives: tuple[str, ...]
+    released_capture_indices: frozenset[int] = frozenset()
+    halt_frontier: JaxRuntimeCapture | None = None
 
 
 def derive_closed_jaxpr(fn: Any, args: Sequence[Any], static_argnums: Sequence[int] = ()) -> Any:
@@ -297,6 +315,7 @@ def interpret_closed_jaxpr_with_inlining(
     tap_values_by_capture_output: Mapping[tuple[int, int], Any] | None = None,
     replacement_values_by_capture_output: Mapping[tuple[int, int], Any] | None = None,
     equation_hook: Callable[..., tuple[Any, ...]] | None = None,
+    hooks: InterpreterHooks | None = None,
 ) -> JaxCaptureResult:
     """Interpret a closed jaxpr while inlining safe pure call primitives.
 
@@ -324,6 +343,8 @@ def interpret_closed_jaxpr_with_inlining(
         Optional ``hook(captures, eqn, outputs, (module_stack, module_call_stack))``
         called per primitive equation before its outputs are written; returns
         the outputs to write and capture (capture-time interventions).
+    hooks
+        Optional retention, halt and combiner-binding hooks (``_interp_hooks.py``).
 
     Returns
     -------
@@ -335,7 +356,7 @@ def interpret_closed_jaxpr_with_inlining(
 
     _assert_no_rejected_effects(closed_jaxpr)
     equation_hook = equation_hook or _unedited_outputs
-    captures: list[JaxRuntimeCapture] = []
+    captures = HookedCaptures(hooks)
     inlined_calls: list[str] = []
     tap_values = {} if tap_values_by_capture_output is None else tap_values_by_capture_output
     replacement_values = (
@@ -400,122 +421,31 @@ def interpret_closed_jaxpr_with_inlining(
         for var, arg in zip(inner.jaxpr.invars, args, strict=True):
             _write_env(env, var, arg, core)
 
+        dead = dead_after(inner.jaxpr, captures)
         for eqn_index, eqn in enumerate(inner.jaxpr.eqns):
+            for var in dead.get(eqn_index - 1, ()):
+                env.pop(var, None)
             primitive_name = eqn.primitive.name
             eqn_path = (*path, f"{eqn_index}:{primitive_name}")
-            if primitive_name == "scan":
+            if primitive_name in {"scan", "cond", "while", "while_loop"}:
                 _refusals.refuse_if_control_flow_rejected(jax_control_flow, primitive_name)
-                if jax_control_flow == "region":
-                    outputs = _interpret_region(
-                        eqn=eqn,
-                        env=env,
-                        core=core,
-                        path=eqn_path,
-                        inlined_depth=inlined_depth,
-                        captures=captures,
-                        jax_max_control_flow_unroll=jax_max_control_flow_unroll,
-                        unverified_reason="scan_region_requested",
-                        inherited_module_stack=inherited_module_stack,
-                        inherited_module_call_stack=inherited_module_call_stack,
-                        rewrite_outputs=rewrite_outputs,
-                    )
-                else:
-                    checkpoint = len(captures)
-                    try:
-                        outputs = _interpret_scan(
-                            eqn=eqn,
-                            env=env,
-                            core=core,
-                            path=eqn_path,
-                            inlined_depth=inlined_depth,
-                            captures=captures,
-                            interpret_inner=interpret_inner,
-                            jax_max_control_flow_unroll=jax_max_control_flow_unroll,
-                            control_capture_indices=control_capture_indices,
-                            rewrite_outputs=rewrite_outputs,
-                        )
-                    except ValueError as exc:
-                        if not _should_region_fallback(primitive_name, exc):
-                            raise
-                        del captures[checkpoint:]
-                        outputs = _interpret_region(
-                            eqn=eqn,
-                            env=env,
-                            core=core,
-                            path=eqn_path,
-                            inlined_depth=inlined_depth,
-                            captures=captures,
-                            jax_max_control_flow_unroll=jax_max_control_flow_unroll,
-                            unverified_reason="scan_length_exceeds_unroll_cap",
-                            inherited_module_stack=inherited_module_stack,
-                            inherited_module_call_stack=inherited_module_call_stack,
-                            rewrite_outputs=rewrite_outputs,
-                        )
-                for var, value in zip(eqn.outvars, outputs, strict=True):
-                    _write_env(env, var, value, core)
-                continue
-            if primitive_name == "cond":
-                _refusals.refuse_if_control_flow_rejected(jax_control_flow, primitive_name)
-                outputs = _interpret_cond(
-                    eqn=eqn,
-                    env=env,
-                    core=core,
-                    path=eqn_path,
-                    inlined_depth=inlined_depth,
-                    captures=captures,
-                    interpret_inner=interpret_inner,
+                common = {"env": env, "core": core, "path": eqn_path, "captures": captures}
+                common["inlined_depth"] = inlined_depth
+                stacks = _frame_stacks(eqn, inherited_module_stack, inherited_module_call_stack)
+                scoped = _scoped_inner(interpret_inner, stacks)
+                outputs = _interpret_control_flow(
+                    eqn,
+                    jax_control_flow,
+                    loop_kwargs={**common, "interpret_inner": scoped},
+                    region_kwargs={
+                        **common,
+                        "jax_max_control_flow_unroll": jax_max_control_flow_unroll,
+                        "inherited_module_stack": stacks[0],
+                        "inherited_module_call_stack": stacks[1],
+                        "rewrite_outputs": rewrite_outputs,
+                    },
                     control_capture_indices=control_capture_indices,
                 )
-                for var, value in zip(eqn.outvars, outputs, strict=True):
-                    _write_env(env, var, value, core)
-                continue
-            if primitive_name in {"while", "while_loop"}:
-                _refusals.refuse_if_control_flow_rejected(jax_control_flow, primitive_name)
-                if jax_control_flow == "region":
-                    outputs = _interpret_region(
-                        eqn=eqn,
-                        env=env,
-                        core=core,
-                        path=eqn_path,
-                        inlined_depth=inlined_depth,
-                        captures=captures,
-                        jax_max_control_flow_unroll=jax_max_control_flow_unroll,
-                        unverified_reason="while_region_requested",
-                        inherited_module_stack=inherited_module_stack,
-                        inherited_module_call_stack=inherited_module_call_stack,
-                        rewrite_outputs=rewrite_outputs,
-                    )
-                else:
-                    checkpoint = len(captures)
-                    try:
-                        outputs = _interpret_while(
-                            eqn=eqn,
-                            env=env,
-                            core=core,
-                            path=eqn_path,
-                            inlined_depth=inlined_depth,
-                            captures=captures,
-                            interpret_inner=interpret_inner,
-                            jax_max_control_flow_unroll=jax_max_control_flow_unroll,
-                            control_capture_indices=control_capture_indices,
-                        )
-                    except ValueError as exc:
-                        if not _should_region_fallback(primitive_name, exc):
-                            raise
-                        del captures[checkpoint:]
-                        outputs = _interpret_region(
-                            eqn=eqn,
-                            env=env,
-                            core=core,
-                            path=eqn_path,
-                            inlined_depth=inlined_depth,
-                            captures=captures,
-                            jax_max_control_flow_unroll=jax_max_control_flow_unroll,
-                            unverified_reason="while_iteration_count_exceeds_unroll_cap",
-                            inherited_module_stack=inherited_module_stack,
-                            inherited_module_call_stack=inherited_module_call_stack,
-                            rewrite_outputs=rewrite_outputs,
-                        )
                 for var, value in zip(eqn.outvars, outputs, strict=True):
                     _write_env(env, var, value, core)
                 continue
@@ -568,21 +498,17 @@ def interpret_closed_jaxpr_with_inlining(
                     eqn_path,
                     inlined_depth + 1,
                     control_capture_indices,
-                    module_stack_from_eqn(eqn) or inherited_module_stack,
-                    module_call_stack_from_eqn(eqn) or inherited_module_call_stack,
+                    *_frame_stacks(eqn, inherited_module_stack, inherited_module_call_stack),
                 )
                 for var, value in zip(eqn.outvars, outputs, strict=True):
                     _write_env(env, var, value, core)
                 continue
-            if _has_nested_jaxpr(eqn, core):
+            if _has_nested_jaxpr(eqn, core) and not binds_as_primitive(primitive_name, hooks):
                 _refusals.refuse_nested_jaxpr(primitive_name)
             result = eqn.primitive.bind(*inputs, **eqn.params)
             outputs = tuple(result if eqn.primitive.multiple_results else (result,))
-            equation_module_stack = module_stack_from_eqn(eqn) or inherited_module_stack
-            equation_module_call_stack = (
-                module_call_stack_from_eqn(eqn) or inherited_module_call_stack
-            )
-            stacks = (equation_module_stack, equation_module_call_stack)
+            stacks = _frame_stacks(eqn, inherited_module_stack, inherited_module_call_stack)
+            equation_module_stack, equation_module_call_stack = stacks
             outputs = equation_hook(captures, eqn, rewrite_outputs(len(captures), outputs), stacks)
             for var, value in zip(eqn.outvars, outputs, strict=True):
                 _write_env(env, var, value, core)
@@ -608,18 +534,117 @@ def interpret_closed_jaxpr_with_inlining(
             )
         return tuple(_read_env(env, var, core) for var in inner.jaxpr.outvars)
 
-    outputs = interpret_inner(closed_jaxpr, flat_args, ("root",), 0)
-    ordered_captures = tuple(captures)
-    equations = tuple(
-        capture for capture in ordered_captures if isinstance(capture, JaxEquationCapture)
+    halt_frontier: Any = None
+    try:
+        outputs = interpret_inner(closed_jaxpr, flat_args, ("root",), 0)
+    except InterpreterHalt as halt:
+        outputs, halt_frontier = (), halt.capture
+    return _capture_result(outputs, tuple(captures), inlined_calls, captures, halt_frontier)
+
+
+def interpret_pullback_jaxpr(
+    closed_jaxpr: Any,
+    flat_args: Sequence[Any],
+    *,
+    equation_hook: Callable[..., tuple[Any, ...]] | None = None,
+    jax_max_control_flow_unroll: int = 64,
+) -> JaxCaptureResult:
+    """Interpret a backward (pullback) jaxpr with the forward interpreter.
+
+    The same loop, captures and control-flow unrolling as the forward capture, except
+    that primitives whose nested jaxpr is an element combiner (``scatter-add`` and the
+    like, which transposes emit) bind as ordinary primitives.
+
+    Parameters
+    ----------
+    closed_jaxpr
+        Closed pullback jaxpr, for example ``jax.make_jaxpr(pullback)(seed)``.
+    flat_args
+        Its flat inputs.
+    equation_hook
+        Optional per-equation hook, as in :func:`interpret_closed_jaxpr_with_inlining`.
+    jax_max_control_flow_unroll
+        Unroll cap for ``scan``/``while`` in the pullback.
+
+    Returns
+    -------
+    JaxCaptureResult
+        Outputs and one capture per backward equation, in program order. The
+        ``equation_hook`` receives each equation, so a caller can read its
+        ``source_info.name_stack`` (for example ``tlb_`` scopes) as it runs.
+    """
+
+    return interpret_closed_jaxpr_with_inlining(
+        closed_jaxpr,
+        flat_args,
+        jax_max_control_flow_unroll=jax_max_control_flow_unroll,
+        equation_hook=equation_hook,
+        hooks=InterpreterHooks(bind_combiners=True),
     )
+
+
+def _capture_result(
+    outputs: tuple[Any, ...],
+    ordered: tuple[JaxRuntimeCapture, ...],
+    inlined_calls: Sequence[str],
+    captures: HookedCaptures,
+    halt_frontier: JaxRuntimeCapture | None,
+) -> JaxCaptureResult:
+    """Package one interpreter run."""
+
     return JaxCaptureResult(
         outputs=outputs,
-        equations=equations,
-        captures=ordered_captures,
-        outvar_key_to_capture_index=_outvar_key_to_capture_index(ordered_captures),
+        equations=tuple(c for c in ordered if isinstance(c, JaxEquationCapture)),
+        captures=ordered,
+        outvar_key_to_capture_index=_outvar_key_to_capture_index(ordered),
         inlined_call_primitives=tuple(inlined_calls),
+        released_capture_indices=frozenset(captures.released),
+        halt_frontier=halt_frontier,
     )
+
+
+_REGION_REASONS = {
+    "scan": ("scan_region_requested", "scan_length_exceeds_unroll_cap"),
+    "while": ("while_region_requested", "while_iteration_count_exceeds_unroll_cap"),
+}
+
+
+def _interpret_control_flow(
+    eqn: Any,
+    jax_control_flow: str,
+    *,
+    loop_kwargs: dict[str, Any],
+    region_kwargs: dict[str, Any],
+    control_capture_indices: tuple[int, ...],
+) -> tuple[Any, ...]:
+    """Dispatch one ``scan``/``cond``/``while`` equation by control-flow mode.
+
+    ``cond`` always interprets the taken branch. ``scan`` and ``while`` import a region
+    under ``"region"`` mode, else unroll, falling back to a region (and dropping the
+    partial unroll's captures) when the unroll cap is exceeded.
+    """
+
+    name = eqn.primitive.name
+    kwargs = {**loop_kwargs, "control_capture_indices": control_capture_indices}
+    if name == "cond":
+        return _interpret_cond(eqn=eqn, **kwargs)
+    requested, over_cap = _REGION_REASONS["scan" if name == "scan" else "while"]
+    if jax_control_flow == "region":
+        return _interpret_region(eqn=eqn, unverified_reason=requested, **region_kwargs)
+    kwargs["jax_max_control_flow_unroll"] = region_kwargs["jax_max_control_flow_unroll"]
+    captures = loop_kwargs["captures"]
+    checkpoint = len(captures)
+    try:
+        if name == "scan":
+            return _interpret_scan(
+                eqn=eqn, rewrite_outputs=region_kwargs["rewrite_outputs"], **kwargs
+            )
+        return _interpret_while(eqn=eqn, **kwargs)
+    except ValueError as exc:
+        if not _should_region_fallback(name, exc):
+            raise
+        del captures[checkpoint:]
+        return _interpret_region(eqn=eqn, unverified_reason=over_cap, **region_kwargs)
 
 
 def _outvar_key_to_capture_index(
@@ -1477,90 +1502,6 @@ def reject_attributed_module_strict_control_flow(closed_jaxpr: Any) -> None:
                 visit(nested_jaxpr)
 
     visit(closed_jaxpr)
-
-
-def module_stack_from_eqn(eqn: Any) -> tuple[str, ...]:
-    """Return the TorchLens module stack encoded on one JAX equation.
-
-    Parameters
-    ----------
-    eqn
-        JAX equation whose source metadata may carry a name stack.
-
-    Returns
-    -------
-    tuple[str, ...]
-        Decoded module addresses in outer-to-inner order.
-    """
-
-    source_info = getattr(eqn, "source_info", None)
-    return module_stack_from_name_stack(getattr(source_info, "name_stack", None))
-
-
-def module_call_stack_from_eqn(eqn: Any) -> tuple[tuple[str, int], ...]:
-    """Return the TorchLens module-call stack encoded on one JAX equation.
-
-    Parameters
-    ----------
-    eqn
-        JAX equation whose source metadata may carry a name stack.
-
-    Returns
-    -------
-    tuple[tuple[str, int], ...]
-        Decoded module calls in outer-to-inner order.
-    """
-
-    source_info = getattr(eqn, "source_info", None)
-    return module_call_stack_from_name_stack(getattr(source_info, "name_stack", None))
-
-
-def module_stack_from_name_stack(name_stack: Any) -> tuple[str, ...]:
-    """Decode TorchLens module markers from a JAX ``NameStack``.
-
-    Parameters
-    ----------
-    name_stack
-        JAX source-info name stack, or ``None``.
-
-    Returns
-    -------
-    tuple[str, ...]
-        Module addresses in outer-to-inner order.
-    """
-
-    stack = getattr(name_stack, "stack", ())
-    decoded: list[str] = []
-    for component in stack:
-        name = getattr(component, "name", str(component))
-        address = decode_module_scope(str(name))
-        if address is not None and (not decoded or decoded[-1] != address):
-            decoded.append(address)
-    return tuple(decoded)
-
-
-def module_call_stack_from_name_stack(name_stack: Any) -> tuple[tuple[str, int], ...]:
-    """Decode TorchLens module-call markers from a JAX ``NameStack``.
-
-    Parameters
-    ----------
-    name_stack
-        JAX source-info name stack, or ``None``.
-
-    Returns
-    -------
-    tuple[tuple[str, int], ...]
-        Module-call pairs in outer-to-inner order.
-    """
-
-    stack = getattr(name_stack, "stack", ())
-    decoded: list[tuple[str, int]] = []
-    for component in stack:
-        name = getattr(component, "name", str(component))
-        call = decode_module_call_scope(str(name))
-        if call is not None and (not decoded or decoded[-1] != call):
-            decoded.append(call)
-    return tuple(decoded)
 
 
 def _is_strict_rejected_attributed_primitive(eqn: Any) -> bool:
