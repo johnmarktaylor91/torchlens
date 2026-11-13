@@ -164,6 +164,17 @@ def test_donor_patch_from_same_backend(fake_backend: ModuleType) -> None:
     assert torch.equal(_op(edited, relu).out, donor_value)
 
 
+def test_patch_from_helper_sets_the_donor_payload(fake_backend: ModuleType) -> None:
+    torch.manual_seed(1)
+    donor = _as_fake(tl.trace(_Net(), torch.randn(2, 4)))
+    relu = _first(donor, "relu")
+    clean = _as_fake(_capture())
+    edited = clean.fork().do(relu, tl.patch_from(donor))
+    assert torch.equal(_op(edited, relu).out, _op(donor, relu).out)
+    assert not torch.equal(_output(edited), _output(clean))
+    assert _backend_replay.verify_backend_replay(edited) == []
+
+
 def test_donor_from_another_framework_is_refused(fake_backend: ModuleType) -> None:
     clean = _as_fake(_capture())
     relu = _first(clean, "relu")

@@ -102,8 +102,13 @@ class BackendReplay:
     preserve_origins: bool
 
 
-def _refuse_entry(trace: Trace, adapter: Any, entry: NormalizedHookEntry) -> None:
-    """Refuse an edit the backend engine cannot apply (a gradient edit, an unported helper)."""
+def _refuse_entry(trace: Trace, adapter: Any, entry: NormalizedHookEntry, value: Any) -> None:
+    """Refuse an edit the backend engine cannot apply (a gradient edit, an unported helper).
+
+    ``patch_from`` runs only on PyTorch arrays: its hook copies the donor with
+    ``detach().clone()``. Off PyTorch the same patch is a callable returning the
+    donor value, which the foreign-framework and layout gates then check.
+    """
 
     if entry.signal == "backward":
         raise InvalidArgumentError(
@@ -114,9 +119,13 @@ def _refuse_entry(trace: Trace, adapter: Any, entry: NormalizedHookEntry) -> Non
             argument="site",
         )
     helper = entry.helper_spec
-    if helper is None or helper.name in {"zero_ablate", "patch_from"}:
+    if helper is None or helper.name == "zero_ablate":
         return
-    if getattr(adapter, "apply_helper", None) is None:
+    if helper.name == "patch_from":
+        supported = _framework_of(value) == "torch"
+    else:
+        supported = getattr(adapter, "apply_helper", None) is not None
+    if not supported:
         raise refuse(
             f"the {helper.name!r} helper has no replay application on the "
             f"{trace_backend(trace)} backend yet",
@@ -136,7 +145,7 @@ def _fire_entry(request: BackendReplay, entry: NormalizedHookEntry, value: Any, 
     """
 
     trace, adapter = request.log, request.adapter
-    _refuse_entry(trace, adapter, entry)
+    _refuse_entry(trace, adapter, entry, value)
     helper = entry.helper_spec
     if helper is not None and helper.name == "zero_ablate":
         return adapter.zeros_like(value)
