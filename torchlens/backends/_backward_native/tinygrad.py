@@ -120,11 +120,15 @@ class _Unavailable(Exception):
 
 
 def _uop_name(uop: Any) -> str:
+    """The UOp's op name without the ``Ops.`` prefix (for example ``MUL``)."""
+
     op = getattr(uop, "op", None)
     return str(getattr(op, "name", op)).removeprefix("Ops.")
 
 
 def _is_float(dtype: Any) -> bool:
+    """Whether ``dtype`` is a tinygrad floating-point dtype."""
+
     from tinygrad import dtypes
 
     return bool(dtypes.is_float(dtype))
@@ -272,6 +276,8 @@ class BackwardScope:
     def _prepare(
         self, recorded: tuple[Any, ...], sources: tuple[Any, ...], raw_output: Any
     ) -> None:
+        """Build the loss gradient on the pre-realize UOps and list every recorded value."""
+
         from tinygrad import Tensor
 
         compute_gradient, rules = _gradient_api()
@@ -337,6 +343,8 @@ def backward_ready_scope(session: Any) -> Iterator[BackwardScope]:
 
 @dataclass(frozen=True)
 class _Node:
+    """One retained backward node: its rule name, op label and realized gradients."""
+
     object_id: int
     class_name: str
     op_label: str
@@ -484,7 +492,13 @@ def _refusal_reason(
             f"the capture's single realize ran one backward pass, already recorded as pass "
             f"{state.recorded_pass}; capture again for another pass"
         )
-    if loss is None or loss is state.loss_fn:
+    return _loss_mismatch(loss, state.loss_fn)
+
+
+def _loss_mismatch(loss: Any, prepared: Callable[[Any], Any] | None) -> str | None:
+    """Why ``loss`` is not the loss the capture differentiated, or ``None``."""
+
+    if loss is None or loss is prepared:
         return None
     if callable(loss):
         return (
@@ -499,6 +513,8 @@ def _refusal_reason(
 
 
 def _start(pass_index: int, stamp: float) -> BackwardPassStart:
+    """The pass-start event of the one backward pass the realize ran."""
+
     return BackwardPassStart(
         pass_index=pass_index,
         trigger="backward",
@@ -550,6 +566,8 @@ def _node_events(state: _Retained, pass_index: int) -> list[Any]:
 
 
 def _grad_events(state: _Retained, pass_index: int) -> list[Any]:
+    """Op and parameter gradient events for every recorded gradient."""
+
     ops = [
         OpGradObserved(
             op_label=label,
