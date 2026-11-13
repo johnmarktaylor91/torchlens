@@ -22,7 +22,7 @@ corrupt tree or an op identity outside the backend's closed allowlist with
 from __future__ import annotations
 
 import math
-from collections.abc import Collection, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any, Protocol, cast, runtime_checkable
@@ -356,25 +356,48 @@ _TAGS = frozenset({"$tuple", "$dict", "$float", "$complex"})
 
 
 def _encode_value(value: Any, label: str | None) -> Any:
-    """Encode one data value as a JSON-safe tagged tree (essential type switch)."""
+    """Encode one data value as a JSON-safe tagged tree."""
 
-    if value is None or type(value) in (bool, str):
+    if value is None or type(value) in (bool, str, int):
         return value
-    if type(value) is int:
-        return value
-    if type(value) is float:
-        return value if math.isfinite(value) else {"$float": repr(value)}
-    if type(value) is complex:
-        return {"$complex": [_encode_value(value.real, label), _encode_value(value.imag, label)]}
-    if type(value) is tuple:
-        return {"$tuple": [_encode_value(v, label) for v in value]}
-    if type(value) is list:
-        return [_encode_value(v, label) for v in value]
-    if type(value) in (dict, MappingProxyType):
-        return {"$dict": {_key(k, label): _encode_value(v, label) for k, v in value.items()}}
-    raise ReplayRefusal(
-        "type", f"non-data value of type {type(value).__name__} in recipe", op_label=label
-    )
+    encoder = _ENCODERS.get(type(value))
+    if encoder is None:
+        raise ReplayRefusal(
+            "type", f"non-data value of type {type(value).__name__} in recipe", op_label=label
+        )
+    return encoder(value, label)
+
+
+def _encode_float(value: float, label: str | None) -> Any:
+    return value if math.isfinite(value) else {"$float": repr(value)}
+
+
+def _encode_complex(value: complex, label: str | None) -> Any:
+    return {"$complex": [_encode_float(value.real, label), _encode_float(value.imag, label)]}
+
+
+def _encode_tuple(value: tuple[Any, ...], label: str | None) -> Any:
+    return {"$tuple": [_encode_value(v, label) for v in value]}
+
+
+def _encode_list(value: list[Any], label: str | None) -> Any:
+    return [_encode_value(v, label) for v in value]
+
+
+def _encode_mapping(value: Mapping[Any, Any], label: str | None) -> Any:
+    return {"$dict": {_key(k, label): _encode_value(v, label) for k, v in value.items()}}
+
+
+_ENCODERS: Mapping[type, Callable[[Any, str | None], Any]] = MappingProxyType(
+    {
+        float: _encode_float,
+        complex: _encode_complex,
+        tuple: _encode_tuple,
+        list: _encode_list,
+        dict: _encode_mapping,
+        MappingProxyType: _encode_mapping,
+    }
+)
 
 
 def _key(key: Any, label: str | None) -> str:
@@ -485,19 +508,22 @@ def _check_bounds(data: Any, limits: RecipeLimits) -> None:
         nodes += 1
         if nodes > limits.max_nodes or depth > limits.max_depth:
             raise ReplayRefusal("bounds", "recipe tree exceeds the size or depth bound")
-        if isinstance(node, str):
-            if len(node) > limits.max_str_len:
-                raise ReplayRefusal("bounds", "recipe string exceeds the length bound")
-        elif type(node) is int:
-            if node.bit_length() > limits.max_int_bits:
-                raise ReplayRefusal("bounds", "recipe integer exceeds the size bound")
-        elif isinstance(node, Mapping):
-            for key, value in node.items():
-                if type(key) is not str:
-                    raise ReplayRefusal("type", "recipe mapping key is not a str")
-                stack.append((key, depth + 1))
-                stack.append((value, depth + 1))
-        elif isinstance(node, (list, tuple)):
-            stack.extend((v, depth + 1) for v in node)
-        elif node is not None and type(node) not in (bool, float):
-            raise ReplayRefusal("type", f"non-data leaf {type(node).__name__} in recipe")
+        stack.extend((child, depth + 1) for child in _children(node, limits))
+
+
+def _children(node: Any, limits: RecipeLimits) -> list[Any]:
+    """Check one raw node against the leaf grammar and return its children."""
+
+    if isinstance(node, Mapping):
+        if any(type(key) is not str for key in node):
+            raise ReplayRefusal("type", "recipe mapping key is not a str")
+        return [*node.keys(), *node.values()]
+    if isinstance(node, (list, tuple)):
+        return list(node)
+    if isinstance(node, str) and len(node) > limits.max_str_len:
+        raise ReplayRefusal("bounds", "recipe string exceeds the length bound")
+    if type(node) is int and node.bit_length() > limits.max_int_bits:
+        raise ReplayRefusal("bounds", "recipe integer exceeds the size bound")
+    if node is not None and type(node) not in (bool, float, int, str):
+        raise ReplayRefusal("type", f"non-data leaf {type(node).__name__} in recipe")
+    return []
