@@ -1096,6 +1096,13 @@ _BUILTIN_EXCEPTION_ROOTS = frozenset(
 # current: a stale entry (class deleted or later registered) fails the gate
 # just like a missing one.
 _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
+    # Paddle native backward: one private signal inside the grad-node walk; the
+    # recorder catches it and raises its coded RunCapabilityUnavailableError.
+    "torchlens.backends._backward_native._paddle_nodes.Unavailable": (
+        "private signal from the Paddle grad-node walk and slot alignment; "
+        "record_backward catches it and raises the coded run_capability_unavailable "
+        "refusal, never escapes"
+    ),
     # Replay layer (wave B backend parity): one private signal for refused recipes,
     # replay plans and adapter lookups; callers translate it into their own coded error.
     "torchlens.backends._replay_adapters._contract.ReplayRefusal": (
