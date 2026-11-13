@@ -67,6 +67,23 @@ from .._backward_neutral import (
     set_pass_roots,
 )
 from .._replay_adapters import paddle as adapter
+from ._paddle_nodes import (
+    ACCUMULATION,
+    LIST_SLOT_NODES,
+    UNKNOWN,
+    Edge,
+    Unavailable,
+    alignments,
+    copy_grad,
+    copy_group,
+    frontier,
+    is_differentiable,
+    next_nodes,
+    node_name,
+    node_ptr,
+    route,
+    walk_nodes,
+)
 
 __all__ = (
     "PAYLOADS",
@@ -82,25 +99,8 @@ _DETECTION_STAGE = "native_backward_capture"
 STATE_KEY = "_paddle_backward_state"
 """``trace.__dict__`` key of the retained backward state."""
 
-ACCUMULATION = "GradNodeAccumulation"
-"""Paddle's name for the leaf node that accumulates a leaf tensor's gradient."""
-
 NODE_BINDINGS = ("name", "next_functions", "node_ptr", "_register_post_hook")
 """Grad-node methods the record needs (feature detection, never version parsing)."""
-
-LIST_SLOT_NODES = frozenset(
-    {
-        "ConcatGradNode",
-        "StackGradNode",
-        "AddNGradNode",
-        "EinsumGradNode",
-        "MeshgridGradNode",
-        "BroadcastTensorsGradNode",
-        "MultiDotGradNode",
-        "UnstackGradNode",
-    }
-)
-"""Nodes with a list-valued input slot, for nodes no recorded op describes."""
 
 _BACKWARD_KWARGS = frozenset({"retain_graph"})
 
@@ -126,51 +126,6 @@ def _retained_refs(raw: Any, transformed: Any, *, raw_memory: int | None) -> lis
 
 PAYLOADS = PayloadPolicy(memory_of=_nbytes, retained_refs=_retained_refs)
 """How the neutral fold reads Paddle gradient payloads."""
-
-
-class _Unavailable(Exception):
-    """The pass cannot be recorded; the message is the refusal reason."""
-
-
-def _ptr(node: Any) -> int:
-    return int(node.node_ptr())
-
-
-def _name(node: Any) -> str:
-    return str(node.name())
-
-
-def _next(node: Any) -> list[Any]:
-    return list(node.next_functions or ())
-
-
-def _copy(value: Any) -> Any:
-    """A detached copy of one gradient (``None`` stays ``None``)."""
-
-    if value is None or not hasattr(value, "detach"):
-        return None
-    initialized = getattr(value, "_is_initialized", None)
-    if callable(initialized) and not initialized():
-        return None  # Paddle's placeholder for a slot that gets no gradient
-    with _state.pause_logging():
-        return value.detach().clone()
-
-
-def _copy_group(values: Any) -> tuple[Any, ...]:
-    """Copy one hook argument: a slot is a tensor, ``None`` or a list of tensors."""
-
-    return tuple(
-        tuple(_copy(item) for item in slot) if isinstance(slot, (list, tuple)) else _copy(slot)
-        for slot in values
-    )
-
-
-def _is_differentiable(tensor: Any) -> bool:
-    import paddle
-
-    if bool(getattr(tensor, "stop_gradient", True)):
-        return False
-    return bool(paddle.is_floating_point(tensor) or paddle.is_complex(tensor))
 
 
 @dataclass
@@ -214,9 +169,9 @@ class BackwardScope:
             return
         node = getattr(tensor, "grad_fn", None)
         self.nodes[label_raw] = node
-        if not _is_differentiable(tensor):
+        if not is_differentiable(tensor):
             return
-        if node is None or _name(node) == ACCUMULATION:
+        if node is None or node_name(node) == ACCUMULATION:
             self.leaves.add(label_raw)
         with _state.pause_logging():
             self.handles.append(tensor.register_hook(self._tensor_hook(label_raw, "tensor")))
@@ -230,7 +185,7 @@ class BackwardScope:
             if recorder is not None:
                 grads = recorder.tensor_grads if kind == "tensor" else recorder.param_grads
                 times = recorder.tensor_times if kind == "tensor" else recorder.param_times
-                grads[key] = _copy(grad)
+                grads[key] = copy_grad(grad)
                 times[key] = time.time()
 
         return hook
@@ -238,7 +193,7 @@ class BackwardScope:
     def hook_node(self, node: Any) -> None:
         """Install the post hook on ``node`` once; it reports only while recording."""
 
-        ptr = _ptr(node)
+        ptr = node_ptr(node)
         if ptr in self.hooked_nodes:
             return
         ref = weakref.ref(self)
@@ -249,10 +204,10 @@ class BackwardScope:
             if recorder is not None:
                 try:
                     recorder.fires.setdefault(
-                        ptr, (time.time(), _copy_group(grad_in), _copy_group(grad_out))
+                        ptr, (time.time(), copy_group(grad_in), copy_group(grad_out))
                     )
                 except Exception as error:  # noqa: BLE001 - a raise would break run_backward
-                    recorder.errors.append(f"{_name(node)}: {error!r}")
+                    recorder.errors.append(f"{node_name(node)}: {error!r}")
             return list(grad_in)
 
         node._register_post_hook(hook)
@@ -300,8 +255,8 @@ def _sites(trace: Any, scope: BackwardScope) -> tuple[dict[int, _Site], dict[str
         if site is None:
             continue
         node = scope.nodes.get(site.slot_labels[0])
-        if node is not None and _name(node) != ACCUMULATION:
-            sites.setdefault(_ptr(node), _Site(capture, site.slot_labels))
+        if node is not None and node_name(node) != ACCUMULATION:
+            sites.setdefault(node_ptr(node), _Site(capture, site.slot_labels))
     for op in trace._layer_list:
         if getattr(op, "is_output", False):
             raw = str(getattr(op, "_label_raw", op.layer_label))
@@ -347,7 +302,7 @@ def _loss_tensor(state: _Retained, loss: Any) -> Any:
         return state.scope.output
     if callable(loss) and not isinstance(loss, paddle.Tensor):
         if state.scope.output is None:
-            raise _Unavailable("the capture kept no live output to pass to the loss callable")
+            raise Unavailable("the capture kept no live output to pass to the loss callable")
         return loss(state.scope.output)
     return loss
 
@@ -359,117 +314,74 @@ def _resolve_loss(state: _Retained, loss: Any) -> Any:
 
     loss = _loss_tensor(state, loss)
     scalar = isinstance(loss, paddle.Tensor) and int(loss.numel()) == 1
-    if not scalar or not _is_differentiable(loss):
-        raise _Unavailable(
+    if not scalar or not is_differentiable(loss):
+        raise Unavailable(
             "the loss must be a differentiable float scalar Paddle tensor, or a callable "
             "mapping the model's output to one"
         )
     root = loss.grad_fn
     if root is None:
-        raise _Unavailable(
-            "the loss has no grad node, so it is not connected to the captured graph"
-        )
+        raise Unavailable("the loss has no grad node, so it is not connected to the captured graph")
     missing = [name for name in NODE_BINDINGS if not hasattr(root, name)]
     if missing:
-        raise _Unavailable(
+        raise Unavailable(
             f"this Paddle's grad nodes lack {', '.join(missing)} "
             "(paddle.base.libpaddle.GradNodeBase), so the backward graph cannot be walked"
         )
     return loss
 
 
-def _walk(root: Any) -> dict[int, Any]:
-    """Every grad node reachable from ``root``, in breadth-first discovery order."""
-
-    found: dict[int, Any] = {}
-    queue = [root]
-    while queue:
-        node = queue.pop(0)
-        if _ptr(node) in found:
-            continue
-        found[_ptr(node)] = node
-        queue.extend(item for item in _next(node) if item is not None)
-    return found
-
-
 def _has_list_slot(site: _Site | None, node: Any) -> bool:
     if site is None:
-        return _name(node) in LIST_SLOT_NODES
+        return node_name(node) in LIST_SLOT_NODES
     return any(len(tuple(leaf.path)) > 2 for leaf in site.capture.tensor_inputs)
 
 
-@dataclass(frozen=True)
-class _Edge:
-    """One gradient slot leaving an op's backward: ``node``'s slot ``index`` to ``target``."""
-
-    node: Any
-    index: int
-    target: Any
-
-
-def _frontier(site_node: Any, owned: set[int]) -> tuple[list[_Edge], list[Any]]:
-    """The op's outgoing slots in call order, and its inner nodes (expanded in place)."""
-
-    edges: list[_Edge] = []
-    inner: list[Any] = []
-
-    def visit(node: Any) -> None:
-        for index, target in enumerate(_next(node)):
-            inner_node = (
-                target is not None and _ptr(target) not in owned and _name(target) != ACCUMULATION
-            )
-            if inner_node and all(_ptr(target) != _ptr(seen) for seen in inner):
-                inner.append(target)
-                visit(target)
-            else:
-                edges.append(_Edge(node, index, target))
-
-    visit(site_node)
-    return edges, inner
-
-
 def _expected(state: _Retained, site: _Site, leaf: Any) -> Any:
-    """What grad node a tensor input should reach: a node, ``ACCUMULATION`` or ``None``."""
+    """What grad node a tensor input should reach: a node, ``ACCUMULATION``, ``None`` or ``UNKNOWN``.
+
+    An input the capture never labelled (the output of an op it did not wrap)
+    is ``UNKNOWN``: it may or may not own a gradient slot.
+    """
 
     if leaf.label is not None:
         if leaf.label in state.scope.leaves:
             return ACCUMULATION
         return state.scope.nodes.get(leaf.label)
+    if leaf.param_address is None:
+        return UNKNOWN
     live = site.capture.param_inputs.get(tuple(leaf.path))
-    if leaf.param_address is not None and live is not None and _is_differentiable(live):
+    if live is not None and is_differentiable(live):
         return ACCUMULATION
     return None
 
 
-def _matches(expected: Any, target: Any) -> bool:
-    if expected is None or target is None:
-        return expected is None and target is None
-    if expected == ACCUMULATION:
-        return _name(target) == ACCUMULATION
-    return _ptr(expected) == _ptr(target)
+def _align(state: _Retained, site: _Site, edges: list[Edge]) -> list[Edge | None]:
+    """One edge (or ``None``) per tensor input, in call order; refuses when they disagree.
 
+    Unlabelled inputs may or may not own a slot, so every consistent alignment
+    is tried; two that route a gradient to different labelled inputs or
+    parameters leave the slots ambiguous and are refused.
+    """
 
-def _align(state: _Retained, site: _Site, edges: list[_Edge]) -> list[_Edge | None]:
-    """One edge (or ``None``) per tensor input, in call order; refuses when they disagree."""
-
-    aligned: list[_Edge | None] = []
-    cursor = 0
-    for leaf in site.capture.tensor_inputs:
-        expected = _expected(state, site, leaf)
-        edge = edges[cursor] if cursor < len(edges) else None
-        if edge is not None and _matches(expected, edge.target):
-            aligned.append(edge)
-            cursor += 1
-        elif expected is None:
-            aligned.append(None)
-        else:
-            raise _Unavailable(
-                f"the grad slots of {site.slots[0]!r} do not line up with its recorded inputs "
-                f"(input {tuple(leaf.path)} has no matching slot)"
+    wants = [_expected(state, site, leaf) for leaf in site.capture.tensor_inputs]
+    known = [index for index, want in enumerate(wants) if want is not UNKNOWN]
+    found: dict[tuple[int | None, ...], tuple[int | None, ...]] = {}
+    for alignment in alignments(wants, edges):
+        routes = tuple(route(edges, alignment[index]) for index in known)
+        found.setdefault(routes, alignment)
+        if len(found) > 1:
+            raise Unavailable(
+                f"the grad slots of {site.slots[0]!r} can be matched to its recorded inputs "
+                "in more than one way, because some of its inputs come from ops the capture "
+                "did not record"
             )
-    if cursor != len(edges):
-        raise _Unavailable(f"{site.slots[0]!r} sends gradients to slots its record does not name")
-    return aligned
+    if not found:
+        raise Unavailable(
+            f"the grad slots of {site.slots[0]!r} do not line up with its recorded inputs"
+        )
+    (alignment,) = found.values()
+    return [None if index is None else edges[index] for index in alignment]
 
 
 @dataclass
@@ -478,31 +390,33 @@ class _Plan:
 
     nodes: dict[int, Any]
     op_nodes: dict[int, _Site] = field(default_factory=dict)
-    aligned: dict[int, list[_Edge | None]] = field(default_factory=dict)
+    aligned: dict[int, list[Edge | None]] = field(default_factory=dict)
     leaf_of: dict[int, tuple[str, str]] = field(default_factory=dict)
     input_slot: dict[tuple[int, int], int] = field(default_factory=dict)
 
 
-def _note_leaves(plan: _Plan, site: _Site, aligned: list[_Edge | None]) -> None:
+def _note_leaves(plan: _Plan, site: _Site, aligned: list[Edge | None]) -> None:
     """Name each accumulation node the op reaches by the input or parameter it belongs to."""
 
     for leaf, edge in zip(site.capture.tensor_inputs, aligned, strict=True):
         target = None if edge is None else edge.target
-        if target is None or _name(target) != ACCUMULATION:
+        if target is None or node_name(target) != ACCUMULATION:
+            continue
+        if leaf.label is None and leaf.param_address is None:
             continue
         key = ("param", str(leaf.param_address)) if leaf.label is None else ("input", leaf.label)
-        plan.leaf_of.setdefault(_ptr(target), key)
+        plan.leaf_of.setdefault(node_ptr(target), key)
 
 
 def _plan(state: _Retained, root: Any) -> _Plan:
     """Walk from the loss, align every recorded op's slots and install the post hooks."""
 
-    plan = _Plan(_walk(root))
+    plan = _Plan(walk_nodes(root))
     order = [ptr for ptr in plan.nodes if ptr in state.sites]
     owned = set(order)
     for ptr in order:
         site = state.sites[ptr]
-        edges, inner = _frontier(plan.nodes[ptr], owned)
+        edges, inner = frontier(plan.nodes[ptr], owned)
         aligned = _align(state, site, edges)
         plan.op_nodes[ptr], plan.aligned[ptr] = site, aligned
         _note_leaves(plan, site, aligned)
@@ -511,12 +425,12 @@ def _plan(state: _Retained, root: Any) -> _Plan:
                 if edge is not None:
                     plan.input_slot[(ptr, edge.index)] = position
     for ptr, node in plan.nodes.items():
-        if _name(node) != ACCUMULATION and not _has_list_slot(plan.op_nodes.get(ptr), node):
+        if node_name(node) != ACCUMULATION and not _has_list_slot(plan.op_nodes.get(ptr), node):
             state.scope.hook_node(node)
     return plan
 
 
-def _slot_value(plan: _Plan, recorder: _Recorder, edge: _Edge) -> Any:
+def _slot_value(plan: _Plan, recorder: _Recorder, edge: Edge) -> Any:
     """The gradient ``edge.node`` sent along ``edge``, read from its post hook.
 
     The post hook reports one entry per forward input slot, while
@@ -525,17 +439,19 @@ def _slot_value(plan: _Plan, recorder: _Recorder, edge: _Edge) -> Any:
     single-node op maps its slots through its recorded inputs instead.
     """
 
-    fire = recorder.fires.get(_ptr(edge.node))
+    fire = recorder.fires.get(node_ptr(edge.node))
     if fire is None:
         return None
     grad_in = fire[1]
-    width = len(_next(edge.node))
+    width = len(next_nodes(edge.node))
     index = (
-        edge.index if len(grad_in) == width else plan.input_slot.get((_ptr(edge.node), edge.index))
+        edge.index
+        if len(grad_in) == width
+        else plan.input_slot.get((node_ptr(edge.node), edge.index))
     )
     if index is None or index >= len(grad_in):
-        raise _Unavailable(
-            f"{_name(edge.node)} reports {len(grad_in)} input slots to its post hook but has "
+        raise Unavailable(
+            f"{node_name(edge.node)} reports {len(grad_in)} input slots to its post hook but has "
             f"{width} next functions, so its gradient slots cannot be matched"
         )
     return grad_in[index]
@@ -552,9 +468,9 @@ def _outgoing(state: _Retained, plan: _Plan, recorder: _Recorder, ptr: int) -> t
             continue
         if edge is None or edge.target is None:
             values.append(None)
-        elif list_slot and _ptr(edge.node) == ptr:
+        elif list_slot and node_ptr(edge.node) == ptr:
             if state.labelled_uses.get(leaf.label, 0) != 1:
-                raise _Unavailable(
+                raise Unavailable(
                     f"Paddle's GradNodeBase._register_post_hook cannot return the list input of "
                     f"{site.slots[0]!r}, and {leaf.label!r} feeds other ops too, so the gradient "
                     "this op sends to it is not observable"
@@ -570,7 +486,7 @@ def _discoveries(state: _Retained, plan: _Plan) -> list[GradFnDiscovered]:
     for ptr, node in plan.nodes.items():
         site = plan.op_nodes.get(ptr)
         leaf = plan.leaf_of.get(ptr)
-        name = _name(node)
+        name = node_name(node)
         events.append(
             GradFnDiscovered(
                 object_id=ptr,
@@ -582,7 +498,7 @@ def _discoveries(state: _Retained, plan: _Plan) -> list[GradFnDiscovered]:
                 created_in_pass=None,
                 creator_object_id=None,
                 source={},
-                topology=tuple(_ptr(item) for item in _next(node) if item is not None),
+                topology=tuple(node_ptr(item) for item in next_nodes(node) if item is not None),
             )
         )
     return events
@@ -703,7 +619,7 @@ def _run(state: _Retained, plan: _Plan, loss: Any, retain_graph: bool) -> tuple[
     handles = []
     with _state.pause_logging():
         for address, param in state.params.items():
-            if _is_differentiable(param):
+            if is_differentiable(param):
                 handles.append(param.register_hook(state.scope._tensor_hook(address, "param")))
     state.scope.recorder = recorder
     started = time.monotonic()
@@ -715,22 +631,22 @@ def _run(state: _Retained, plan: _Plan, loss: Any, retain_graph: bool) -> tuple[
             handle.remove()
     duration = time.monotonic() - started
     if recorder.errors:
-        raise _Unavailable(f"a grad-node hook failed: {recorder.errors[0]}")
+        raise Unavailable(f"a grad-node hook failed: {recorder.errors[0]}")
     return recorder, duration
 
 
 def _record(trace: Any, loss: Any, backward_kwargs: dict[str, Any]) -> tuple[list[Any], int]:
-    """Run the pass and build its events; raises :class:`_Unavailable` with the reason."""
+    """Run the pass and build its events; raises :class:`Unavailable` with the reason."""
 
     state = trace.__dict__.get(STATE_KEY)
     if state is None:
-        raise _Unavailable(
+        raise Unavailable(
             "the capture kept no grad nodes; capture with "
             "capture=tl.options.CaptureOptions(backward_ready=True) first"
         )
     extra = sorted(set(backward_kwargs) - _BACKWARD_KWARGS)
     if extra:
-        raise _Unavailable(f"Paddle backward takes only retain_graph (got {extra})")
+        raise Unavailable(f"Paddle backward takes only retain_graph (got {extra})")
     tensor = _resolve_loss(state, loss)
     plan = _plan(state, tensor.grad_fn)
     stamp = time.time()
@@ -750,7 +666,7 @@ def _record(trace: Any, loss: Any, backward_kwargs: dict[str, Any]) -> tuple[lis
         *_grad_events(state, recorder, pass_index, stamp),
         end,
     ]
-    return events, _ptr(tensor.grad_fn)
+    return events, node_ptr(tensor.grad_fn)
 
 
 def record_backward(trace: Any, loss: Any = None, **backward_kwargs: Any) -> None:
@@ -776,7 +692,7 @@ def record_backward(trace: Any, loss: Any = None, **backward_kwargs: Any) -> Non
 
     try:
         events, root = _record(trace, loss, backward_kwargs)
-    except _Unavailable as error:
+    except Unavailable as error:
         raise RunCapabilityUnavailableError(
             f"backward() is unavailable on this Paddle trace: {error}.",
             code=_CODE,

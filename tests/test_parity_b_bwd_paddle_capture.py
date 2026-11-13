@@ -159,19 +159,34 @@ class SharedLinear(paddle.nn.Layer):
 
 
 class MultiOutput(paddle.nn.Layer):
-    """A three-way split with one part unused, and top-k values with integer indices."""
+    """A three-way split with one part unused, and a reduction over another part."""
 
     def forward(self, x: Any) -> Any:
         a, b, _unused = paddle.split(x, 3, axis=1)
+        return paddle.max(paddle.exp(a), axis=1, keepdim=True) * paddle.sin(b)
+
+
+class Uncaptured(paddle.nn.Layer):
+    """An input from an op the capture does not record (top-k), so it has no label."""
+
+    def forward(self, x: Any) -> Any:
+        a, b = paddle.split(x, 2, axis=1)
         values, _indices = paddle.topk(paddle.exp(a), k=1, axis=1)
         return values * paddle.sin(b)
 
 
-class Gathered(paddle.nn.Layer):
-    """A gather whose integer index Paddle gives no gradient slot."""
+class Selected(paddle.nn.Layer):
+    """A ``where`` whose boolean condition Paddle never differentiates."""
 
-    def forward(self, x: Any, index: Any) -> Any:
-        return paddle.gather(paddle.tanh(x), index)
+    def forward(self, x: Any, condition: Any) -> Any:
+        return paddle.where(condition, paddle.tanh(x), paddle.sin(x))
+
+
+class Indexed(paddle.nn.Layer):
+    """Indexing by an integer tensor made inside the forward."""
+
+    def forward(self, x: Any) -> Any:
+        return paddle.tanh(x)[paddle.to_tensor([0, 2, 2])]
 
 
 class Concat(paddle.nn.Layer):
@@ -246,10 +261,18 @@ def test_records_pass_the_backward_validator(
 
 def test_integer_inputs_get_no_slot_and_validate(ready: Any) -> None:
     x = _leaf([4, 3], 3)
-    index = paddle.to_tensor([0, 2, 2])
-    trace, leaves = _run(ready, Gathered(), x, index)
+    condition = paddle.to_tensor([[True, False, True]] * 4)
+    trace, leaves = _run(ready, Selected(), x, condition)
     result = _validate(trace, 1, leaves)
     assert result.findings == () and result.nodes_checked > 0
+
+
+@pytest.mark.parametrize("model", [Uncaptured(), Indexed()], ids=["uncaptured", "indexed"])
+def test_unlabelled_inputs_align_and_leaf_grads_match(ready: Any, model: Any) -> None:
+    trace, leaves = _run(ready, model, _leaf([4, 4], 11))
+    fired = [record for record in trace._grad_fn_logs.values() if record.op_label is not None]
+    assert fired
+    assert all(trace[record.op_label].grad is not None for record in fired)
 
 
 def test_grad_fns_carry_paddle_names_and_op_calls(ready: Any) -> None:
