@@ -140,7 +140,9 @@ def test_saved_and_loaded_trace_validates_from_recipes(tmp_path: Path, name: str
     trace.save(bundle, level="executable_with_callables")
     loaded = tl.load(str(bundle))
     before = validate_tf_trace_status(loaded, validate_metadata=False)
-    assert before.state == "unavailable"
+    # The bundle stores one replay recipe per op, so the loaded trace already
+    # validates by replay; binding the same recipes again keeps the live verdict.
+    assert before.state == live_state, before.message
     decoded = {
         label: decode_recipe(
             json.loads(json.dumps(data)), backend="tf", allowlist=ADAPTER.ALLOWLIST
