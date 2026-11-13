@@ -400,7 +400,7 @@ def test_tinygrad_spec_registered() -> None:
     assert capabilities.supports_backward_capture is False
     assert capabilities.supports_validation_replay is True
     assert capabilities.supports_fastlog is False
-    assert capabilities.supports_intervention is False
+    assert capabilities.supports_intervention is True
     assert capabilities.supports_payload_materialization is True
     assert capabilities.module_identity_modes == ("function_root", "object_module")
     assert capabilities.payload_policy == "array_payloads"

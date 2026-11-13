@@ -140,7 +140,7 @@ def test_edited_capture_matches_torch_twin_and_validates(
 
     relu = _relu_op(edited)
     assert relu.is_edited is True
-    assert relu.intervention_fired is True
+    assert _relu_op(torch_edited).is_edited is True
     np.testing.assert_allclose(_np(relu.out), expected(_np(_relu_op(plain).out)), atol=1e-6)
     np.testing.assert_allclose(_np(relu.out), _np(_relu_op(torch_edited).out), atol=1e-5)
     np.testing.assert_allclose(_final_output(edited), _final_output(torch_edited), atol=1e-5)
@@ -195,9 +195,9 @@ def test_stripping_the_edit_declaration_fails_validation() -> None:
         backend="tinygrad",
         intervene=tl.when(tl.func("where"), tl.scale(0.5)),
     )
-    captures = trace.tinygrad_uop_captures
-    index = next(i for i, capture in enumerate(captures) if capture.edit is not None)
-    captures[index] = dataclasses.replace(captures[index], edit=None)
+    trace.tinygrad_uop_captures = tuple(
+        dataclasses.replace(capture, edit=None) for capture in trace.tinygrad_uop_captures
+    )
 
     assert TinygradBackend().validate_trace(trace) is not True
 

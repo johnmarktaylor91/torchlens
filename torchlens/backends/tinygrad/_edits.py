@@ -128,9 +128,10 @@ class TinygradEditSession:
         observer.paused = True
         try:
             replacement = self.edit.apply(result)
+            _check_replacement(result, replacement, self.edit.identity)
+            replacement = _fresh_replacement(result, replacement)
         finally:
             observer.paused = False
-        _check_replacement(result, replacement, self.edit.identity)
         observer.alias(result.uop, replacement.uop)
         self.replaced[id(replacement.uop)] = result.uop
         self._pins.append(replacement)
@@ -156,6 +157,20 @@ def _check_replacement(result: Any, replacement: Any, identity: str) -> None:
             f"{tuple(replacement.shape)} {replacement.dtype}; edits keep shape and dtype.",
             code=EDIT_REFUSAL,
         )
+
+
+def _fresh_replacement(result: Any, replacement: Any) -> Any:
+    """``replacement`` as a new UOp that depends on ``result``, with the same values.
+
+    tinygrad interns UOps, so an edit that builds its value without reading
+    the result (``zeros_like``, ``replace_with``) can return a UOp the forward
+    already holds elsewhere, such as the zero constant inside relu. Selecting
+    through a condition that is false everywhere (NaN included) keeps the
+    values and gives the replacement its own UOp in the graph.
+    """
+
+    never = (result != result) & (result == result)
+    return never.where(result, replacement)
 
 
 def fire_amendment(event: Any, edit: TinygradEdit, selector: object) -> OpAmendment:
