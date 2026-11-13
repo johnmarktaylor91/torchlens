@@ -18,7 +18,7 @@ from .._validation_shared import (
     replay_payload,
 )
 from ._raw_op_replay import _import_tensorflow, _replay_raw_op
-from ._variable_reads import parameter_read_decision, read_failures
+from ._replay_exemptions import early_decision, tally_early
 from .op_callback_capture import TFOpCapture
 
 TFOpClass = Literal[
@@ -268,11 +268,12 @@ def validate_tf_trace_detailed(trace: Any) -> TFValidationResult:
             if op_type == "constant":
                 _record_constant_leaf(op_label, decisions_list, exempted_reasons)
             continue
+        args = (op_class, _PURE_REPLAY_ALLOWLIST, captures_by_label, ops_by_label)
+        if early := early_decision(trace, op, *args):
+            decisions_list.append(early)
+            tally_early(label, early, failures, exempted_reasons)
+            continue
         if op_class != "value":
-            if read := parameter_read_decision(trace, op, captures_by_label.get(label)):
-                decisions_list.append(read)
-                failures.extend(read_failures(label, read))
-                continue
             if op_class in {"pure-resource-read", "effect-denied", "control-region"}:
                 effect_region_histogram[op_type] += 1
                 unverified_reasons[_REASON_EFFECT] += 1
