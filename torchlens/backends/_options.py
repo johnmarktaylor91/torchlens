@@ -267,9 +267,9 @@ PADDLE_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
     runtime_message=(
         "The Paddle backend does not support these options: {names}. "
         "Live trace(intervene=...), trace(stop_after=...), facets=, and static-label "
-        "save= selectors are supported on eager Paddle; "
-        "storage=, and the remaining torch-only runtime options are not. Use "
-        "the PyTorch backend for storage= and stop-early capture shaping."
+        "save= selectors, and storage= (without save= or structure_only) are "
+        "supported on eager Paddle; the remaining torch-only runtime options are "
+        "not. Use the PyTorch backend for them."
     ),
     fallback_message="",
     always_runtime=True,

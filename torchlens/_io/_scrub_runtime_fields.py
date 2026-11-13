@@ -67,5 +67,9 @@ RUNTIME_ONLY_TRACE_FIELDS: Final[frozenset[str]] = frozenset(
         # The TF static FuncGraph path stamps both after capture and never removes them.
         "_tf_static_region_labels",
         "_tf_static_fallback_error",
+        # Paddle capture-mode state; the capture pops all three before returning.
+        "_paddle_stream_state",
+        "_paddle_capture_mode",
+        "_paddle_retention_state",
     }
 )

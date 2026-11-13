@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from .._quantities import Bytes
 from .._utils._record_group_table import record_member
 from ..backends import TORCH_BACKEND_NAME
+from ..backends.registry import get_backend_spec
 from ..backends.torch._pinned_graph import pinned_autograd_bytes
 
 if TYPE_CHECKING:
@@ -154,6 +155,12 @@ def _has_retained_gradient_payloads(self: "Trace") -> bool:
     each pass.
     """
 
+    backend = str(self._provenance_backend)
+    if (
+        backend != TORCH_BACKEND_NAME
+        and not get_backend_spec(backend).capabilities.backward_capture
+    ):
+        return False  # no true-backward grads exist; the grads accessor refuses here
     for op in self._layer_list:
         for record in record_member(op, "grads", ()):
             if record.grad is not None or record.transformed_grad is not None:

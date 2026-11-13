@@ -1,12 +1,7 @@
-"""Paddle ``storage=tl.to_disk(path)``: payloads stream during capture and load back as Paddle.
-
-The fixture opens the Paddle ``has_streaming`` gate the way the registry change
-for this capability does (spec flag plus implementing surface).
-"""
+"""Paddle ``storage=tl.to_disk(path)``: payloads stream during capture and load back as Paddle."""
 
 from __future__ import annotations
 
-import dataclasses
 from pathlib import Path
 from typing import Any
 
@@ -18,27 +13,10 @@ paddle = pytest.importorskip("paddle")
 import torchlens as tl  # noqa: E402
 from torchlens._errors import InvalidArgumentError  # noqa: E402
 from torchlens._io.streaming import BundleStreamWriter  # noqa: E402
-from torchlens.backends import registry  # noqa: E402
 from torchlens.backends.paddle import _stream_capture  # noqa: E402
 from torchlens.backends.paddle._retention import STREAM_KEY  # noqa: E402
 
 pytestmark = [pytest.mark.backend_paddle, pytest.mark.rare]
-
-
-@pytest.fixture(autouse=True)
-def _paddle_streaming_open(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Open the Paddle streaming gate for the test."""
-
-    spec = registry.get_backend_spec("paddle")
-    replaced = dataclasses.replace(
-        spec,
-        capabilities=dataclasses.replace(spec.capabilities, has_streaming=True),
-        capability_implementations={
-            **dict(spec.capability_implementations),
-            "has_streaming": lambda: _stream_capture,
-        },
-    )
-    monkeypatch.setitem(registry._REGISTRY, "paddle", replaced)
 
 
 def _chain(x: Any) -> Any:

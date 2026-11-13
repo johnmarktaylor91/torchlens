@@ -101,7 +101,7 @@ def _seed(trace: Any, adapter: Any, values: dict[str, Any], loss_fn: Any) -> dic
     from tinygrad import Tensor
 
     # tinygrad 0.13 takes requires_grad= at runtime; its annotations omit it.
-    leaf = Tensor(values[label].numpy(), requires_grad=True)  # type: ignore[call-arg]
+    leaf = Tensor(values[label].numpy(), requires_grad=True)  # type: ignore[call-arg,unused-ignore]
     loss = loss_fn(leaf) if loss_fn is not None else leaf
     if tuple(loss.shape) not in ((), (1,)):
         raise ValueError(
