@@ -413,6 +413,14 @@ def to_host(value: Any) -> Any:
         return np.asarray(value.numpy())
 
 
+def apply_helper(trace: Any, helper: Any, value: Any) -> Any:
+    """Apply a built-in edit helper to a Paddle value (the fork engine's helper door)."""
+    from ..paddle._edit_helpers import apply_paddle_helper
+
+    with _state.pause_logging():
+        return apply_paddle_helper(trace, helper, value)
+
+
 def close(expected: Any, actual: Any) -> bool:
     """The Paddle validator's own payload comparison (replayed value first, as it calls it)."""
     return bool(_payloads_close(actual, expected))
@@ -766,6 +774,7 @@ __all__ = (
     "ALLOWLIST",
     "BACKEND",
     "add",
+    "apply_helper",
     "bind_recipes",
     "can_replay",
     "close",
