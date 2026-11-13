@@ -31,8 +31,8 @@ Builder = Callable[[Callable[[Any], Any]], Callable[[Any], Any]]
 
 
 def _jax() -> tuple[Builder, Any]:
-    import jax
-    import jax.numpy as jnp
+    jax = pytest.importorskip("jax")
+    jnp = pytest.importorskip("jax.numpy")
 
     def build(edit: Callable[[Any], Any]) -> Callable[[Any], Any]:
         def chain(v: Any) -> Any:
@@ -45,7 +45,7 @@ def _jax() -> tuple[Builder, Any]:
 
 
 def _tf() -> tuple[Builder, Any]:
-    import tensorflow as tf
+    tf = pytest.importorskip("tensorflow")
 
     def build(edit: Callable[[Any], Any]) -> Callable[[Any], Any]:
         def chain(v: Any) -> Any:
@@ -58,7 +58,7 @@ def _tf() -> tuple[Builder, Any]:
 
 
 def _mlx() -> tuple[Builder, Any]:
-    import mlx.core as mx
+    mx = pytest.importorskip("mlx.core")
 
     def build(edit: Callable[[Any], Any]) -> Callable[[Any], Any]:
         def chain(v: Any) -> Any:
@@ -71,7 +71,7 @@ def _mlx() -> tuple[Builder, Any]:
 
 
 def _paddle() -> tuple[Builder, Any]:
-    import paddle
+    paddle = pytest.importorskip("paddle")
 
     def build(edit: Callable[[Any], Any]) -> Callable[[Any], Any]:
         def chain(v: Any) -> Any:
@@ -84,7 +84,7 @@ def _paddle() -> tuple[Builder, Any]:
 
 
 def _tinygrad() -> tuple[Builder, Any]:
-    from tinygrad import Tensor
+    Tensor = pytest.importorskip("tinygrad").Tensor
 
     def build(edit: Callable[[Any], Any]) -> Callable[[Any], Any]:
         def chain(v: Any) -> Any:
@@ -96,13 +96,7 @@ def _tinygrad() -> tuple[Builder, Any]:
     return build, Tensor(_X)
 
 
-_BACKENDS = {
-    "jax": ("jax", _jax),
-    "tf": ("tensorflow", _tf),
-    "mlx": ("mlx.core", _mlx),
-    "paddle": ("paddle", _paddle),
-    "tinygrad": ("tinygrad", _tinygrad),
-}
+_BACKENDS = {"jax": _jax, "tf": _tf, "mlx": _mlx, "paddle": _paddle, "tinygrad": _tinygrad}
 
 _MARKS = {
     "jax": pytest.mark.backend_jax,
@@ -118,13 +112,11 @@ pytestmark = pytest.mark.parametrize(
 
 
 def _setup(backend: str) -> tuple[Builder, Any, Any]:
-    module, factory = _BACKENDS[backend]
-    pytest.importorskip(module)
+    build, value = _BACKENDS[backend]()
     if not has_adapter(backend):
         pytest.skip(f"the {backend} replay adapter has not landed on this branch")
     from torchlens.backends._replay_adapters import get_adapter
 
-    build, value = factory()
     return build, value, get_adapter(backend)
 
 
