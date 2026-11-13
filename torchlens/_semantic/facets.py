@@ -6,7 +6,6 @@ import ast
 import builtins
 import contextlib
 import contextvars
-import hashlib
 import importlib
 import inspect
 import itertools
@@ -25,6 +24,7 @@ from .._selection.selection import _SelectionOperand
 from .._trace_core.record_refs import RecordSlot
 from .._utils._callable_safety import FACET_RECIPE_MARKER_ATTR
 from .._utils._record_group_table import record_member
+from ._facet_provenance import provenance_id
 from ._facet_tensor_ops import _copy_scatter_value, _ensure_scatter_capable, _heads_geometry
 from ._families import family_entries, family_spec
 from ._structural_names import (
@@ -1687,17 +1687,9 @@ def snapshot(extra_facets: Sequence[RecipeFunc] | None = None) -> FacetRegistryS
         registry_entries = tuple(_REGISTRY)
         registry_version = _REGISTRY_VERSION
     recipes = (*registry_entries, *_CONTEXT_RECIPES.get(), *extra_entries)
-    digest = hashlib.sha256()
-    for recipe in recipes:
-        digest.update(recipe.public.name.encode("utf-8"))
-        digest.update(repr(recipe.public.class_names).encode("utf-8"))
-        digest.update(repr(recipe.public.qualnames).encode("utf-8"))
-        digest.update(str(recipe.public.has_predicate).encode("utf-8"))
-        digest.update(recipe.public.target_scope.encode("utf-8"))
-        digest.update(recipe.public.source.encode("utf-8"))
     return FacetRegistrySnapshot(
         version=registry_version,
-        provenance_id=digest.hexdigest()[:16],
+        provenance_id=provenance_id(tuple(recipe.public for recipe in recipes)),
         functions=tuple(recipes),
     )
 

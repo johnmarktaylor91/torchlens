@@ -75,6 +75,23 @@ def read_interactive_source(filename: str) -> str | None:
 _NON_PARSER_BREAKS = re.compile("[\x0b\x0c\x1c\x1d\x1e\x85\u2028\u2029]")
 
 
+#: The members of ``_NON_PARSER_BREAKS``, ASCII ones first; an ASCII source holds no other.
+_ASCII_NON_PARSER_BREAKS = ("\x0b", "\x0c", "\x1c", "\x1d", "\x1e")
+_ALL_NON_PARSER_BREAKS = (*_ASCII_NON_PARSER_BREAKS, "\x85", "\u2028", "\u2029")
+
+
+def _has_no_non_parser_break(source: str) -> bool:
+    """Return whether ``source`` holds none of ``_NON_PARSER_BREAKS``.
+
+    One substring scan per break character is several times cheaper than the regex
+    class scan over a whole source file (``str.isascii`` is a flag read, so an ASCII
+    source skips the three non-ASCII characters).
+    """
+
+    breaks = _ASCII_NON_PARSER_BREAKS if source.isascii() else _ALL_NON_PARSER_BREAKS
+    return not any(char in source for char in breaks)
+
+
 def split_source_lines(source: str) -> list[str]:
     """Split source into lines exactly as the CPython parser does.
 
@@ -93,7 +110,7 @@ def split_source_lines(source: str) -> list[str]:
         offsets index correctly.
     """
 
-    if _NON_PARSER_BREAKS.search(source) is None:
+    if _has_no_non_parser_break(source):
         # Every ``splitlines`` break is then a parser terminator: same lines.
         return source.splitlines(keepends=True)
     lines: list[str] = []
