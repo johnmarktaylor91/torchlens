@@ -495,6 +495,7 @@ def build_backward_records(
         root_id for roots in roots_by_pass.values() for root_id in roots
     ]
     trace._num_backward_passes = max(trace._backward_pass_logs, default=0)
+    trace._autograd_has_backward_pass = bool(trace._backward_pass_logs)
     _link_ops_to_grad_fns(trace)
 
 
