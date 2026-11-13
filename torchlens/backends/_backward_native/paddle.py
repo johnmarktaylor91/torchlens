@@ -167,10 +167,13 @@ class BackwardScope:
 
         if label_raw in self.nodes or not hasattr(tensor, "register_hook"):
             return
+        if not is_differentiable(tensor):
+            # Paddle gives even integer and stop_gradient tensors an accumulation
+            # node; no gradient reaches them, so they own no slot.
+            self.nodes[label_raw] = None
+            return
         node = getattr(tensor, "grad_fn", None)
         self.nodes[label_raw] = node
-        if not is_differentiable(tensor):
-            return
         if node is None or node_name(node) == ACCUMULATION:
             self.leaves.add(label_raw)
         with _state.pause_logging():
