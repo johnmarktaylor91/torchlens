@@ -91,7 +91,7 @@ from ._capture_helpers import (
     paddle_layer_type,
 )
 from ._capture_scopes import PaddleCaptureHooks
-from ._edit_replay import run_derived_grad_forward
+from ._edit_replay import run_derived_grad_forward as _replay_forward
 from ._grad_sites import paddle_grad_site_records
 from ._param_writes import PARAMETER_WRITE_MARKER, ParameterWriteGuard
 from .constants_rule import constant_labels, is_constant_capture, is_literal_producer_capture
@@ -692,9 +692,7 @@ class PaddleBackend:
             # could clobber a concurrent capture's _active_trace and republish
             # a stale trace on restore); concurrent capture refuses typed.
             with _state.publish_active_trace(trace), _state.pause_logging():
-                replay_output = run_derived_grad_forward(
-                    self, trace, observer, model, (args, kwargs)
-                )
+                replay_output = _replay_forward(self, trace, observer, model, (args, kwargs))
                 loss = (
                     grad_options.loss_fn(replay_output) if grad_options.loss_fn else replay_output
                 )
