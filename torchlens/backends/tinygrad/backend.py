@@ -121,7 +121,7 @@ from ._rules import (
     refuse_constant_unrealizable,
 )
 from ._source_lines import SourceLineRecorder
-from ._uop_graph import _data_flow_uops, _op_func_name, _unique_uops, _uop_name
+from ._uop_graph import _data_flow_uops, _op_func_name, _unique_uops, _uop_name, _uop_signature
 
 
 @dataclass(frozen=True)
@@ -2462,25 +2462,6 @@ def _resolve_tinygrad_module_identity_mode(
     if value == "function_root":
         return False
     return module_tree is not None
-
-
-def _uop_signature(uop: Any) -> str:
-    """Return a structural UOp signature string.
-
-    Parameters
-    ----------
-    uop
-        tinygrad UOp.
-
-    Returns
-    -------
-    str
-        Recursive operation/dtype/arg signature.
-    """
-
-    src = getattr(uop, "src", ()) or ()
-    children = ",".join(_uop_signature(child) for child in src)
-    return f"{_uop_name(uop)}:{getattr(uop, 'dtype', None)}:{getattr(uop, 'arg', None)}[{children}]"
 
 
 def _tinygrad_signature_key(
