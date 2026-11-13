@@ -214,6 +214,11 @@ class TestArtifact:
         with pytest.raises(OSError, match="member copy failure"):
             loaded.save(art, overwrite=True)
 
+        # The surviving older copy loads only once the failed save's staging dir is accepted.
+        with pytest.raises(tl.errors.ArtifactError) as refused:
+            tl.load(art)
+        assert refused.value.fields["code"] == "newer_save_unfinished"
+        assert len(tl.io.cleanup_tmp(art)) == 1
         restored = tl.load(art)
         assert restored.alignment.value == "aligned"
 

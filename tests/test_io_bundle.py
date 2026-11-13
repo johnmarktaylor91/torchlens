@@ -599,8 +599,16 @@ def test_bundle_save_overwrite_typeerror_preserves_original_and_marks_partial(
 
     assert isinstance(excinfo.value.__cause__, TypeError)
 
-    # The original (pre-overwrite) bundle must survive the failed overwrite.
+    # The original (pre-overwrite) bundle must survive the failed overwrite, but
+    # tl.load refuses it while the failed save's PARTIAL staging dir is beside it.
     assert bundle_path.exists()
+    assert [p for p in tmp_path.iterdir() if ".bak." in p.name] == []  # before cleanup_tmp sweeps
+    (tmp_dir,) = [p for p in tmp_path.iterdir() if p.name.startswith(f"{bundle_path.name}.tmp.")]
+    assert (tmp_dir / "PARTIAL").exists()
+    with pytest.raises(ArtifactError) as refused:
+        load(bundle_path)
+    assert refused.value.fields["code"] == "newer_save_unfinished"
+    assert cleanup_tmp(bundle_path) == [tmp_dir]
     restored = load(bundle_path)
     first_output = first_log._layer_list[-1].out
     restored_output = restored._layer_list[-1].out
@@ -614,14 +622,9 @@ def test_bundle_save_overwrite_typeerror_preserves_original_and_marks_partial(
     bak_dirs = [p for p in siblings if ".bak." in p.name]
     assert bak_dirs == []
 
-    # Any leftover ``.tmp.<uuid>`` dir must carry the PARTIAL sentinel so
-    # ``cleanup_tmp()`` (without ``force=True``) can sweep it.
-    tmp_dirs = [p for p in siblings if ".tmp." in p.name]
-    for tmp_dir in tmp_dirs:
-        assert (tmp_dir / "PARTIAL").exists()
-    removed = cleanup_tmp(bundle_path)
-    assert set(removed) == set(tmp_dirs)
-    assert not any(p.exists() for p in tmp_dirs)
+    # The PARTIAL staging dir was swept by ``cleanup_tmp()`` (no ``force=True``).
+    assert not tmp_dir.exists()
+    assert [p for p in siblings if ".tmp." in p.name] == []
 
 
 class _NeverEnumeratedError(Exception):
@@ -674,9 +677,17 @@ def test_bundle_save_overwrite_arbitrary_exception_preserves_original_and_marks_
 
     assert excinfo.value.__cause__ is injected_exception
 
-    # The original (pre-overwrite) bundle must survive the failed overwrite,
+    # The original (pre-overwrite) bundle must survive the failed overwrite, but
+    # tl.load refuses it while the failed save's PARTIAL staging dir is beside it,
     # regardless of which exception type the write raised.
     assert bundle_path.exists()
+    assert [p for p in tmp_path.iterdir() if ".bak." in p.name] == []  # before cleanup_tmp sweeps
+    (tmp_dir,) = [p for p in tmp_path.iterdir() if p.name.startswith(f"{bundle_path.name}.tmp.")]
+    assert (tmp_dir / "PARTIAL").exists()
+    with pytest.raises(ArtifactError) as refused:
+        load(bundle_path)
+    assert refused.value.fields["code"] == "newer_save_unfinished"
+    assert cleanup_tmp(bundle_path) == [tmp_dir]
     restored = load(bundle_path)
     first_output = first_log._layer_list[-1].out
     restored_output = restored._layer_list[-1].out
@@ -689,14 +700,9 @@ def test_bundle_save_overwrite_arbitrary_exception_preserves_original_and_marks_
     bak_dirs = [p for p in siblings if ".bak." in p.name]
     assert bak_dirs == []
 
-    # Any leftover ``.tmp.<uuid>`` dir must carry the PARTIAL sentinel so
-    # ``cleanup_tmp()`` (without ``force=True``) can sweep it.
-    tmp_dirs = [p for p in siblings if ".tmp." in p.name]
-    for tmp_dir in tmp_dirs:
-        assert (tmp_dir / "PARTIAL").exists()
-    removed = cleanup_tmp(bundle_path)
-    assert set(removed) == set(tmp_dirs)
-    assert not any(p.exists() for p in tmp_dirs)
+    # The PARTIAL staging dir was swept by ``cleanup_tmp()`` (no ``force=True``).
+    assert not tmp_dir.exists()
+    assert [p for p in siblings if ".tmp." in p.name] == []
 
 
 class _LegacyPicklePlaceholder:
