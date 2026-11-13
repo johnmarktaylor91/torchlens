@@ -360,7 +360,7 @@ class TFBackend:
         # restore, wedging later admissions. Concurrent capture now refuses
         # typed, matching the torch-vs-torch contract.
         hooks = {"save_rng": save_rng_states, "backward_ready": backward_ready}
-        with _state.publish_active_trace(trace), forward_hooks(session, **hooks):
+        with _state.publish_active_trace(trace), forward_hooks(session, **hooks) as hook_state:
             result = run_wired_session(tf, session, wiring)
         if save_predicate is not None and session.save_predicate_match_count == 0:
             # TF gates retention per-op (the shared post-finalization resolver
@@ -383,7 +383,7 @@ class TFBackend:
         _mark_outputs(trace, result.output, session.producer_by_ref)
         _reject_collapsed_graph_capture(result.op_type_counts)
         materialize_from_events(trace, trace.capture_events)
-        after_forward(trace, session, backward_ready=backward_ready)
+        after_forward(trace, session, hook_state, backward_ready=backward_ready)
         delattr(trace, "capture_events")
         self._attach_param_logs(trace, module_tree)
         self._finish_trace(

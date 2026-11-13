@@ -1,10 +1,10 @@
 """Optional capture hooks the TensorFlow eager path calls around its forward.
 
-Each hook belongs to another private package (random-state capture in
+Each hook belongs to another private module (random-state capture in
 ``backends/_rng_capture``, native backward capture in
-``backends/_backward_native``). The capture path calls the hook only when its
-module is importable and the matching capture option is on, so a plain capture
-runs exactly as before.
+``backends/_backward_native``, variable-read verification in
+``tf/_variable_reads``). The capture path calls a hook only when its module is
+importable and, for the first two, when the matching capture option is on.
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ from typing import Any
 
 _RNG_PACKAGE = "torchlens.backends._rng_capture"
 _BACKWARD_MODULE = "torchlens.backends._backward_native.tf"
+_VARIABLE_READS_MODULE = "torchlens.backends.tf._variable_reads"
 
 
 def _optional_module(name: str) -> ModuleType | None:
@@ -45,7 +46,9 @@ def _rng_hooks() -> ModuleType | None:
 
 
 @contextmanager
-def forward_hooks(session: Any, *, save_rng: bool, backward_ready: bool) -> Iterator[None]:
+def forward_hooks(
+    session: Any, *, save_rng: bool, backward_ready: bool
+) -> Iterator[dict[str, Any]]:
     """Run the eager forward inside the random-state and backward scopes it asked for.
 
     Parameters
@@ -57,8 +60,14 @@ def forward_hooks(session: Any, *, save_rng: bool, backward_ready: bool) -> Iter
     backward_ready
         Whether a persistent tape is held for later backward passes
         (``backward_ready_scope``).
+
+    Yields
+    ------
+    dict[str, Any]
+        What the scopes leave for :func:`after_forward`.
     """
 
+    state: dict[str, Any] = {}
     with ExitStack() as stack:
         rng = _rng_hooks() if save_rng else None
         if rng is not None:
@@ -66,12 +75,19 @@ def forward_hooks(session: Any, *, save_rng: bool, backward_ready: bool) -> Iter
         backward = _optional_module(_BACKWARD_MODULE) if backward_ready else None
         if backward is not None:
             stack.enter_context(backward.backward_ready_scope(session))
-        yield
+        reads = _optional_module(_VARIABLE_READS_MODULE)
+        if reads is not None:
+            scope = reads.variable_read_scope(session.tf, session.module_tree)
+            state["variable_reads"] = (reads, stack.enter_context(scope))
+        yield state
 
 
-def after_forward(trace: Any, session: Any, *, backward_ready: bool) -> None:
-    """Keep what later backward passes need, while the capture stream is still live."""
+def after_forward(trace: Any, session: Any, state: dict[str, Any], *, backward_ready: bool) -> None:
+    """Keep what validation and later backward passes need, while the stream is still live."""
 
+    if "variable_reads" in state:
+        reads, ledger = state["variable_reads"]
+        reads.attach_variable_reads(trace, ledger)
     if not backward_ready:
         return
     backward = _optional_module(_BACKWARD_MODULE)
