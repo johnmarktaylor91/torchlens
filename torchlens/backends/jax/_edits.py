@@ -461,14 +461,3 @@ def replay_with_edits(capture: Any, op: Any, replayed: Any) -> tuple[Any, Any]:
     for applier in appliers:
         edited = applier.apply(edited)
     return (edited, *tuple(replayed)[1:]), replayed
-
-
-__all__ = [
-    "JaxEditApplier",
-    "JaxEditRuntime",
-    "JaxEditedEquationCapture",
-    "JaxEquationSession",
-    "append_session_event",
-    "open_equation_session",
-    "replay_with_edits",
-]

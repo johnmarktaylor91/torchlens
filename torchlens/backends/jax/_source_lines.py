@@ -161,6 +161,3 @@ class EquationFrames:
                 frame.file_name, self.num_context_lines, self._fingerprints
             )
         return loc
-
-
-__all__ = ["EquationFrames"]
