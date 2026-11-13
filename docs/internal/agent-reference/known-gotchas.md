@@ -90,6 +90,13 @@
   when the disk falls behind, a failed write raises typed `ArtifactError` + PARTIAL, finalize
   drains before publish, and bundles are byte-identical to sync. `async_writes=False` opts out;
   `tl.record` streaming stays synchronous and refuses an explicit `True`.
+- A failed or killed save leaves `<name>.tmp.<hex>` beside the path (`PARTIAL` plus `REASON.txt`
+  after a failed overwrite, unmarked after a kill). `tl.load` then refuses `newer_save_unfinished`
+  while that folder is at least as new as the copy on disk (directory mtimes; a rename keeps the
+  mtime), because the copy on disk is the older one. `tl.io.cleanup_tmp(path)` accepts the older
+  copy (`force=True` for an unmarked folder). Every saver (`Trace.save`, `Bundle.save`,
+  `save_intervention`, `Recipe.save`, merged, `to_disk`) stages under that name; tests that
+  fail an overwrite and then load must clean up first.
 - A streamed (`to_disk`) trace does not run: every `trace.run(...)` door refuses
   `trace_option_unsupported`, because a run would re-capture every payload into RAM while the
   bundle on disk kept the first capture. Capture again with `to_disk` to a new path, or without

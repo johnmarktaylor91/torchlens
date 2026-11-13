@@ -20,6 +20,7 @@ import glob
 import shutil
 import warnings
 from pathlib import Path
+from typing import NoReturn
 
 from ..errors._base import TorchLensWarning
 from .format_errors import ArtifactError
@@ -130,8 +131,8 @@ def _read_reason(staging: Path) -> str | None:
     return text or None
 
 
-def _newer_save_error(target: Path, newer: list[Path]) -> ArtifactError:
-    """Build the ``newer_save_unfinished`` refusal for the newest staging folder in ``newer``."""
+def _refuse_newer_save(target: Path, newer: list[Path]) -> NoReturn:
+    """Raise the ``newer_save_unfinished`` refusal for the newest staging folder in ``newer``."""
 
     staging = newer[-1]
     partial = (staging / PARTIAL_SENTINEL).exists()
@@ -149,7 +150,7 @@ def _newer_save_error(target: Path, newer: list[Path]) -> ArtifactError:
         else "it is not marked PARTIAL, so tl.io.cleanup_tmp(path, force=True) is needed "
         "(first make sure no save to this path is still running)"
     )
-    return ArtifactError(
+    raise ArtifactError(
         f"A newer save to this path failed or is still running; the file on disk is the "
         f"older copy. Staging folder {staging} is {state}{detail}{others}. "
         f"{_ACCEPT_OLDER}: {cleanup}.",
@@ -202,12 +203,16 @@ def refuse_stale_load(target: Path, *, member: bool = False) -> None:
     newer = [staging for mtime, staging in found if mtime >= installed_ns]
     older = [staging for mtime, staging in found if mtime < installed_ns]
     if newer:
-        raise _newer_save_error(target, newer)
+        _refuse_newer_save(target, newer)
     if older:
         warnings.warn(
-            f"Leftover staging folder {older[-1]} beside {target} is older than the copy "
-            "being loaded (an earlier save failed before a later one succeeded); run "
-            "tl.io.cleanup_tmp(path) to remove it.",
-            TorchLensWarning,
+            TorchLensWarning(
+                f"Leftover staging folder {older[-1]} beside {target} is older than the copy "
+                "being loaded (an earlier save failed before a later one succeeded). "
+                "Remedy: run tl.io.cleanup_tmp(path) to remove it",
+                code="older_staging_leftover",
+                path=str(target),
+                staging=str(older[-1]),
+            ),
             stacklevel=3,
         )

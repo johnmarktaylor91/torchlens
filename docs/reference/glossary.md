@@ -2067,6 +2067,14 @@ that is not on the site.
   (`load_path_symlink_rejected` at load); a symlinked parent directory passes on both sides.
   Save and load use the same rule, and `storage=tl.to_disk(...)` and `save_intervention`
   apply it to their own targets.
+- Failed or unfinished saves: every save stages into `<name>.tmp.<hex>` beside the path and
+  renames it into place. A failed overwrite puts the previous copy back and leaves that
+  staging folder marked `PARTIAL`, with a `REASON.txt`; a killed save leaves it unmarked.
+  While such a folder is at least as new as the copy on disk, `tl.load` raises
+  `newer_save_unfinished` instead of serving the older copy as current. Re-save, or run
+  `tl.io.cleanup_tmp(path)` to accept the older copy (`force=True` for an unmarked folder).
+  A leftover folder older than the copy only warns. A failed first save leaves nothing at
+  the path, and loading it fails as for any missing path.
 - Values with no typed encoding: written as text and counted in the manifest's
   `disclosures`. They load back as `tl.types.UnencodableValue`, a frozen stand-in carrying
   `type_name` (the original type's dotted name), `repr_text` (its `repr`, cut at 256

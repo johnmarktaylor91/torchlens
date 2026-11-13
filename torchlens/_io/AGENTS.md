@@ -9,6 +9,10 @@ hostile input, and every load path here is fail-closed.
   allowlist while preserving the locked `_RENAMED_PICKLE_GLOBALS` class/module remap; each
   remapped target is still gated through the allowlist.
 - `cleanup_tmp()` removes stale partial-save temp directories.
+- `_staging.refuse_stale_load()` runs at the top of `load()` (top-level path only): a sibling
+  `<name>.tmp.*` staging folder at least as new as the target refuses `newer_save_unfinished`.
+  `_staging.settle_failed_staging()` is how the non-bundle savers keep a failed overwrite's
+  staging folder PARTIAL; `sibling_staging_dirs()` is the one escaped, symlink-refusing glob.
 - `_root_manifest.load_by_root_manifest()` routes merged, fastlog and extraction directories by
   their root manifest before `load()` parses a trace manifest. Merged, fastlog and current-format
   manifests first pass the release floor (`raise_if_saved_by_older_major`: a `torchlens_version`

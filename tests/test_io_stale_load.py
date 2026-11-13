@@ -147,7 +147,10 @@ def test_earlier_failure_then_successful_save_warns(
 
     with pytest.warns(TorchLensWarning, match="cleanup_tmp") as record:
         loaded = tl.load(path)
-    assert len([w for w in record if "Leftover staging folder" in str(w.message)]) == 1
+    leftovers = [w.message for w in record if "Leftover staging folder" in str(w.message)]
+    assert len(leftovers) == 1
+    assert leftovers[0].fields["code"] == "older_staging_leftover"
+    assert leftovers[0].fields["remedy"].startswith("run tl.io.cleanup_tmp(path)")
     assert torch.equal(_out(loaded), _out(newest))
 
 
