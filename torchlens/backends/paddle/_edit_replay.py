@@ -31,9 +31,8 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from ...intervention._grad_site_neutral import GradSiteCall, armed_grad_sites
 from ._edit_helpers import _replace_leaves
-from ._grad_sites import armed_hooks_by_call
+from ._grad_sites import armed_hooks_by_call, grad_site_call, grad_site_neutral
 from .wrappers import paddle_tap_observer
 
 EditHooks = tuple[tuple[tuple[Any, ...], Callable[[Any], Any]], ...]
@@ -83,7 +82,7 @@ def edit_replay_plan(trace: Any) -> EditReplayPlan:
         The recorded plan; plain when the capture had no runtime.
     """
 
-    grad_hooks = armed_hooks_by_call(trace) if armed_grad_sites(trace) else {}
+    grad_hooks = armed_hooks_by_call(trace) if grad_site_neutral().armed_grad_sites(trace) else {}
     runtime = getattr(trace, "_paddle_intervention_runtime", None)
     if runtime is None:
         return EditReplayPlan(grad_hooks=grad_hooks)
@@ -202,7 +201,7 @@ class PaddleEditReplayTap:
             key = (id(edit), label)
             call_index = self._grad_calls.get(key, 0)
             self._grad_calls[key] = call_index + 1
-            return edit.apply(grad, GradSiteCall(label, 0, call_index, 1))
+            return edit.apply(grad, grad_site_call(label, call_index))
 
         return _hook
 
@@ -225,8 +224,7 @@ def run_derived_grad_forward(
     trace: Any,
     observer: Any | None,
     model: Callable[..., Any],
-    args: Sequence[Any],
-    kwargs: Mapping[Any, Any],
+    call: tuple[Sequence[Any], Mapping[Any, Any]],
 ) -> Any:
     """Run the derived-gradient forward over the program the capture executed.
 
@@ -245,10 +243,8 @@ def run_derived_grad_forward(
         Intermediate-gradient tap observer, or ``None``.
     model
         Prepared Paddle callable.
-    args
-        Positional model inputs.
-    kwargs
-        Keyword model inputs.
+    call
+        ``(args, kwargs)``: the positional and keyword model inputs.
 
     Returns
     -------
@@ -256,6 +252,7 @@ def run_derived_grad_forward(
         Raw output of the replayed program.
     """
 
+    args, kwargs = call
     plan = edit_replay_plan(trace)
     if plan.is_plain and getattr(trace, "_paddle_intervention_runtime", None) is None:
         if observer is None:

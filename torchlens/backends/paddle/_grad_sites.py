@@ -23,7 +23,8 @@ This module imports without Paddle installed.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import replace
 from typing import Any
 
 from ..._data_classes.derived_grad import (
@@ -32,13 +33,28 @@ from ..._data_classes.derived_grad import (
 )
 from ..._ir.refs import DtypeRef
 from ..._utils._record_group_table import record_member
-from ...intervention._grad_site_neutral import (
-    armed_grad_sites,
-    run_armed_grad_sites,
-)
 from .._protocols.paddle import PADDLE_REFUSAL_BACKWARD
 from .._replay_adapters import get_adapter
+from .._reverse_engine import ReplayGraph, graph_from_recipes
 from ..registry import BackendUnsupportedError
+
+
+def grad_site_neutral() -> Any:
+    """The backend-neutral gradient-site module (imported on first use).
+
+    The Paddle modules reach it only through this function, so the backend
+    tier keeps no eager import of the intervention tier.
+    """
+
+    from ...intervention import _grad_site_neutral  # deferred: L4 module, tl.grad clauses only
+
+    return _grad_site_neutral
+
+
+def grad_site_call(label: str, call_index: int) -> Any:
+    """The call context an armed edit receives at ``label`` in the first backward pass."""
+
+    return grad_site_neutral().GradSiteCall(label, 0, call_index, 1)
 
 
 def _backward_refusal(message: str) -> BackendUnsupportedError:
@@ -63,7 +79,7 @@ def armed_hooks_by_call(trace: Any) -> dict[int, tuple[tuple[tuple[Any, ...], An
 
     ops = {getattr(op, "_label_raw", None): op for op in getattr(trace, "_layer_list", ())}
     hooks: dict[int, tuple[tuple[tuple[Any, ...], Any, str], ...]] = {}
-    for edit in armed_grad_sites(trace):
+    for edit in grad_site_neutral().armed_grad_sites(trace):
         op = ops.get(edit.label)
         call_id = None if op is None else record_member(op, "func_call_id", None)
         if call_id is None:
@@ -182,6 +198,30 @@ def _engine_record(op: Any, grad: Any, grad_options: Any) -> IntermediateDerived
     )
 
 
+def _engine_graph(
+    trace: Any, adapter: Any, ops: Sequence[Any], value: Callable[[str], Any]
+) -> ReplayGraph:
+    """The reverse-engine graph over ``ops``, keyed by raw labels throughout.
+
+    ``graph_from_recipes`` names an op without a recipe (an op the adapter
+    cannot replay) by its final label, while recipes name parents by raw label;
+    a gradient reaching such an op would then miss it and be dropped instead of
+    refused. Each blocked node is renamed to its raw label here, so the engine
+    refuses it by name. Records repeating a multi-output op keep one node.
+    """
+
+    nodes = []
+    seen: set[tuple[str, ...]] = set()
+    for node in graph_from_recipes(trace, adapter, ops, value).nodes:
+        raw = getattr(node.op, "_label_raw", None)
+        if node.blocked is not None and isinstance(raw, str):
+            node = replace(node, outputs=(raw,))
+        if node.outputs not in seen:
+            seen.add(node.outputs)
+            nodes.append(node)
+    return ReplayGraph(nodes=tuple(nodes), value=value)
+
+
 def _engine_pass(backend: Any, trace: Any, replay_output: Any, loss_fn: Any) -> Any:
     """The armed pass recomputed by the reverse engine from the captured values."""
 
@@ -192,13 +232,14 @@ def _engine_pass(backend: Any, trace: Any, replay_output: Any, loss_fn: Any) -> 
         )
     runtime = getattr(trace, "_paddle_intervention_runtime", None)
     seed_label = _seed_label(trace, None if runtime is None else runtime.halt_call_id)
-    return run_armed_grad_sites(
-        trace,
-        "paddle",
-        _engine_ops(trace),
-        lambda label: _saved_value(trace, label),
-        {seed_label: _loss_cotangent(backend, replay_output, loss_fn)},
+    neutral = grad_site_neutral()
+    adapter = get_adapter("paddle")
+    graph = _engine_graph(
+        trace, adapter, _engine_ops(trace), lambda label: _saved_value(trace, label)
     )
+    seeds = {seed_label: _loss_cotangent(backend, replay_output, loss_fn)}
+    backward = neutral.GradSitePass(seeds, neutral.armed_grad_sites(trace), 1)
+    return neutral.edited_gradients(trace, adapter, graph, backward)
 
 
 def _saved_value(trace: Any, label: str) -> Any:
@@ -218,8 +259,7 @@ def paddle_grad_site_records(
     trace: Any,
     replay_output: Any,
     grad_options: Any,
-    leaves: Sequence[Any],
-    leaf_grads: Sequence[Any],
+    leaf_results: tuple[Sequence[Any], Sequence[Any]],
 ) -> IntermediateDerivedGradAccessor | None:
     """Recompute an armed pass with the reverse engine, check it, return intermediate records.
 
@@ -233,9 +273,9 @@ def paddle_grad_site_records(
         Raw output (or halted frontier) of the derived-gradient replay.
     grad_options
         Paddle ``GradOptions``.
-    leaves, leaf_grads
-        The differentiated leaves (inputs first) and their ``paddle.grad``
-        results, edited through the replay hooks.
+    leaf_results
+        ``(leaves, grads)``: the differentiated leaves (inputs first) and their
+        ``paddle.grad`` results, edited through the replay hooks.
 
     Returns
     -------
@@ -244,8 +284,9 @@ def paddle_grad_site_records(
         edited intermediate gradients by op label (empty unless requested).
     """
 
-    if not armed_grad_sites(trace):
+    if not grad_site_neutral().armed_grad_sites(trace):
         return None
+    leaves, leaf_grads = leaf_results
     result = _engine_pass(backend, trace, replay_output, grad_options.loss_fn)
     _check_input_leaves(get_adapter("paddle"), trace, result.grads, leaves, leaf_grads)
     if not grad_options.intermediate_grads:
@@ -261,5 +302,7 @@ def paddle_grad_site_records(
 
 __all__ = (
     "armed_hooks_by_call",
+    "grad_site_call",
+    "grad_site_neutral",
     "paddle_grad_site_records",
 )

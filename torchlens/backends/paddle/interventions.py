@@ -17,7 +17,7 @@ import time
 import warnings
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ... import _state
 from ..._capture._stop_after_policy import settle_unfired_stop_after
@@ -29,17 +29,9 @@ from ..._ir.selector_eval import (
     module_union_addresses,
     selector_contains_kind,
 )
-from ..._selection.resolver import _normalize_query, resolve_site_plan
 from ..._selection.selectors import BaseSelector
-from ...intervention._grad_site_neutral import (
-    GradSiteCall,
-    arm_grad_sites,
-    build_grad_site_edits,
-)
 from ...intervention._predicates import as_intervention_decision
-from ...intervention._spec import Recipe, Rule
 from ...intervention._types import Edit, FireRecord, InterventionDecision, TargetSpec
-from ...intervention.hooks import _target_operands, split_site_branches
 from ...recording._exceptions import PredicateError
 from .._protocols.paddle import (
     PADDLE_REFUSAL_BACKWARD,
@@ -48,6 +40,10 @@ from .._protocols.paddle import (
 )
 from ..registry import BackendUnsupportedError
 from ._edit_helpers import _replace_leaves, resolve_paddle_helper
+from ._grad_sites import grad_site_neutral
+
+if TYPE_CHECKING:
+    from ...intervention._grad_site_neutral import GradSiteCall
 
 _PADDLE_SUPPORTED_HELPER_NAMES = (
     "add",
@@ -535,16 +531,24 @@ def _backward_refusal(message: str) -> BackendUnsupportedError:
     return BackendUnsupportedError(message, code=PADDLE_REFUSAL_BACKWARD)
 
 
+def _intervention_hooks() -> Any:
+    """The site-branch helpers of ``torchlens.intervention.hooks`` (imported on first use)."""
+
+    from ...intervention import hooks  # deferred: L4 vocabulary, used only with tl.grad clauses
+
+    return hooks
+
+
 def _split_rule(rule: Any) -> tuple[list[Any], list[GradRule]]:
     """Split one rule into its live activation rule (if any) and its gradient clauses."""
 
     live: list[Any] = []
     grads: list[GradRule] = []
-    for universe, branch in split_site_branches(rule.target):
+    for universe, branch in _intervention_hooks().split_site_branches(rule.target):
         if universe == "gradient":
             grads.append((branch, rule.edit))
         elif universe == "activation":
-            live.append(rule if branch is rule.target else Rule(branch, rule.edit))
+            live.append(rule if branch is rule.target else replace(rule, target=branch))
         else:
             raise _backward_refusal(
                 f"the paddle backend cannot arm {branch!r}: autograd-node selectors "
@@ -583,7 +587,7 @@ def _split_gradient_rules(intervene: Any) -> tuple[Any, tuple[GradRule, ...]]:
         return intervene, ()
     if not live:
         return None, tuple(grads)
-    return Recipe(rules=tuple(live)), tuple(grads)
+    return replace(intervene, rules=tuple(live)), tuple(grads)
 
 
 def _gradient_edit_function(edit: Any, paddle: Any) -> Callable[[Any], Any]:
@@ -650,8 +654,8 @@ def _resolve_raw_labels(trace: Any, selector: Any) -> tuple[str, ...]:
         Raw (capture-identity) labels in trace order, without repeats.
     """
 
-    plan = resolve_site_plan(trace, _normalize_query(selector), strict=False, require_match=False)
-    labels = (getattr(site, "_label_raw", None) for branch in plan for site in branch.sites)
+    sites = trace._resolve_sites(selector, strict=False, max_fanout=len(trace._layer_list) + 1)
+    labels = (getattr(site, "_label_raw", None) for site in sites)
     return tuple(dict.fromkeys(label for label in labels if isinstance(label, str)))
 
 
@@ -668,6 +672,7 @@ def _arm_paddle_grad_sites(trace: Any, grad_rules: Sequence[GradRule], paddle: A
         Imported ``paddle`` module.
     """
 
+    neutral = grad_site_neutral()
     for site, edit in grad_rules:
         function = _gradient_edit_function(edit, paddle)
 
@@ -677,11 +682,11 @@ def _arm_paddle_grad_sites(trace: Any, grad_rules: Sequence[GradRule], paddle: A
             del call
             return function(grad)
 
-        edits = build_grad_site_edits(
+        edits = neutral.build_grad_site_edits(
             site,
             _apply,
             lambda inner: _resolve_raw_labels(trace, inner),
-            operands=_target_operands,
+            operands=_intervention_hooks()._target_operands,
             name=_edit_name(edit),
         )
-        arm_grad_sites(trace, edits)
+        neutral.arm_grad_sites(trace, edits)

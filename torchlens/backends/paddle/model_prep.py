@@ -251,8 +251,6 @@ def _make_pre_hook(tree: PaddleModuleTree, address: str) -> Any:
         call_index = tree.call_counts.get(address, 0) + 1
         tree.call_counts[address] = call_index
         tree.forward_args_by_call[(address, call_index)] = (tuple(args), dict(kwargs))
-        from ... import _state
-
         trace = _state._active_trace
         if trace is not None and hasattr(trace, "_paddle_module_stack"):
             metadata = tree.metadata[address]
