@@ -36,7 +36,7 @@ print(status.state)
 
 | Capability | Status | Note |
 |---|---|---|
-| backward_capture | unsupported | True backward graphs are deferred. |
+| backward_capture | supported | `trace.backward(loss_fn)` records one backward pass per call from JAX's own derivative rules; custom-VJP calls and whole control-flow regions refuse. |
 | has_validation_replay | supported | Replay distinguishes verified operations and partial regions. |
 | fastlog | unsupported | Sparse recording is not declared. |
 | can_intervene | unsupported | The registry does not declare it yet, so `intervene=` refuses at `trace()`; the backend's capture-time edits are described under Edits. |
