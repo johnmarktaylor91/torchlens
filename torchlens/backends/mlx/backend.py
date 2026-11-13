@@ -47,6 +47,7 @@ from ..._output_slot import returned, stopped
 from ..._postprocess._materialize import materialize_from_events
 from ..._postprocess._selective_save import apply_save_keep_set
 from ..._quantities import Duration
+from ..._selection.errors import LiveModeLabelError
 from ..._trace_core.relation_views import freeze_trace_relation_views
 from ..._validation_status import ValidationStatus  # noqa: TC001
 from ...backends.registry import (
@@ -388,12 +389,25 @@ def _stamp_param_logs(trace: Trace, module_tree: MLXModuleTree | None) -> None:
         trace._provenance_param_source = "none"
 
 
+def _live_save_match(selector: Any, ctx: RecordContext) -> bool:
+    """Live ``save=`` match; a finalized label cannot match before labels exist.
+
+    Such a selector answers "not now": the op becomes a witness and the final
+    keep set restores its payload from the spill when the trace is settled.
+    """
+
+    try:
+        return selector_matches_capture_context(selector, ctx)
+    except LiveModeLabelError:
+        return False
+
+
 #: The capture-stack callables MLX retention runs use (``_retention`` imports none).
 _RETENTION_DEPS = RetentionDeps(
     undecidable=lambda selector: (
         first_selector_kind_outside(selector, allowed=LIVE_DECIDABLE_KINDS) is not None
     ),
-    live_match=selector_matches_capture_context,
+    live_match=_live_save_match,
     apply_keep_set=partial(apply_save_keep_set, backend_name="MLX"),
 )
 

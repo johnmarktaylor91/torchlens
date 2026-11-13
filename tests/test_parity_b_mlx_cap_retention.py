@@ -13,7 +13,6 @@ import os
 import sys
 from typing import Any
 
-import numpy as np
 import pytest
 
 if sys.platform != "darwin" and os.environ.get("TORCHLENS_RUN_UNSTABLE_MLX_TESTS") != "1":
@@ -32,12 +31,14 @@ from torchlens._capture.structure_only import (  # noqa: E402
     StructureOnlyCapabilityError,
     require_structure_only_capability,
 )
+from torchlens._postprocess._selective_save import apply_static_label_save_policy  # noqa: E402
 from torchlens.backends.mlx._retention import (  # noqa: E402
     RetentionRequest,
     SpillStore,
     retention_scope,
 )
 from torchlens.backends.mlx.backend import MLXBackend  # noqa: E402
+from torchlens.errors import TorchLensWarning  # noqa: E402
 
 pytestmark = [pytest.mark.rare, pytest.mark.backend_mlx]
 
@@ -71,6 +72,14 @@ class NoisyMLP(nn.Module):
         return self.l2(hidden)
 
 
+def _full(model: Any, x: mx.array, selector: Any) -> Any:
+    """Full capture filtered after the fact: the reference the sparse path must equal."""
+
+    trace = MLXBackend().capture_trace(model, x)
+    apply_static_label_save_policy(trace, selector, backend_name="MLX")
+    return trace
+
+
 def _sparse(model: Any, x: mx.array, selector: Any, chunk_bytes: int = 1) -> Any:
     """Capture under a retention request (what the dispatch hunk does)."""
 
@@ -101,7 +110,8 @@ def _assert_same_public_surface(sparse: Any, full: Any) -> None:
             assert sparse_op.out is None, sparse_op.label
         else:
             assert sparse_op.out is not None, sparse_op.label
-            assert np.array_equal(np.array(sparse_op.out), np.array(full_op.out)), sparse_op.label
+            assert sparse_op.out.dtype == full_op.out.dtype, sparse_op.label
+            assert bool(mx.array_equal(sparse_op.out, full_op.out, equal_nan=True)), sparse_op.label
     assert sparse._num_saved_ops == full._num_saved_ops
 
 
@@ -120,7 +130,7 @@ def test_sparse_equals_full_on_selected_ops_and_validates(selector: Any) -> None
 
     model = ResidualMLP()
     x = mx.random.normal((3, 16))
-    full = tl.trace(model, x, save=selector, backend="mlx")
+    full = _full(model, x, selector)
     sparse = _sparse(model, x, selector)
 
     _assert_same_public_surface(sparse, full)
@@ -170,10 +180,14 @@ def test_random_forward_gives_identical_values() -> None:
 
     model = NoisyMLP()
     x = mx.random.normal((2, 8))
+    # Random draws inside a forward are not wrapped ops today; the capture says so.
+    unwrapped = "not produced by a wrapped operation"
     mx.random.seed(7)
-    full = tl.trace(model, x, save=tl.func("linear"), backend="mlx")
+    with pytest.warns(TorchLensWarning, match=unwrapped):
+        full = _full(model, x, tl.func("linear"))
     mx.random.seed(7)
-    sparse = _sparse(model, x, tl.func("linear"))
+    with pytest.warns(TorchLensWarning, match=unwrapped):
+        sparse = _sparse(model, x, tl.func("linear"))
 
     _assert_same_public_surface(sparse, full)
     assert _status_key(MLXBackend().validate_trace(sparse)) == _status_key(
@@ -187,7 +201,7 @@ def test_bfloat16_witnesses_spill() -> None:
     model = ResidualMLP()
     model.set_dtype(mx.bfloat16)
     x = mx.random.normal((3, 16)).astype(mx.bfloat16)
-    full = tl.trace(model, x, save=tl.func("relu"), backend="mlx")
+    full = _full(model, x, tl.func("relu"))
     sparse = _sparse(model, x, tl.func("relu"), chunk_bytes=64)
 
     _assert_same_public_surface(sparse, full)
