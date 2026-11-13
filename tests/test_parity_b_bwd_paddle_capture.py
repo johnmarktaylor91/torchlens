@@ -102,12 +102,27 @@ def _raw(trace: Any) -> dict[str, str]:
     }
 
 
+def _one_op_per_call(trace: Any, raw: dict[str, str]) -> list[Any]:
+    """Non-input ops, one per call: a multi-output call's recipe already names every slot."""
+
+    kept: list[Any] = []
+    seen: set[str] = set()
+    for op in trace._layer_list:
+        if op.is_input or raw[op.layer_label] in seen:
+            continue
+        recipe = adapter.recipe(trace, op)
+        seen.update(recipe.output_slots if recipe is not None else (raw[op.layer_label],))
+        kept.append(op)
+    return kept
+
+
 def _validate(trace: Any, pass_number: int, leaves: dict[str, Any]) -> Any:
     """Run the shared backward validator on one recorded pass.
 
     The validator's graph comes from the adapter's recipes, which name ops by
     raw label; the trace's records name them by final label. Only the keys are
-    translated here; every comparison is the validator's own.
+    translated here, and a multi-output call enters the graph once; every
+    comparison is the validator's own.
     """
 
     raw = _raw(trace)
@@ -116,9 +131,8 @@ def _validate(trace: Any, pass_number: int, leaves: dict[str, Any]) -> Any:
         calls={raw[label]: call for label, call in recorded.calls.items()},
         grads={raw[label]: grad for label, grad in recorded.grads.items()},
     )
-    ops = [op for op in trace._layer_list if not op.is_input]
     values = {raw[op.layer_label]: op.out for op in trace._layer_list}
-    graph = graph_from_recipes(trace, adapter, ops, values.__getitem__)
+    graph = graph_from_recipes(trace, adapter, _one_op_per_call(trace, raw), values.__getitem__)
     inputs = {
         raw[op.layer_label]: grad
         for op in trace._layer_list
