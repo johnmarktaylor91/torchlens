@@ -137,7 +137,7 @@ def _rectifier(trace: Any) -> Any:
 
     ops = list(trace._layer_list)
     order = {op.label: n for n, op in enumerate(ops)}
-    final = [op for op in ops if getattr(op, "is_output", False)][-1]
+    final = ([op for op in ops if getattr(op, "is_output", False)] or ops)[-1]
     while getattr(final, "is_output", False) and len(tuple(final.parents)) == 1:
         final = trace._layer_dict_all_keys[tuple(final.parents)[0]]
     return trace._layer_dict_all_keys[max(final.parents, key=order.__getitem__)]
