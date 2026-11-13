@@ -108,6 +108,8 @@ def _variable_handle(variable: Any) -> Any:
     """The resource handle of a ``tf.Variable`` or a Keras 3 variable, else ``None``."""
 
     for holder in (variable, getattr(variable, "_value", None)):
+        if holder is None:
+            continue
         try:
             handle = holder.handle
         except (AttributeError, ValueError, TypeError):
@@ -351,11 +353,11 @@ def _snapshot_from_record(record: Any) -> VariableSnapshot | None:
     if not isinstance(record, Mapping):
         return None
     address, dtype, shape, digest = (record.get(k) for k in ("address", "dtype", "shape", "digest"))
-    text_fields_ok = all(isinstance(value, str) for value in (address, dtype, digest))
-    shape_ok = isinstance(shape, list | tuple) and all(
-        isinstance(dim, int) and not isinstance(dim, bool) for dim in shape
-    )
-    if not (text_fields_ok and shape_ok):
+    if not (isinstance(address, str) and isinstance(dtype, str) and isinstance(digest, str)):
+        return None
+    if not isinstance(shape, list | tuple):
+        return None
+    if not all(isinstance(dim, int) and not isinstance(dim, bool) for dim in shape):
         return None
     return VariableSnapshot(address=address, dtype=dtype, shape=tuple(shape), digest=digest)
 

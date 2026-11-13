@@ -7,7 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from ..registry import BackendUnsupportedError
+from ._helper_hooks import tf_helper_hook
 
 
 def _selector_kinds(selector: Any) -> frozenset[str]:
@@ -47,34 +47,13 @@ def _selector_kinds(selector: Any) -> frozenset[str]:
 
 
 def _tf_helper_hook(spec: Any, tf: Any) -> Callable[[Any], Any]:
-    """Return the TensorFlow implementation for a curated helper spec.
+    """Return the TensorFlow implementation for a built-in helper spec.
 
-    Parameters
-    ----------
-    spec
-        Portable helper spec built by ``tl.zero_ablate``/``tl.scale``/``tl.add``.
-    tf
-        Imported TensorFlow module.
-
-    Returns
-    -------
-    Callable[[Any], Any]
-        TensorFlow replacement callable.
+    Delegates to :func:`._helper_hooks.tf_helper_hook`, which applies every
+    helper in ``TF_SUPPORTED_HELPER_NAMES`` and refuses the rest typed.
     """
 
-    if spec.name == "zero_ablate":
-        return lambda out: tf.zeros_like(out)
-    if spec.name == "scale":
-        factor = spec.args[0]
-        return lambda out: out * tf.cast(factor, out.dtype)
-    if spec.name == "add":
-        delta = spec.args[0]
-        return lambda out: out + tf.cast(delta, out.dtype)
-    raise BackendUnsupportedError(
-        f"tf backend interventions implement the curated helpers zero_ablate, scale, "
-        f"and add; helper {spec.name!r} has no TensorFlow implementation. Pass "
-        "a callable action for custom replacements."
-    )
+    return tf_helper_hook(spec, tf)
 
 
 def _tf_callable_hook(hook: Callable[..., Any]) -> Callable[[Any], Any]:
