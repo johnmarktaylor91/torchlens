@@ -197,7 +197,9 @@ def _model_payloads(trace: Any, field: str = "out", ops: Any = None) -> list[Any
     for op in trace._layer_list if ops is None else ops:
         if op.is_input or not op.has_saved_activation:
             continue
-        value = getattr(op, field, None)
+        # ``transformed_out`` lives in the payload group; ``Op.transformed_out``
+        # is a removed member, so a defaulted getattr would read None everywhere.
+        value = getattr(op.payload if field == "transformed_out" else op, field)
         if value is not None and _fingerprint(value)[0] in _MODEL_SHAPES:
             payloads.append(value)
     return payloads
