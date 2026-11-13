@@ -147,6 +147,7 @@ def test_record_values_and_keys_equal_trace_on_a_chain(save: Any) -> None:
     else:
         assert any(r.ctx.layer_type == "constant" for r in recording.records)
     assert _PRODUCERS[-1].values_delivered == len(recording.records)
+    assert _PRODUCERS[-1].drains == 1
     assert bool(mx.array_equal(recording.output, _chain(_x())))
 
 
@@ -230,6 +231,23 @@ def test_disk_storage_writes_selected_values(tmp_path: Path) -> None:
     recording = tl.record(_chain, _x(), save=_maximum_ops, storage=storage, backend="mlx")
 
     assert len(recording.records) == 2
+    assert all(r.metadata.get("blob_id") is not None for r in recording.records)
+    _assert_records_match_trace(recording, _trace_payloads(_chain, _x()))
+
+
+def test_held_values_stream_in_bounded_chunks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A one-byte bound delivers each selected value as soon as it is requested."""
+
+    monkeypatch.setattr(
+        _record, "mlx_record_producer", lambda: _record.MLXRecordProducer(chunk_bytes=1)
+    )
+    storage = tl.options.StorageOptions(path=tmp_path / "mlx_stream", retain_in_memory=True)
+    recording = tl.record(_chain, _x(), save=_ops, storage=storage, backend="mlx")
+
+    producer = _PRODUCERS[-1]
+    assert producer.drains == len(recording.records) + 1
     assert all(r.metadata.get("blob_id") is not None for r in recording.records)
     _assert_records_match_trace(recording, _trace_payloads(_chain, _x()))
 

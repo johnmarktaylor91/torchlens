@@ -9,10 +9,13 @@ reservation sequence in the same order (input leaves, then per call its closure
 constants, then its outputs), so every raw label equals the label ``tl.trace``
 gives that op.
 
-MLX computes lazily. The producer holds the arrays the sink requested and, when
-the forward returns or a decision says stop, realizes all of them together with
-the output in one ``mx.eval`` and only then delivers them, so an unselected value
-is never realized for the recording and never copied. When a decision says stop
+MLX computes lazily. The producer holds the arrays the sink requested and
+realizes them together in one ``mx.eval`` before delivering them, so an
+unselected value is never realized for the recording and never copied. Held
+values are bounded: once their bytes reach ``chunk_bytes`` the forward pauses
+while the held chunk is realized and delivered (to RAM, or through the
+``storage=`` disk writer), and the rest are delivered with the output when the
+forward returns or a decision says stop. When a decision says stop
 the wrapper raises out of the forward, so no op after the stop frontier runs.
 
 The scratch ``Trace`` a pass opens only carries the capture-depth, module-stack
@@ -22,6 +25,7 @@ validated, and it keeps no op payloads.
 
 from __future__ import annotations
 
+from collections import deque
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, cast
@@ -34,6 +38,7 @@ from ..._ir.events import ModuleFrame
 from ..._ir.predicate import ModuleStackFrame
 from ..._ir.refs import DeviceRef, DtypeRef, ReservedLabel
 from ..._ir.semantics import CapturePolicy
+from ._retention import DEFAULT_CHUNK_BYTES
 from .backend import MLXBackend
 from .external_arrays import external_array_ids
 from .model_prep import discover_mlx_module_tree
@@ -106,13 +111,21 @@ class MLXRecordProducer:
     backend = "mlx"
     supported_options: frozenset[str] = frozenset()
 
-    def __init__(self) -> None:
-        """Set up the codec and the per-recorder counters tests read."""
+    def __init__(self, chunk_bytes: int = DEFAULT_CHUNK_BYTES) -> None:
+        """Set up the codec, the held-value byte bound and the counters tests read.
+
+        Parameters
+        ----------
+        chunk_bytes
+            Bytes of requested values held before the forward pauses to deliver them.
+        """
 
         self.codec = MLXPayloadCodec()
+        self.chunk_bytes = chunk_bytes
         self.passes = 0
         self.ops_emitted = 0
         self.values_delivered = 0
+        self.drains = 0
 
     def prepare(self, model: Any) -> _Prepared:
         """Return the prepared model (module discovery runs per pass, as in ``tl.trace``)."""
@@ -184,7 +197,8 @@ class _RecordingMLXBackend(MLXBackend):
         super().__init__()
         self._sink = sink
         self._producer = producer
-        self._requested: list[tuple[Any, Any]] = []
+        self._requested: deque[tuple[Any, Any]] = deque()
+        self._requested_bytes = 0
 
     def _capture_policy(self, session: Any) -> CapturePolicy:
         """Keep no payloads on the scratch session (closure constants included)."""
@@ -284,20 +298,32 @@ class _RecordingMLXBackend(MLXBackend):
             decision = self._sink.emit(event)
         if decision.request is not None:
             self._requested.append((decision.request, array))
+            self._requested_bytes += int(getattr(array, "nbytes", 0))
+            if self._requested_bytes >= self._producer.chunk_bytes:
+                self._drain(())
         if decision.stop:
             raise _StopRecording
 
     def deliver_requested(self, output: Any) -> None:
-        """Realize every requested array and the output once, then deliver them."""
+        """Deliver every value still held, realized together with the output."""
 
-        requested, self._requested = self._requested, []
-        values = [array for _request, array in requested]
-        values.extend(self._iter_arrays(output))
-        if values:
-            self.mx.eval(*values)
-        for request, array in requested:
-            self._sink.deliver(request, array)
-            self._producer.values_delivered += 1
+        self._drain(tuple(self._iter_arrays(output)))
+
+    def _drain(self, extra_values: tuple[Any, ...]) -> None:
+        """Realize the held values (and ``extra_values``) once, deliver, and drop them."""
+
+        held = self._requested
+        self._requested, self._requested_bytes = deque(), 0
+        values = [array for _request, array in held]
+        with _state.pause_logging():
+            if values or extra_values:
+                self.mx.eval(*values, *extra_values)
+            del values
+            while held:
+                request, array = held.popleft()
+                self._sink.deliver(request, array)
+                self._producer.values_delivered += 1
+        self._producer.drains += 1
 
 
 def _stack_frames(module_stack: tuple[ModuleFrame, ...]) -> tuple[ModuleStackFrame, ...]:
