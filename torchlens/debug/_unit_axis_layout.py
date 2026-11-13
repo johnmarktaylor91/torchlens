@@ -8,8 +8,8 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, Final
 
 from .._utils._record_group_table import record_member
-from ._common import _op_label
-from ._unit_axis import _MAX_INHERIT_HOPS, _same_shape_parent
+from ._common import _op_from_label, _op_label
+from ._unit_axis import _MAX_INHERIT_HOPS
 
 if TYPE_CHECKING:
     from torchlens._data_classes.op import Op
@@ -195,23 +195,55 @@ def backend_unit_axis(trace: Trace, op: Op, out: Any, memo: dict[str, int]) -> i
         return None
     if ndim == 2:
         return 1
-    shape = tuple(out.shape)
-    chain: list[str] = []
-    current: Op | None = op
-    axis: int | None = None
-    for _ in range(_MAX_INHERIT_HOPS):
-        if current is None:
-            break
-        label = _op_label(current)
-        if label in memo:
-            axis = memo[label]
-            break
-        chain.append(label)
-        spatial, axis = _own_layout_axis(trace, current, ndim)
-        if spatial or not getattr(current, "parents", None):
-            break
-        current = _same_shape_parent(trace, current, shape)
+    return _inherited_axis(trace, op, (tuple(out.shape), ndim), memo, set(), _MAX_INHERIT_HOPS)
+
+
+def _same_shape_parents(trace: Trace, op: Op, shape: tuple[int, ...]) -> list[Op]:
+    """Return every parent op whose output has exactly ``shape``, in parent order."""
+
+    parents = (_op_from_label(trace, str(label)) for label in op.parents or ())
+    return [
+        parent
+        for parent in parents
+        if parent is not None and tuple(getattr(parent, "shape", None) or ()) == shape
+    ]
+
+
+def _inherited_axis(
+    trace: Trace,
+    op: Op,
+    geometry: tuple[tuple[int, ...], int],
+    memo: dict[str, int],
+    unknown: set[str],
+    hops: int,
+) -> int | None:
+    """Return the axis evidenced by ``op`` or by any same-shaped ancestor within ``hops``.
+
+    Every same-shaped parent is searched, not only the first: a framework that
+    lowers an elementwise op (tinygrad's relu is ``cmplt`` + ``where`` over an
+    expanded constant) gives the activation several same-shaped parents, and
+    only one of them may lead back to the layout-fixing op. Ancestors that
+    evidence different axes leave the axis unknown rather than picking one.
+    ``unknown`` caches labels already found without evidence in this call.
+    """
+
+    label = _op_label(op)
+    if label in memo:
+        return memo[label]
+    if label in unknown or hops <= 0:
+        return None
+    shape, ndim = geometry
+    spatial, axis = _own_layout_axis(trace, op, ndim)
+    unknown.add(label)  # in progress: a parent cycle back to this op proves nothing
+    if not spatial:
+        found = {
+            parent_axis
+            for parent in _same_shape_parents(trace, op, shape)
+            if (parent_axis := _inherited_axis(trace, parent, geometry, memo, unknown, hops - 1))
+            is not None
+        }
+        axis = next(iter(found)) if len(found) == 1 else None
     if axis is not None:
-        for label in chain:
-            memo[label] = axis
+        unknown.discard(label)
+        memo[label] = axis
     return axis

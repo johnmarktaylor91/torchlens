@@ -195,6 +195,39 @@ def test_parent_shape_boundary_and_cycle_are_bounded() -> None:
     assert backend_unit_axis(trace, relu, out, {}) is None
 
 
+def test_lowered_relu_inherits_through_any_same_shaped_parent() -> None:
+    """tinygrad's relu (``where(cmplt(zeros, x), x, zeros)``) reaches the conv via a later parent."""
+
+    conv = _op("reshape", "reshape_8_17:3", output_of_modules=["conv"])
+    scalar = _op("reshape", "reshape_1_2:1", shape=(1, 1, 1, 1))
+    zeros = _op("expand", "expand_1_3:1", parents=[scalar.label])
+    mask = _op("cmplt", "cmplt_1_20:1", parents=[zeros.label, conv.label])
+    relu = _op("where", "where_1_21:1", parents=[mask.label, conv.label, zeros.label])
+    trace = _Trace(
+        "tinygrad",
+        {op.label: op for op in (conv, scalar, zeros, mask, relu)},
+        {"conv": SimpleNamespace(class_qualname="tinygrad.nn.Conv2d")},
+    )
+    memo: dict[str, int] = {}
+    out = SimpleNamespace(ndim=4, shape=_SHAPE)
+    assert backend_unit_axis(trace, relu, out, memo) == 1
+    assert memo == {conv.label: 1, mask.label: 1, relu.label: 1}
+    assert backend_unit_axis(trace, zeros, out, {}) is None
+
+
+def test_conflicting_same_shaped_ancestors_leave_the_axis_unknown() -> None:
+    """Two same-shaped parents evidencing different channel axes prove no axis."""
+
+    first = _op("Conv2D", "first:1", annotations={"tf_attrs": {"data_format": "b'NHWC'"}})
+    second = _op("Conv2D", "second:1", annotations={"tf_attrs": {"data_format": "b'NCHW'"}})
+    added = _op("AddV2", "add:1", parents=[first.label, second.label])
+    trace = _Trace("tf", {op.label: op for op in (first, second, added)})
+    out = SimpleNamespace(ndim=4, shape=_SHAPE)
+    assert backend_unit_axis(trace, added, out, {}) is None
+    second.annotations = {"tf_attrs": {"data_format": "b'NHWC'"}}
+    assert backend_unit_axis(trace, added, out, {}) == 3
+
+
 def test_tinygrad_lowered_conv_uses_recorded_module_return() -> None:
     """Lowered UOp names retain a conv axis through recorded module identity."""
 
