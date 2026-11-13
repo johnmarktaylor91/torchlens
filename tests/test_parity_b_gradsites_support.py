@@ -18,6 +18,7 @@ import numpy as np
 from torchlens.backends._replay_adapters import get_adapter
 from torchlens.intervention._grad_site_neutral import (
     GradSiteEdit,
+    GradSitePass,
     GradSiteResult,
     edited_gradients_for_backend,
 )
@@ -67,14 +68,18 @@ def _labels(op: Any) -> tuple[str, ...]:
 def _replay_values(
     trace: Any, adapter: Any, x_value: Any
 ) -> tuple[dict[str, Any], list[Any], tuple[str, ...]]:
-    """Values of every label from the input through ``adapter.forward``; the graph ops."""
+    """Values of every label from the input through ``adapter.forward``; the graph ops.
+
+    The input is the op with no recipe (JAX, TF, Paddle, tinygrad) or an
+    ``"input"`` recipe (MLX); it is left out of the graph ops, so it is a leaf.
+    """
 
     values: dict[str, Any] = {}
     graph_ops: list[Any] = []
     sources: list[tuple[str, ...]] = []
     for op in trace._layer_list:
         recipe = adapter.recipe(trace, op)
-        if recipe is None:
+        if recipe is None or recipe.op_identity == "input":
             sources.append(_labels(op))
             values.update(dict.fromkeys(_labels(op), x_value))
             continue
@@ -116,7 +121,11 @@ def run_neutral(
     loss = adapter.recipe(trace, graph_ops[-1]).output_slots[0]
     armed = [GradSiteEdit(site, lambda grad, call, fn=fn: fn(grad), name) for name, fn in edits]
     result = edited_gradients_for_backend(
-        trace, backend, graph_ops, values.__getitem__, {loss: ones_like(values[loss])}, armed
+        trace,
+        backend,
+        graph_ops,
+        values.__getitem__,
+        GradSitePass({loss: ones_like(values[loss])}, armed),
     )
     input_label = next(label for label in source if label in result.grads)
     return NeutralRun(result=result, site=site, input_label=input_label, adapter=adapter)
