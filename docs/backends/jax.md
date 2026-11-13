@@ -1,6 +1,6 @@
-# JAX backend (preview)
+# JAX backend
 
-The JAX preview captures raw functions through their jaxpr, with parameter records
+The JAX backend captures raw functions through their jaxpr, with parameter records
 derived from explicit pytree leaves. Equinox and Flax NNX module roots also carry
 module attribution. Static-label payload selection, portable array payloads, and
 derived gradients are supported. Transformed roots and unsupported effects refuse;
