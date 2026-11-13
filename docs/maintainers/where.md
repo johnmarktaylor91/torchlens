@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-87 packages, 1776 modules, 710597 lines, 0 modules without a docstring.
+87 packages, 1776 modules, 710610 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -57,7 +57,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 26 | 8308 |
 | `torchlens.backends._backward_native` | Native backward capture, one private module per backend. | 1 | 137 |
 | `torchlens.backends._protocols` | Per-backend ''BackendProtocol'' objects, kept import-light. | 8 | 928 |
-| `torchlens.backends._replay_adapters` | Private per-backend replay adapters (see :mod:'._contract'). | 3 | 920 |
+| `torchlens.backends._replay_adapters` | Private per-backend replay adapters (see :mod:'._contract'). | 3 | 933 |
 | `torchlens.backends.jax` | JAX backend preview exports. | 17 | 9645 |
 | `torchlens.backends.mlx` | Technical-preview MLX backend for TorchLens. | 17 | 6951 |
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6595 |
@@ -1390,12 +1390,12 @@ Per-backend ''BackendProtocol'' objects, kept import-light. (8 modules, 928 line
 
 ### `torchlens.backends._replay_adapters`
 
-Private per-backend replay adapters (see :mod:'._contract'). (3 modules, 920 lines)
+Private per-backend replay adapters (see :mod:'._contract'). (3 modules, 933 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Private per-backend replay adapters (see :mod:'._contract'). | 97 |
-| `_contract` | Replay adapter contract: the function protocol and the data-only op recipe. | 526 |
+| `_contract` | Replay adapter contract: the function protocol and the data-only op recipe. | 539 |
 | `_session` | Replay session: owns values, substitutions, last-use counts and cleanup. | 297 |
 
 ### `torchlens.backends.jax`
