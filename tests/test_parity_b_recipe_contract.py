@@ -89,8 +89,9 @@ def test_fake_adapter_recipes_round_trip_and_rebind() -> None:
         tree = json.loads(json.dumps(ra.encode_recipe(rec)))
         recipes[op.label] = ra.decode_recipe(tree, backend="fake", allowlist=fake.ALLOWLIST)
     fresh = fake.FakeTrace(ops={}, payloads=dict(trace.payloads))
-    fake.bind_recipes(fresh, recipes)
+    fake.bind_recipes(fresh, recipes, param_payloads={"w": np.ones(2)})
     assert fresh.captures == recipes
+    assert set(fresh.param_payloads) == {"w"}
     for op in fresh.ops.values():
         if op.op_identity == "input":
             continue
@@ -294,3 +295,13 @@ def test_lookup_refuses_a_mutable_allowlist(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setitem(sys.modules, module.__name__, module)
     with pytest.raises(ra.ReplayRefusal, match="ALLOWLIST"):
         ra.get_adapter("paddle")
+
+
+def test_protocol_bind_recipes_takes_param_payloads_keyword() -> None:
+    import inspect
+
+    params = inspect.signature(ra.ReplayAdapter.bind_recipes).parameters
+    assert params["param_payloads"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert params["param_payloads"].default is None
+    fake_params = inspect.signature(fake.bind_recipes).parameters
+    assert fake_params["param_payloads"].kind is inspect.Parameter.KEYWORD_ONLY
