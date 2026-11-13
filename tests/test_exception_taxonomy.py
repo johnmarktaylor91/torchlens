@@ -1096,6 +1096,13 @@ _BUILTIN_EXCEPTION_ROOTS = frozenset(
 # current: a stale entry (class deleted or later registered) fails the gate
 # just like a missing one.
 _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
+    # Replay layer (wave B backend parity): one private signal for refused recipes,
+    # replay plans and adapter lookups; callers translate it into their own coded error.
+    "torchlens.backends._replay_adapters._contract.ReplayRefusal": (
+        "private signal from the replay layer (recipe decode, replay plan, adapter "
+        "lookup); callers at load, fork and the reverse engine catch it and raise "
+        "their own contracted error, never escapes"
+    ),
     # Metadata unpickler pre-scan control flow: private signals between the dry run and
     # the load path, never raised to a caller (the load path catches both and either runs
     # the pure-Python machine or refuses with the boundary's UnpicklingError).

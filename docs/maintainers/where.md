@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1769 modules, 708519 lines, 0 modules without a docstring.
+87 packages, 1776 modules, 710610 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -54,14 +54,16 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.attribution` | Input-attribution methods for TorchLens. | 31 | 15152 |
 | `torchlens.attribution._graph` | Attribution graphs: direct linear effects between transcoder features, errors, tokens and logits. | 7 | 2550 |
 | `torchlens.attribution._onebackward` | One-backward attribution reads: one backward pass seeded at gradient edges resolved from existing op fields, returned as a :class:'ReadTa... | 11 | 3881 |
-| `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 24 | 7552 |
+| `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 26 | 8308 |
+| `torchlens.backends._backward_native` | Native backward capture, one private module per backend. | 1 | 137 |
 | `torchlens.backends._protocols` | Per-backend ''BackendProtocol'' objects, kept import-light. | 8 | 928 |
+| `torchlens.backends._replay_adapters` | Private per-backend replay adapters (see :mod:'._contract'). | 3 | 933 |
 | `torchlens.backends.jax` | JAX backend preview exports. | 17 | 9645 |
 | `torchlens.backends.mlx` | Technical-preview MLX backend for TorchLens. | 17 | 6951 |
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6595 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8577 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 11 | 4583 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 138 | 59358 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 138 | 59370 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8876 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2741 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 28 | 9426 |
@@ -94,7 +96,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.trackers` | Experiment-tracker integration: one watch engine produces tensor-free statistics records, and sinks (TensorBoard, Weights & Biases, JSONL... | 15 | 5231 |
 | `torchlens.transformer` | Static transformer pictures: token-labeled attention heatmaps, logit-lens and per-token loss strips, and attention annotated with measure... | 15 | 5407 |
 | `torchlens.transforms` | Built-in activation transforms: one contract, declared not sniffed. | 13 | 6105 |
-| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 87 | 34331 |
+| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 88 | 34584 |
 | `torchlens.viz` | Visualization convenience namespace for TorchLens. | 10 | 2755 |
 
 ## Modules by package
@@ -1332,13 +1334,14 @@ One-backward attribution reads: one backward pass seeded at gradient edges resol
 
 ### `torchlens.backends`
 
-Backend Protocol and public registry exports for TorchLens adapters. (24 modules, 7552 lines)
+Backend Protocol and public registry exports for TorchLens adapters. (26 modules, 8308 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Backend Protocol and public registry exports for TorchLens adapters. | 84 |
 | `_backend_names` | The canonical default-backend name, split out of :mod:'torchlens.backends.registry'. | 20 |
 | `_backend_protocol` | The one backend protocol every TorchLens backend fills, torch included. | 521 |
+| `_backward_neutral` | Backward records built from backend-neutral backward events. | 552 |
 | `_constants` | The shared constants rule every preview backend's finalize step applies. | 589 |
 | `_default_specs` | Default public backend specs registered by TorchLens. | 1291 |
 | `_default_specs_tf` | TensorFlow / Keras runtime probes used by the default backend specs. | 102 |
@@ -1355,11 +1358,20 @@ Backend Protocol and public registry exports for TorchLens adapters. (24 modules
 | `_module_returns` | Recorded module returns: how a preview backend hands module-call outputs to the finalizer. | 234 |
 | `_options` | Shared backend trace-option defaulting and rejection helpers. | 790 |
 | `_protocol` | Backend Protocol for unified TorchLens capture. | 354 |
+| `_reverse_engine` | Reverse gradient engine over a captured graph, through a backend's replay adapter. | 204 |
 | `_root_frames` | The root call's frame in preview op module stacks. | 76 |
 | `_scorecard_rows` | ''backend_scorecard:<name>'' rows for ''tl.report.doctor''. | 206 |
 | `_trace_options` | Per-backend trace-option vocabularies (leaf module: no registry import). | 191 |
 | `_validation_shared` | Backend-neutral helpers shared by the preview backends' validation modules. | 171 |
 | `registry` | Public backend registry for TorchLens capture and validation. | 638 |
+
+### `torchlens.backends._backward_native`
+
+Native backward capture, one private module per backend. (1 modules, 137 lines)
+
+| Module | What it holds | Lines |
+| --- | --- | ---: |
+| `__init__` | Native backward capture, one private module per backend. | 137 |
 
 ### `torchlens.backends._protocols`
 
@@ -1375,6 +1387,16 @@ Per-backend ''BackendProtocol'' objects, kept import-light. (8 modules, 928 line
 | `tf` | TensorFlow preview ''BackendProtocol'' (delegating; eager). | 130 |
 | `tinygrad` | tinygrad preview ''BackendProtocol'' shell (delegating; lazy, realize-once). | 137 |
 | `torch` | Torch's ''BackendProtocol'' object: the reference, by delegation. | 209 |
+
+### `torchlens.backends._replay_adapters`
+
+Private per-backend replay adapters (see :mod:'._contract'). (3 modules, 933 lines)
+
+| Module | What it holds | Lines |
+| --- | --- | ---: |
+| `__init__` | Private per-backend replay adapters (see :mod:'._contract'). | 97 |
+| `_contract` | Replay adapter contract: the function protocol and the data-only op recipe. | 539 |
+| `_session` | Replay session: owns values, substitutions, last-use counts and cleanup. | 297 |
 
 ### `torchlens.backends.jax`
 
@@ -1485,7 +1507,7 @@ tinygrad backend preview. (11 modules, 4583 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (138 modules, 59358 lines)
+Torch backend implementation package for TorchLens capture. (138 modules, 59370 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1592,7 +1614,7 @@ Torch backend implementation package for TorchLens capture. (138 modules, 59358 
 | `_tl` | Compatibility path for the tensor-label metadata helpers (now ''torchlens._utils._tensor_label''). | 75 |
 | `_tl_collective` | Compatibility re-export; the helper lives in ''torchlens._utils._tl_collective''. | 6 |
 | `_torch_ops_calls` | Record direct ''torch.ops.*'' calls made by user code as ordinary logged ops. | 571 |
-| `_trace_backward` | Trace backward-capture functions reached from the records through ''_data_classes._doors.backends_torch''. | 145 |
+| `_trace_backward` | Trace backward-capture functions reached from the records through ''_data_classes._doors.backends_torch''. | 157 |
 | `_tracing_pass` | Recognise torch's own fake-tensor tracing passes so the wrappers stay out of them. | 399 |
 | `_transform_wrappers` | Transform-boundary wrappers: torch.func builders and autograd.functional direct calls. | 587 |
 | `_user_grad_fn` | The user op's live autograd node, stamped on a logging copy for its op record. | 456 |
@@ -2354,13 +2376,14 @@ Built-in activation transforms: one contract, declared not sniffed. (13 modules,
 
 ### `torchlens.validation`
 
-Validation subpackage for saved activations, backward capture, and invariants. (87 modules, 34331 lines)
+Validation subpackage for saved activations, backward capture, and invariants. (88 modules, 34584 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Validation subpackage for saved activations, backward capture, and invariants. | 135 |
 | `_autograd_grad_replay` | Faithful replay of an in-forward ''torch.autograd.grad'' boundary op. | 797 |
 | `_backward` | Validation helpers for backward-pass grad capture. | 820 |
+| `_backward_neutral` | Backward validation for backends whose backward pass is recorded natively. | 253 |
 | `_backward_state` | Model-state guards and parameter-gradient evidence for backward validation. | 250 |
 | `_carried_graph` | Typed refusal for a stock backward that reaches a graph an earlier backward freed. | 111 |
 | `_completeness_backstop` | Completeness backstop census: dispatcher-witness counts against captured ops. | 257 |
