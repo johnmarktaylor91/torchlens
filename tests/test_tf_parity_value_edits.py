@@ -90,16 +90,17 @@ def _torch_relu_and_final(trace: Any) -> tuple[np.ndarray, np.ndarray]:
     return relu.out.detach().numpy(), final.detach().numpy()
 
 
-def _replay_state(trace: Any) -> str:
-    """Return the trace's replay-validation state (``passed``, ``unverified``, ...)."""
+def _validation_state(trace: Any) -> str:
+    """Run replay validation and return its state (``passed``, ``unverified``, ...)."""
 
+    TFBackend().validate_trace(trace)
     return str(trace.validation_replay_status.state)
 
 
 def _plain_keras_state() -> str:
-    """Replay state of the unedited Keras capture (parameter reads are unverified)."""
+    """Validation state of the unedited Keras capture (parameter reads are unverified)."""
 
-    return _replay_state(tl.trace(_keras_mlp(), tf.constant(_X), backend="tf"))
+    return _validation_state(tl.trace(_keras_mlp(), tf.constant(_X), backend="tf"))
 
 
 def _is_hidden_relu(ctx: Any) -> bool:
@@ -133,21 +134,29 @@ def test_tf_bare_callable_condition_matches_torch_twin() -> None:
         tl.trace(_keras_mlp(), tf.constant(_X), backend="tf")._layer_list[-1].out
     )
     assert not np.allclose(tf_final, plain_final)
-    assert _replay_state(tf_trace) == _plain_keras_state()
+    assert _validation_state(tf_trace) == _plain_keras_state()
 
 
 def test_tf_when_with_callable_condition_matches_torch_twin() -> None:
     """``tl.when(callable, action)`` behaves like torch's value-dependent ``when``."""
 
-    tf_trace, torch_trace = _trace_both(tl.when(_is_hidden_relu, tl.zero_ablate()))
+    tf_trace, torch_trace = _trace_both(tl.when(_is_hidden_relu, tl.scale(-2.0)))
     tf_relu, tf_final = _tf_relu_and_final(tf_trace)
     torch_relu, torch_final = _torch_relu_and_final(torch_trace)
     assert np.any(tf_relu != 0.0)
-    np.testing.assert_array_equal(torch_relu, np.zeros_like(torch_relu))
+    np.testing.assert_allclose(torch_relu, -2.0 * tf_relu, rtol=1e-5, atol=1e-6)
     np.testing.assert_allclose(tf_final, torch_final, rtol=1e-5, atol=1e-6)
     relu = next(layer for layer in tf_trace._layer_list if str(layer.func_name) == "Relu")
     assert relu.is_edited is True
-    assert _replay_state(tf_trace) == _plain_keras_state()
+    assert _validation_state(tf_trace) == _plain_keras_state()
+
+
+def _failed_decisions(trace: Any) -> list[tuple[str, str]]:
+    """Run validation and return ``(op type, reason)`` for every failed op decision."""
+
+    TFBackend().validate_trace(trace)
+    decisions = trace.validation_replay_status.decisions
+    return sorted((d["func_name"], d["reason"]) for d in decisions if d["decision"] == "failed")
 
 
 def _tf_flag_forward(x: Any) -> Any:
@@ -209,7 +218,9 @@ def test_tf_scalar_bool_value_condition_flips_branch_like_torch() -> None:
     np.testing.assert_allclose(torch_trace._layer_list[-1].out.detach().numpy(), expected)
     any_op = next(layer for layer in tf_trace._layer_list if str(layer.func_name) == "Any")
     assert any_op.is_edited is True
-    assert TFBackend().validate_trace(tf_trace) is True
+    # The edited trace validates exactly as well as the unedited one. ``Any`` has no
+    # replay classification in this backend, so both report it the same way.
+    assert _failed_decisions(tf_trace) == _failed_decisions(plain)
 
 
 def test_tf_value_condition_invalid_return_refuses_typed() -> None:

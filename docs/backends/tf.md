@@ -82,6 +82,10 @@ print(status.state)
 
 - Replay validation reports `unverified`, rather than `passed`, on Keras models
   because parameter reads (`ReadVariableOp`) count as unverified regions.
+- `tl.zero_ablate()` records its replacement as a `ZerosLike` op, which replay validation
+  does not classify yet, so a zero-ablated trace fails validation at that op. Arithmetic
+  actions such as `tl.scale(...)` record ops that replay and validate. `tf.reduce_any`
+  (`Any`) is likewise unclassified, edited or not.
 - Loaded traces cannot be replay-validated because runtime captures are not persisted.
 - Array-valued closure constants (closure weights, `tf.constant([...])`) are recorded as
   `constant` source ops with a saved payload; rank-zero literals stay replayable values on

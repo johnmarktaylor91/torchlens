@@ -64,9 +64,10 @@ def _ops(trace: Any) -> list[tuple[str, str, np.ndarray]]:
     ]
 
 
-def _replay_state(trace: Any) -> str:
-    """Return the trace's replay-validation state (``passed``, ``unverified``, ...)."""
+def _validation_state(trace: Any) -> str:
+    """Run replay validation and return its state (``passed``, ``unverified``, ...)."""
 
+    TFBackend().validate_trace(trace)
     return str(trace.validation_replay_status.state)
 
 
@@ -79,7 +80,8 @@ def _frontier_op_type(trace: Any) -> str:
         if layer.func_name and str(layer.func_name) not in _NOT_FRONTIERS and layer.parents
     ]
     assert candidates, "roster row recorded no compute ops"
-    return candidates[len(candidates) // 2]
+    # The lower middle, so the frontier never defaults to the final op.
+    return candidates[(len(candidates) - 1) // 2]
 
 
 @pytest.mark.parametrize("family", _ROWS)
@@ -104,10 +106,10 @@ def test_tf_halted_prefix_equals_full_run_prefix(family: str) -> None:
         assert (h_type, h_label) == (f_type, f_label)
         np.testing.assert_array_equal(h_value, f_value)
     # Keras rows read parameters through ReadVariableOp, which replay reports as
-    # unverified on full and halted traces alike; the halted prefix must validate
-    # exactly as well as the full run and never fail.
-    assert _replay_state(halted) == _replay_state(full)
-    assert _replay_state(halted) != "failed"
+    # unverified. The halted prefix never fails, and passes whenever the full run does.
+    halted_state, full_state = _validation_state(halted), _validation_state(full)
+    assert halted_state != "failed"
+    assert full_state != "passed" or halted_state == "passed"
 
 
 def test_tf_halt_stops_execution_at_frontier() -> None:

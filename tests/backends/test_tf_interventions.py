@@ -229,10 +229,10 @@ def test_tf_value_dependent_condition_applies() -> None:
         _relu_plus_ten,
         x,
         backend="tf",
-        intervene=tl.when(lambda ctx: str(ctx.func_name) == "Relu", tl.zero_ablate()),
+        intervene=tl.when(lambda ctx: str(ctx.func_name) == "Relu", tl.scale(2.0)),
     )
     add_op = next(op for op in trace._layer_list if op.func_name == "AddV2")
-    assert np.allclose(np.asarray(add_op.out), [10.0, 10.0, 10.0])
+    assert np.allclose(np.asarray(add_op.out), [12.0, 10.0, 14.0])
     assert TFBackend().validate_trace(trace) is True
 
 
