@@ -140,7 +140,7 @@ class _ThinRow(_PendingRow):
         fill_settle_fields(self.fields, self.describe)
         self.device = str(self.device)
         self.handle_id = str(self.handle_id)
-        self.__class__ = _PendingRow
+        self.__class__ = _PendingRow  # type: ignore[assignment]  # same slots, now a plain row
 
     def function_ref(self) -> Any:
         """Return the op's function-call ref (``_PendingRow.function_ref``), filled first."""
@@ -200,7 +200,7 @@ def _appender(edge_use_builder: Any, layout: Any, describe: Any) -> _Commit:
         pending.params = _param_refs_from_fields(fields) if fields["parent_params"] else ()
         pending.requires_grad = bool(requires_grad)
         pending.device = tensor.device
-        pending.handle_id = id(tensor)  # type: ignore[assignment]  # a str from the fill on
+        pending.handle_id = id(tensor)  # an int until the fill makes it a str
         pending._options_save_mode = trace._options_save_mode
         pending.events = dict(zip(parents, found, strict=True))
         pending.journal = journal
