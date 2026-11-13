@@ -51,13 +51,14 @@ def hoist_nested_jit_consts(
     var_by_const = {id(c): v for v, c in zip(jaxpr.constvars, closed_jaxpr.consts, strict=True)}
     hoisted_by_inner: dict[int, tuple[Any, list[Any]]] = {}
     constvars, consts = list(jaxpr.constvars), list(closed_jaxpr.consts)
-    eqns = []
+    eqns, changed = [], False
     for eqn in jaxpr.eqns:
         rewritten = _hoist_call(eqn, core, call_primitives, known_params, hoisted_by_inner)
         if rewritten is None:
             eqns.append(eqn)
             continue
         new_eqn, inner_consts = rewritten
+        changed = True
         lead = []
         for var, value in zip(new_eqn.params["jaxpr"].jaxpr.invars, inner_consts, strict=False):
             existing = var_by_const.get(id(value))
@@ -67,7 +68,7 @@ def hoist_nested_jit_consts(
                 consts.append(value)
             lead.append(existing)
         eqns.append(new_eqn.replace(invars=[*lead, *new_eqn.invars]))
-    if len(consts) == len(closed_jaxpr.consts):
+    if not changed:
         return closed_jaxpr
     return core.ClosedJaxpr(jaxpr.replace(constvars=constvars, eqns=eqns), consts)
 

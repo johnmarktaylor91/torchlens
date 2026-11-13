@@ -50,7 +50,15 @@ Jaxpr-first JAX backend. It fills the backend protocol (no `capture_backend`); i
   entry `interpret_pullback_jaxpr` (binds combiner primitives such as
   `scatter-add`).
 - `_module_stacks.py`: the `tlm_`/`tlc_` codec and relative-stack composition
-  (nested name stacks carry only their own scope). Leaf module.
+  (nested name stacks carry only their own scope); `CallNumbering` gives a module
+  called inside a loop iteration or a jit bind one runtime call per run, as on
+  PyTorch (`module_call_renumbering` on the result moves later trace-time calls;
+  `_module_return_probe.split_outputs` applies it to forward args and the ledger).
+  Leaf module.
+- `_jit_consts.py`: `derive_closed_jaxpr` hoists the closure constants of top-level
+  jit calls (a module's weights read inside `jax.jit`) to top-level constants, so
+  they are recorded `constant` sources and module params. A jit inside a cond,
+  scan or while body that closes over constants still refuses (purity gate).
 - `_halt.py`: `JaxStop`, the `stop_after=` site for `capture_trace` (selector or
   callable, matched on the equation context at hook time; halted traces get
   torch's `is_stopped`/`stop_reason`/`_graph_stop_frontier`/`stopped` slot).

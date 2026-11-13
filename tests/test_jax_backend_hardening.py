@@ -904,8 +904,8 @@ def test_jax_accepts_custom_vjp_forward_region() -> None:
     assert trace.validate_forward_pass([]).state == "unverified"
 
 
-def test_jax_rejects_nested_jit_closure_constants() -> None:
-    """Nested JIT calls with closed constants should fail the recursive purity gate."""
+def test_jax_hoists_top_level_jit_closure_constants() -> None:
+    """A top-level nested JIT's closed constant becomes a recorded top-level constant."""
 
     hidden = jnp.ones((2,), dtype=jnp.float32)
 
@@ -920,6 +920,32 @@ def test_jax_rejects_nested_jit_closure_constants() -> None:
 
         del params
         return uses_hidden(x)
+
+    trace = tl.trace(cast(Any, model), ({}, jnp.ones((2,), dtype=jnp.float32)), backend="jax")
+
+    constants = [op for op in trace._layer_list if op.func_name == "constant"]
+    assert len(constants) == 1
+    adds = [op for op in trace._layer_list if op.func_name == "add"]
+    assert adds and constants[0].layer_label in adds[0].parent_layers
+    assert trace.validate_forward_pass([]) is True
+
+
+def test_jax_rejects_jit_closure_constants_inside_loop_body() -> None:
+    """A nested JIT with closed constants inside a scan body still fails the purity gate."""
+
+    hidden = jnp.ones((2,), dtype=jnp.float32)
+
+    @jax.jit
+    def uses_hidden(x: Any) -> Any:
+        """Return output using a hidden closed constant."""
+
+        return x + hidden
+
+    def model(params: dict[str, Any], x: Any) -> Any:
+        """Return output through a JIT closure called in a scan body."""
+
+        del params
+        return lax.scan(lambda carry, _item: (uses_hidden(carry), None), x, None, length=2)[0]
 
     with pytest.raises(BackendUnsupportedError, match="nested call primitive"):
         tl.trace(cast(Any, model), ({}, jnp.ones((2,), dtype=jnp.float32)), backend="jax")
