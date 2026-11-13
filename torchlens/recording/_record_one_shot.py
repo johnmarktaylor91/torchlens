@@ -136,28 +136,28 @@ def _fastlog_recorder_factory(
 
     backend_spec = get_backend_spec(str(backend) if backend is not None else "torch")
     name = str(backend_spec.name)
-    if not backend_spec.capabilities.fastlog:
-        raise BackendUnsupportedError(
+    if backend_spec.capabilities.fastlog:
+        implementation = require_capability_implementation(backend_spec, "fastlog")
+        if implementation is Recorder:
+            return Recorder
+        if is_backend_record_producer(implementation):
+            _refuse_torch_only_record_doors(name, generate_kwargs, recording)
+            return functools.partial(BackendRecorder, producer=implementation)
+        problem = (
+            f"tl.record() cannot dispatch backend {name!r}: its registered fastlog "
+            "implementation is neither the torch Recorder nor a backend record producer, "
+            "so record() has no non-torch dispatch path for it."
+        )
+    else:
+        problem = (
             f"tl.record() refuses: the resolved {name!r} backend declares "
             "capabilities.fastlog=False, and the registered capability table is the "
             "load-bearing gate for this surface (tl.record is torch-only on a backend "
-            "that binds no record producer). Use tl.trace(..., backend=...) instead.",
-            code=refusal_code_for_capability("fastlog"),
-            backend=name,
+            "that binds no record producer). Use tl.trace(..., backend=...) instead."
         )
-    implementation = require_capability_implementation(backend_spec, "fastlog")
-    if implementation is Recorder:
-        return Recorder
-    if not is_backend_record_producer(implementation):
-        raise BackendUnsupportedError(
-            f"tl.record() cannot dispatch backend {name!r}: its registered fastlog "
-            "implementation is neither the torch Recorder nor a backend record producer, "
-            "so record() has no non-torch dispatch path for it.",
-            code=refusal_code_for_capability("fastlog"),
-            backend=name,
-        )
-    _refuse_torch_only_record_doors(name, generate_kwargs, recording)
-    return functools.partial(BackendRecorder, producer=implementation)
+    raise BackendUnsupportedError(
+        problem, code=refusal_code_for_capability("fastlog"), backend=name
+    )
 
 
 def _refuse_torch_only_record_doors(

@@ -28,7 +28,7 @@ import time
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, NoReturn, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, NoReturn, Protocol, TypeGuard, runtime_checkable
 
 import torch
 
@@ -144,7 +144,7 @@ class BackendRecordProducer(Protocol):
         """Run one forward, emitting events to ``sink``; return the model output."""
 
 
-def is_backend_record_producer(candidate: object) -> bool:
+def is_backend_record_producer(candidate: object) -> TypeGuard[BackendRecordProducer]:
     """Return whether ``candidate`` satisfies :class:`BackendRecordProducer`."""
 
     return isinstance(candidate, BackendRecordProducer) and isinstance(
