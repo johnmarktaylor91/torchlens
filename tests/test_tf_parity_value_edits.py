@@ -218,9 +218,11 @@ def test_tf_scalar_bool_value_condition_flips_branch_like_torch() -> None:
     np.testing.assert_allclose(torch_trace._layer_list[-1].out.detach().numpy(), expected)
     any_op = next(layer for layer in tf_trace._layer_list if str(layer.func_name) == "Any")
     assert any_op.is_edited is True
-    # The edited trace validates exactly as well as the unedited one. ``Any`` has no
-    # replay classification in this backend, so both report it the same way.
-    assert _failed_decisions(tf_trace) == _failed_decisions(plain)
+    # ``Any`` and the ``ZerosLike`` replacement have no replay classification yet
+    # (docs/backends/tf.md, Known gaps): the edited trace fails validation on exactly
+    # those ops and nothing else.
+    zeros_gap = [("ZerosLike", "op_unclassified")]
+    assert _failed_decisions(tf_trace) == sorted(_failed_decisions(plain) + zeros_gap)
 
 
 def test_tf_value_condition_invalid_return_refuses_typed() -> None:
