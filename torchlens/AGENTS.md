@@ -10,7 +10,7 @@ Referenced sections retain their instructions. Before changes, read the relevant
 ## What This Is
 
 TorchLens extracts outs and metadata from backend-resolved captures. PyTorch eager capture is the
-stable default; MLX, JAX, tinygrad, Paddle, and TensorFlow are technical-preview backends. `import torchlens`
+stable default; MLX, JAX, tinygrad, Paddle, and TensorFlow are the other backends, with the features docs/backends.md lists. `import torchlens`
 exposes the public API, but torch wrapping is lazy: the first torch capture
 prepares the model and calls `wrap_torch()` from `backends/torch/`.
 
