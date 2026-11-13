@@ -213,6 +213,15 @@ def attach_variable_reads(trace: Any, ledger: VariableReadLedger | None) -> None
         _LEDGERS[trace] = ledger
 
 
+def _ledger_for(trace: Any) -> VariableReadLedger | None:
+    """The ledger attached to ``trace``; ``None`` also for an object that takes no weak reference."""
+
+    try:
+        return _LEDGERS.get(trace)
+    except TypeError:  # not weakly referenceable, so it never had a ledger
+        return None
+
+
 def _verifiable_snapshot(
     ledger: VariableReadLedger | None, capture: Any
 ) -> VariableSnapshot | None:
@@ -267,7 +276,9 @@ def parameter_read_decision(trace: Any, op: Any, capture: Any) -> Mapping[str, A
         ``effectful_region`` decision).
     """
 
-    snapshot = _verifiable_snapshot(_LEDGERS.get(trace), capture)
+    if getattr(capture, "op_type", None) != _READ_OP:
+        return None
+    snapshot = _verifiable_snapshot(_ledger_for(trace), capture)
     if snapshot is None:
         return None
     matched = _payload_matches(op, snapshot)
