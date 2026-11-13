@@ -67,7 +67,7 @@ def _cases() -> list[tuple[str, Callable[[], Any], Callable[[Any], Any]]]:
         ("scale", lambda: tl.scale(2.0), lambda o: o * 2.0),
         ("add", lambda: tl.add(0.5), lambda o: o + 0.5),
         ("clamp", lambda: tl.clamp(low=0.1, high=0.6), lambda o: mx.clip(o, 0.1, 0.6)),
-        ("mean_ablate", tl.mean_ablate, lambda o: mx.zeros_like(o) + mx.mean(o)),
+        ("mean_ablate", lambda: tl.mean_ablate(dim=None), lambda o: mx.zeros_like(o) + mx.mean(o)),
         (
             "replace_with",
             lambda: tl.replace_with(mx.full((2, 4), 0.3)),
@@ -160,7 +160,7 @@ def test_fork_helper_outside_the_table_refuses_typed() -> None:
     clean = tl.trace(_chain(lambda o: o), mx.array(_X), backend="mlx")
     with pytest.raises(Exception, match="no replay application") as info:
         clean.fork().do(_rectifier_label(clean), tl.add_noise(0.1))
-    assert getattr(info.value, "code", None) == "backend_replay_helper_unsupported"
+    assert info.value.fields["code"] == "backend_replay_helper_unsupported"
 
 
 def test_live_helper_outside_the_table_refuses_typed() -> None:
@@ -186,7 +186,7 @@ def test_projection_with_zero_direction_refuses() -> None:
             backend="mlx",
             intervene=tl.when(tl.func("maximum"), tl.project_onto(mx.zeros((4,)), dim=1)),
         )
-    assert getattr(info.value, "code", None) == "intervention_helper_arguments_invalid"
+    assert info.value.fields["code"] == "intervention_helper_arguments_invalid"
 
 
 def test_forward_signal_edit_at_a_grad_site_refuses() -> None:

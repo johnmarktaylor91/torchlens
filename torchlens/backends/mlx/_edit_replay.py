@@ -383,7 +383,9 @@ def edited_replay_model(
 
     sites = captured_edit_sites(trace)
     grad_labels = tuple(getattr(plan, "grad_site_labels", ()) or ())
-    grad_sites = {site_key(label): plan.applier.apply for label in grad_labels}
+    grad_sites = (
+        {} if plan is None else {site_key(label): plan.applier.apply for label in grad_labels}
+    )
     frontier = trace._graph_stop_frontier if trace.is_stopped else None
     halt_key = site_key(frontier) if isinstance(frontier, str) else None
     if not sites and not grad_sites and halt_key is None:

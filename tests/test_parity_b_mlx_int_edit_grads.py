@@ -103,7 +103,7 @@ _FORWARD_EDITS: list[tuple[str, Callable[[], Any], Callable[[Any], Any]]] = [
     ("zero_ablate", tl.zero_ablate, mx.zeros_like),
     ("add", lambda: tl.add(0.5), lambda h: h + 0.5),
     ("clamp", lambda: tl.clamp(high=0.3), lambda h: mx.clip(h, None, 0.3)),
-    ("mean_ablate", tl.mean_ablate, lambda h: mx.zeros_like(h) + mx.mean(h)),
+    ("mean_ablate", lambda: tl.mean_ablate(dim=None), lambda h: mx.zeros_like(h) + mx.mean(h)),
     ("callable", lambda: lambda out, *, ctx: out * out, lambda h: h * h),
     (
         "steer",
@@ -183,21 +183,16 @@ def _suffix_cotangent(model: _MLP) -> tuple[Any, Any]:
 def _expected_with_cotangent(model: _MLP, edited: Any) -> dict[str, Any]:
     """Gradients when ``edited`` replaces the cotangent at the relu output (``mx.vjp``)."""
 
-    params = model.parameters()
+    def prefix(weight: Any, bias: Any, x: Any) -> Any:
+        return nn.relu(x @ weight.T + bias)
 
-    def prefix(p: Any, x: Any) -> Any:
-        model.update(p)
-        return nn.relu(model.l1(x))
-
-    try:
-        _, (grad_params, grad_x) = mx.vjp(prefix, [params, _x()], [edited])
-    finally:
-        model.update(params)
+    primals = [model.l1.weight, model.l1.bias, _x()]
+    _, (grad_weight, grad_bias, grad_x) = mx.vjp(prefix, primals, [edited])
     suffix = _reference(model, lambda m, x: _loss(m(x)))
     found = {
         "inputs.0": grad_x,
-        "params.l1.weight": grad_params["l1"]["weight"],
-        "params.l1.bias": grad_params["l1"]["bias"],
+        "params.l1.weight": grad_weight,
+        "params.l1.bias": grad_bias,
         "params.l2.weight": suffix["params.l2.weight"],
         "params.l2.bias": suffix["params.l2.bias"],
     }
