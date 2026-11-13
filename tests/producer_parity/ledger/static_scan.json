@@ -5793,6 +5793,30 @@
  },
  {
   "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/backends/_replay_adapters/jax.py",
+  "has_default": false,
+  "sites": 5,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "params",
+  "file": "torchlens/backends/_replay_adapters/jax.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/backends/_replay_adapters/jax.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "modules",
   "file": "torchlens/backends/_root_frames.py",
   "has_default": false,

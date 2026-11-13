@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1769 modules, 708519 lines, 0 modules without a docstring.
+86 packages, 1773 modules, 710250 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -56,6 +56,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.attribution._onebackward` | One-backward attribution reads: one backward pass seeded at gradient edges resolved from existing op fields, returned as a :class:'ReadTa... | 11 | 3881 |
 | `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 24 | 7552 |
 | `torchlens.backends._protocols` | Per-backend ''BackendProtocol'' objects, kept import-light. | 8 | 928 |
+| `torchlens.backends._replay_adapters` | Private per-backend replay adapters (see :mod:'._contract'). | 4 | 1731 |
 | `torchlens.backends.jax` | JAX backend preview exports. | 17 | 9645 |
 | `torchlens.backends.mlx` | Technical-preview MLX backend for TorchLens. | 17 | 6951 |
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6595 |
@@ -1375,6 +1376,17 @@ Per-backend ''BackendProtocol'' objects, kept import-light. (8 modules, 928 line
 | `tf` | TensorFlow preview ''BackendProtocol'' (delegating; eager). | 130 |
 | `tinygrad` | tinygrad preview ''BackendProtocol'' shell (delegating; lazy, realize-once). | 137 |
 | `torch` | Torch's ''BackendProtocol'' object: the reference, by delegation. | 209 |
+
+### `torchlens.backends._replay_adapters`
+
+Private per-backend replay adapters (see :mod:'._contract'). (4 modules, 1731 lines)
+
+| Module | What it holds | Lines |
+| --- | --- | ---: |
+| `__init__` | Private per-backend replay adapters (see :mod:'._contract'). | 97 |
+| `_contract` | Replay adapter contract: the function protocol and the data-only op recipe. | 539 |
+| `_session` | Replay session: owns values, substitutions, last-use counts and cleanup. | 297 |
+| `jax` | JAX replay adapter: per-op replay, derivative and data-only recipe. | 798 |
 
 ### `torchlens.backends.jax`
 
