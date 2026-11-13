@@ -31,6 +31,8 @@ from ..._utils._tensor_label import (
 )
 from ..._utils._tl_collective import _async_collective_elem
 from ..._utils.introspection import get_arg_tensors_for_resolution
+from ._arg_template_resolve import resolve_arg_template_fields
+from ._args_template_cache import observe_template
 from ._call_layout import planned_tensor_items
 from ._ops_arg_slots import (
     _ArgSlot,
@@ -43,6 +45,7 @@ from ._ops_arg_slots import (
     _SnapshotScope,
     _storage_intact,
     _tensor_items,
+    arg_slot_labels,
     parents_from_slots,
     templates_requested,
 )
@@ -335,32 +338,40 @@ def _set_arg_template_fields(
     fields_dict: dict[str, Any],
     call: _SlotCall,
 ) -> None:
-    """Seed the replay argument templates and the portable function identity of one call."""
-    if templates_requested(self):
-        captured_template = _args_template_of(
-            (call.func, call.func_name, call.args, call.kwargs), self, call.layout
+    """Seed the replay argument templates and the portable function identity of one call.
+
+    Observes here every fact the stored values carry (labels, layouts, literals, copies
+    and the function key, read at the call), then resolves them with
+    ``resolve_arg_template_fields``, a pure function of those facts and the layout plan.
+    """
+    # The portable function identity is what lets a LOADED bundle resolve its
+    # callables for validation; a default capture records templates only for
+    # in-process replay, so it keeps the default bundle's identity-free contract.
+    # A capture that saves arguments is replay-ready either way: its identity lets
+    # replay validation resolve the callable on a loaded bundle
+    # (``validation/_loaded_callables.py``), which carries no callables.
+    # The parts are read at the call: ``_ops_arguments`` defines them after its own late imports.
+    parts = _ops_arguments._TEMPLATE_PARTS
+    replayable = getattr(self, "is_replayable", False)
+    observed: tuple[Any, bool, bool, Any]
+    if replayable or self._options_save_arg_templates:
+        args, kwargs = call.args, call.kwargs
+        facts = observe_template(
+            parts,
+            (call.func, call.func_name, args, kwargs),
+            self,
+            arg_slot_labels(self, args, kwargs),
+            call.layout,
         )
-        fields_dict["args_template"] = captured_template
-        fields_dict["kwargs_template"] = captured_template if call.kwargs else None
-        # The portable function identity is what lets a LOADED bundle resolve its
-        # callables for validation; a default capture records templates only for
-        # in-process replay, so it keeps the default bundle's identity-free contract.
-        fields_dict["func_id"] = (
-            captured_template.func_id
-            if getattr(self, "is_replayable", False) or self._options_save_args
-            else None
-        )
+        observed = (facts, bool(kwargs), bool(replayable or self._options_save_args), None)
     else:
-        fields_dict["args_template"] = None
-        fields_dict["kwargs_template"] = None
-        # A capture that saves arguments is replay-ready; its portable function
-        # identity lets replay validation resolve the callable on a loaded
-        # bundle (``validation/_loaded_callables.py``), which carries no callables.
-        fields_dict["func_id"] = (
+        key = (
             _function_registry_key(call.func, call.func_name, self)
             if self._options_save_args
             else None
         )
+        observed = (None, False, False, key)
+    resolve_arg_template_fields(fields_dict, observed, parts)
 
 
 def _repin_rebound_receiver(self: "Trace", args: tuple[Any, ...], tensor: torch.Tensor) -> bool:
@@ -390,8 +401,8 @@ def _repin_rebound_receiver(self: "Trace", args: tuple[Any, ...], tensor: torch.
 
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
+from . import _ops_arguments  # noqa: E402
 from ._ops_arguments import (  # noqa: E402
-    _args_template_of,
     _function_registry_key,
     _session_validated_parameter,
     _tensor_has_known_provenance,
