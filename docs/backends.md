@@ -1,7 +1,8 @@
 # Backend Support
 
-TorchLens is built for PyTorch and has preview support for five other frameworks: JAX,
-TensorFlow, MLX, PaddlePaddle and tinygrad. Every backend fills the same contract,
+TorchLens is built for PyTorch and also supports five other frameworks: JAX, TensorFlow, MLX,
+PaddlePaddle and tinygrad. They have fewer features than PyTorch; the table below says which.
+Every backend fills the same contract,
 `BackendSpec`, so the same `tl.trace` call works on each. With `backend=None` a torch model
 runs on the PyTorch backend, and a model from one of the other frameworks (framework installed,
 no foreign tensors in the inputs) is routed to its backend automatically; pass `backend="jax"`,
@@ -23,7 +24,8 @@ reruns the Yes and Partial cells so the table cannot quietly go stale.
 | tinygrad | Partial (1) | Partial (2) | Partial (4) | Partial (5) | No (6) | Yes | Partial (8) | Yes | Yes |
 
 1. You can select operations by function, by module, or both. Selecting by influence (which
-   later units a given unit can reach) works only on PyTorch.
+   later units a given unit can reach) works only on PyTorch; on the other frameworks it refuses
+   with `influence_geometry_unavailable` or returns only a whole-input upper bound.
 2. You can save only the operations you choose. Stopping the forward pass early and fast
    repeated recording (`tl.record`) work only on PyTorch.
 3. You can save only the operations you choose and stop the forward pass early. Fast repeated
@@ -39,7 +41,8 @@ reruns the Yes and Partial cells so the table cannot quietly go stale.
    PyTorch, and on a convolution output the dead-unit counter needs the channel axis passed as
    `dim`.
 9. Gradients of a loss with respect to inputs, weights and each operation work when the model
-   is a plain function of its weights. Flax modules refuse them for now.
+   is a plain function of its weights. Flax and Equinox modules (captured as module trees)
+   refuse them for now.
 
 Compare means comparing two runs on the same framework, for example two inputs through one
 model. Comparing a run from one framework with a run from another (a PyTorch trace against an
@@ -49,16 +52,16 @@ not there. Module-level comparison across frameworks is planned; see
 [Comparing runs from different backends](reference/debug.md#comparing-runs-from-different-backends).
 
 Checked with PyTorch 2.13, JAX 0.10.2 (Flax 0.12.8), TensorFlow 2.21 (Keras 3.15), MLX 0.26.3,
-PaddlePaddle 3.3.1 and tinygrad 0.13.0, the versions the preview test jobs pin.
+PaddlePaddle 3.3.1 and tinygrad 0.13.0, the versions each backend's test job pins.
 
-On the five preview backends `save=` chooses which payloads a finished trace keeps; it does not
+On the five non-PyTorch backends `save=` chooses which payloads a finished trace keeps; it does not
 lower peak memory, because these backends capture the full forward first and then drop the
 public payloads of unselected ops (hidden copies stay for replay validation). Torch's `save=` is
 single-pass selective capture and does lower memory. Value-dependent `save=` predicates,
 `tl.followed_by` and `tl.preceded_by`, lookback windows and save shaping refuse with a typed
-error on every preview backend.
+error on every non-PyTorch backend.
 
-## Backend protocol and maturity
+## Backend protocol
 
 Every backend, torch included, fills one contract, `tl.backends.BackendProtocol`: a framework
 requirement, a capability table, capture, replay validation, a reference output computed with no
@@ -67,19 +70,18 @@ closed set of refusal codes. `BackendSpec.protocol()` returns a backend's protoc
 `CaptureBackend` adapter in `torchlens/backends/_protocol.py` is torch's internal capture seam,
 not the backend contract.
 
-| Backend | Maturity | Materialization | Page |
-|---|---|---|---|
-| `torch` | stable | eager | [PyTorch](backends/torch.md) |
-| `tf` | preview | eager | [TensorFlow](backends/tf.md) |
-| `jax` | preview | eager | [JAX](backends/jax.md) |
-| `mlx` | preview | lazy | [MLX](backends/mlx.md) |
-| `paddle` | preview | eager | [Paddle](backends/paddle.md) |
-| `tinygrad` | preview | lazy | [tinygrad](backends/tinygrad.md) |
+| Backend | Materialization | Page |
+|---|---|---|
+| `torch` | eager | [PyTorch](backends/torch.md) |
+| `tf` | eager | [TensorFlow](backends/tf.md) |
+| `jax` | eager | [JAX](backends/jax.md) |
+| `mlx` | lazy | [MLX](backends/mlx.md) |
+| `paddle` | eager | [Paddle](backends/paddle.md) |
+| `tinygrad` | lazy | [tinygrad](backends/tinygrad.md) |
 
-`maturity` is the launch label on `BackendSpec.maturity`. It changes only on a recorded maintainer
-decision, and `stable` requires every graduation item below to be met in the backend's shipped
-scorecard. Each page has a runnable tutorial, a can and cannot table and the backend's framework
-requirement (supported version range, the version the per-change CI leg pins, and the install
+No backend carries a maturity label: what each one supports is stated by the feature table above,
+its page and its shipped scorecard. Each page has a runnable tutorial, a can and cannot table and
+the backend's framework requirement (supported version range, the version the per-change CI leg pins, and the install
 extra). The repository check `scripts/checks/backend_docs_lockstep.py` holds this table to the
 registry and each page's can and cannot table to the backend's shipped capability summary.
 
@@ -101,7 +103,7 @@ Rules every backend follows:
   forward refuse with `rng_state_in_graph`, because replay would draw them again.
 - **Validation reasons.** `validate` returns a `ValidationStatus` whose per-op decisions name a
   reason from `tl.backends.VALIDATION_REASONS`; a failure names the first offending op. On the
-  preview backends `tl.validate(...)` may return that status object rather than a bool: `bool()`
+  non-PyTorch backends `tl.validate(...)` may return that status object rather than a bool: `bool()`
   of a non-final state (`unverified`, `unavailable`) raises `TypeError`, so branch on `.state` or
   `.passed`. `unverified` means replay was partial; it is not a pass.
 
@@ -120,14 +122,17 @@ flag as `supported`, `unsupported` (the request refuses with the contracted code
 from the shipped record only (no framework import). Its status is `pass` (durable tier reached, no
 failed cell), `known_broken` (a cell failed), `scope` (framework not installed here) or
 `not_tested` (no record ships); its details read
-`<maturity>; <passed>/<denominator> cells passed, <unsupported> unsupported, <failed> failed;
-pinned <pin>, installed <version or absent>, supported [<minimum>, <ceiling>)`, and the
-suggestion names the install extra or the first failed cell.
+`<passed>/<denominator> cells passed, <unsupported> unsupported, <failed> failed; pinned <pin>,
+installed <version or absent>, supported [<minimum>, <ceiling>)`, and the suggestion names the
+install extra or the first failed cell. The severity is the same on every backend: `ok` for
+`pass`, `warning` for `known_broken` (a failed cell in a shipped measurement is not a fault in
+your environment, so it never turns the report red) and `info` otherwise.
 
 ### Graduation
 
-`python -m tests.conformance.scorecard --backend <name> --graduation` checks six items and never
-changes `maturity`:
+`python -m tests.conformance.scorecard --backend <name> --graduation` checks six items. They are
+evidence of how completely the shared suite covers a backend, embedded in its scorecard; they set
+no label:
 
 | Item | Criterion |
 |---|---|
@@ -141,7 +146,7 @@ changes `maturity`:
 ## Live edits and early stop
 
 PyTorch capture can read a predicate while a concrete value flows through the wrapped operation,
-then replace the value (`intervene=`) or stop the forward (`stop_after=`). Which preview backends
+then replace the value (`intervene=`) or stop the forward (`stop_after=`). Which backends
 expose that point decides what they support:
 
 - **Paddle and MLX** see each concrete output in their wrapper before the caller does, so both
@@ -150,17 +155,20 @@ expose that point decides what they support:
 - **TensorFlow** records through read-only `op_callbacks` (a returned replacement is ignored, re-checked
   on TF 2.21), so `intervene=` runs through a writable wrap layer on top of the callback capture,
   with static selectors only; `stop_after=` refuses.
-- **JAX and tinygrad** have no such point (JAX builds a jaxpr over tracers and labels are
-  final only after interpretation; tinygrad's values appear only after `realize()`), so both refuse
-  `intervene=` and `stop_after=` with typed errors.
+- **JAX** evaluates its recorded jaxpr one equation at a time with concrete values, and the
+  interpreter can replace an equation's outputs (its gradient checks already do). That is the edit
+  point, but edits through it are not built yet, so `intervene=` and `stop_after=` refuse with
+  typed errors.
+- **tinygrad** builds a lazy graph whose values appear only after `realize()`. Edits that wrap
+  its Tensor calls are not built yet, so `intervene=` and `stop_after=` refuse with typed errors.
 
-Value-dependent `save=` predicates are rejected on all preview backends. Editing a finished trace
-(`trace.fork().do(...)`) and patching in activations from another run refuse on every preview backend
-with an error that names the framework.
+Value-dependent `save=` predicates are rejected on every non-PyTorch backend. Editing a finished
+trace (`trace.fork().do(...)`) and patching in activations from another run refuse on every
+non-PyTorch backend with an error that names the framework.
 
 ## Backend options
 
-`tl.options.CaptureOptions` carries the options the preview backends read, declared before every
+`tl.options.CaptureOptions` carries the options the non-PyTorch backends read, declared before every
 backend implements them (`jax_control_flow`, `jax_max_control_flow_unroll`, `module_identity_mode`,
 `payload_policy`). Torch accepts them as inert cache-key inputs so torch behavior stays unchanged.
 `facets=` is a `tl.trace` keyword on every backend. An option a backend does not implement refuses
@@ -480,8 +488,8 @@ pass, then checks each attached boundary with an independent boundary-replacemen
 difference; requests above the cap fail. Only records with provenance `status == "exact"` reach
 `trace.autograd.intermediate_derived_grads` and `op.autograd.derived_grad`; oracle failures and
 non-float or control outputs are skipped. If the producer cannot run on the installed JAX, leaf
-`derived_grads` stay intact and the intermediate accessor is empty. Flax modules refuse derived
-gradients. Full page: [JAX](backends/jax.md).
+`derived_grads` stay intact and the intermediate accessor is empty. Flax and Equinox modules
+(`module_identity_mode="pytree_module"`) refuse derived gradients. Full page: [JAX](backends/jax.md).
 
 ## tinygrad
 
@@ -568,7 +576,7 @@ The implementation view of the same facts, one row per backend:
 | `paddle` | Dygraph/eager capture with live forward `intervene=`/`stop_after=` | Live replay/perturbation plus static inventory guard; corroborated user-intervention carve-out | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.autograd.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads` |
 | `tf` | Eager op-callback capture; implemented graph-only FuncGraph static path for compiled/SavedModel entries | Callback self-consistency plus per-op replay/perturbation accounting | Materialized forward array `.tlspec` payloads | `function_root`, Keras/`tf.Module` object `object_module` | `trace.autograd.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads` (eager entries only) |
 
-Replay validation on the preview backends (`has_validation_replay`) replays each captured op from
+Replay validation on the non-PyTorch backends (`has_validation_replay`) replays each captured op from
 its parents' saved payloads and perturbation-checks the dependency. Unlike torch's validator it
 does not re-run the whole model against a ground-truth output, so an op the backend failed to wrap
 is outside the replay denominator, and a call with no perturbable tensor argument reports

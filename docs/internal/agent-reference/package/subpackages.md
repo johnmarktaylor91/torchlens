@@ -11,7 +11,7 @@
   (`op_store.py`) held at `trace._trace_core` (declared `FieldPolicy.DROP`); rows are
   row-major lists while building and seal after the final step, key 20 (columnar transpose with
   numeric packing at >=512 rows). `Op._copy_with_shallow_fields()`, pickle restore, fork shells, and
-  preview backends use detached single-row stores. Relations are LIVE
+  the non-PyTorch backends use detached single-row stores. Relations are LIVE
   (`relation_views.py`): on FINISHED traces the relation accessors return IMMUTABLE
   views — `tuple` for label sequences (`parents`, `children`, `modules`,
   `module_call_stack`, conditional child lists, ...), `frozenset` for label sets
@@ -40,7 +40,7 @@
   and cleanup/removal materialize mirrors before husking the backing ops.
   `Param`/`Buffer`/`FuncCallLocation`/`ModuleCall`/`Module` are row facades
   over per-trace kind tables (`record_rows.py`, `TraceCore.kind_rows`,
-  adopted by the build passes and sealed with the core; preview backends and
+  adopted by the build passes and sealed with the core; non-PyTorch backends and
   loads stay detached-backed). The canonical label -> op-row index binds at
   the freeze as `TraceCore.label_rows`.
   backward epochs: `GradFn`/`GradFnCall`/`BackwardPass` are row facades;
@@ -48,7 +48,7 @@
   (`TraceCore.backward_epochs`) — a full rebuild atomically replaces the
   epoch list, a clean tail fold extends the live epoch — whose per-kind row
   stores back the projected records. The lazy watermark/revision
-  invalidation stays trace-side and byte-identical; loaded/preview traces
+  invalidation stays trace-side and byte-identical; loaded and non-PyTorch traces
   keep detached-backed backward records.
   `TraceBuildState` is GONE — its transient fields dissolved into three
   named per-phase workspaces (`ir/workspaces.py`: `RawGraphWorkspace` for

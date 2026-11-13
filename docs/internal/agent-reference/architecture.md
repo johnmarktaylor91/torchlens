@@ -16,7 +16,7 @@ Key entry points:
 - Backend protocol: `torchlens/backends/_backend_protocol.py` - `BackendProtocol`, the one
   contract all six backends fill (`BackendSpec.protocol()`; objects in
   `torchlens/backends/_protocols/<name>.py`), `FrameworkRequirement`, `REFUSAL_CODES`,
-  `VALIDATION_REASONS` and the `maturity` labels. Shared rules: constants
+  `VALIDATION_REASONS` (no maturity label). Shared rules: constants
   (`backends/_constants.py`, called from `backends/_finalize.py`) and realize-once for lazy
   frameworks. The conformance suite (`tests/conformance/`) scores every backend with the
   same case ids; the record ships as `torchlens/backends/<name>/scorecard.json` and surfaces as
@@ -311,11 +311,11 @@ Key entry points:
   intervention; nothing in it imports `torchlens.intervention` at module level. Public doors
   stay in `torchlens.intervention`, `.types` and `.errors`.
 - Intervention: `torchlens/intervention/` plus top-level selector/helper aliases. Live
-  `trace(intervene=...)` runs on torch, on the eager Paddle preview
+  `trace(intervene=...)` runs on torch, on the eager Paddle backend
   (`torchlens/backends/paddle/interventions.py`; forward-only, builtin helper adapters
   `zero_ablate`/`scale`/`add`/`replace_with`, corroborated validation carve-out), and on the
-  eager TF preview (static-label, two-level writable layer, fail-closed site reachability;
-  see invariant 15). `trace(stop_after=...)` runs on torch and Paddle; the remaining previews
+  eager TF backend (static-label, two-level writable layer, fail-closed site reachability;
+  see invariant 15). `trace(stop_after=...)` runs on torch and Paddle; the remaining backends
   refuse typed.
   Spec persistence is one path: `intervention/_save.py` owns the `.tlspec` directory,
   tensors and manifest; `intervention/_spec_codec.py` holds the one spec-document

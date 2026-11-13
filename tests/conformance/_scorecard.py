@@ -1,7 +1,7 @@
-"""Preview scorecards (ecosystem MEMO section 4, build item B4; SPEC 4.5 v2).
+"""Backend scorecards (ecosystem MEMO section 4, build item B4; SPEC 4.5 v3).
 
-"Preview backends publish the highest tier/profile/scope they actually earn,
-unsupported cases in the denominator." A scorecard is one canonical record per
+Every backend publishes the highest tier, profile and scope it actually
+earns, with unsupported cases in the denominator. A scorecard is one canonical record per
 backend, folded from a full C0-C2 conformance run over that backend's roster.
 It lists every case the runner defines for that roster, each in exactly one
 state:
@@ -13,10 +13,11 @@ state:
   failure for the same model stopped the case from being reached.
 
 Every cell is in the denominator; only ``passed`` counts toward it. The
-headline is the highest tier whose every cell passed. Version 2 adds the launch
-label (``maturity``), the framework requirement, the capability summary
-(``supported`` / ``unsupported`` / ``untested`` per flag), the roster group
-counts and the six advisory graduation items. A scorecard is never a claim:
+headline is the highest tier whose every cell passed. The record also carries
+the framework requirement, the capability summary (``supported`` /
+``unsupported`` / ``untested`` per flag), the roster group counts and the six
+graduation items, kept as evidence; no record carries a maturity label
+(version 3 retired it). A scorecard is never a claim:
 its inputs are toys, it carries no claim string, and the word the claim
 grammar reserves is redacted from any provider detail it records.
 
@@ -60,7 +61,7 @@ if TYPE_CHECKING:
 
 __tl_layer__ = "L9"
 
-SCORECARD_VERSION = "torchlens.conformance.preview_scorecard.v2"
+SCORECARD_VERSION = "torchlens.conformance.scorecard.v3"
 
 #: The closed cell-state vocabulary, in canonical count order.
 CELL_STATES: tuple[str, ...] = ("passed", "failed", "unsupported", "not_run")
@@ -121,7 +122,8 @@ class ScorecardCell:
 
 @dataclass(frozen=True)
 class PreviewScorecard:
-    """Canonical per-backend scorecard (record version 2).
+    """Canonical per-backend scorecard (record version 3; version 2 also carried a
+    ``maturity`` label, retired 2026-11-12, which a reader ignores).
 
     Parameters
     ----------
@@ -141,9 +143,6 @@ class PreviewScorecard:
         Cells per state plus ``denominator`` (all cells).
     highest_tier:
         Highest tier whose every cell passed, cumulative from C0, else ``""``.
-    maturity:
-        The backend's launch label (``"preview"`` or ``"stable"``), ``""``
-        when the provider registers no protocol.
     framework_requirement:
         ``minimum``, ``below``, ``tested_through``, ``pinned`` and ``extra`` as
         strings (``""`` for an undeclared value); empty without a protocol.
@@ -152,7 +151,7 @@ class PreviewScorecard:
     roster_groups:
         Roster rows per group.
     graduation:
-        The six advisory graduation items (SPEC 5); never changes ``maturity``.
+        The six graduation items (SPEC 5): evidence, never a label.
     sha256:
         SHA-256 over the canonical bytes with this field excluded.
     """
@@ -165,7 +164,6 @@ class PreviewScorecard:
     cells: tuple[ScorecardCell, ...]
     counts: dict[str, int]
     highest_tier: str
-    maturity: str = ""
     framework_requirement: dict[str, str] = field(default_factory=dict)
     capabilities: dict[str, str] = field(default_factory=dict)
     roster_groups: dict[str, int] = field(default_factory=dict)
@@ -200,7 +198,6 @@ def _canonical_payload(card: PreviewScorecard) -> dict[str, object]:
         ],
         "counts": dict(sorted(card.counts.items())),
         "highest_tier": card.highest_tier,
-        "maturity": card.maturity,
         "framework_requirement": dict(sorted(card.framework_requirement.items())),
         "capabilities": dict(sorted(card.capabilities.items())),
         "roster_groups": dict(sorted(card.roster_groups.items())),
@@ -269,7 +266,6 @@ def scorecard_from_json(text: str) -> PreviewScorecard:
         cells=cells,
         counts={str(key): int(value) for key, value in data.get("counts", {}).items()},
         highest_tier=str(data.get("highest_tier", "")),
-        maturity=str(data.get("maturity", "")),
         framework_requirement={
             str(key): str(value) for key, value in data.get("framework_requirement", {}).items()
         },
@@ -509,7 +505,6 @@ def scorecard_from_report(
         cells=cells,
         counts=counts,
         highest_tier=highest,
-        maturity=str(getattr(protocol, "maturity", "") or ""),
         framework_requirement=_framework_requirement_strings(protocol),
         capabilities=capability_summary(protocol, cells),
         roster_groups=groups,

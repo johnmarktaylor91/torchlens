@@ -54,10 +54,10 @@ class BackendRegistryError(ConfigurationError, ValueError):
     ...     capabilities=tl.backends.BackendCapabilities(*[False] * 7))
     >>> import dataclasses
     >>> try:
-    ...     tl.backends.register(dataclasses.replace(demo, maturity="beta"))
+    ...     tl.backends.register(dataclasses.replace(demo, name="torch"))
     ... except BackendRegistryError as err:
     ...     print(err.code)
-    backend_maturity_invalid
+    backend_already_registered
     """
 
     code: str = "backend_error"

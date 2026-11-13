@@ -404,6 +404,8 @@ internal `MISSING` sentinel that existed only to arbitrate against the removed
 | `Op.out_ref` | `Op.out` / `Op.payload.materialize_out()` | removed |
 | `Op.grad_ref` | `Op.grad` / `Op.payload.materialize_grad()` | removed |
 | `Op.grad_fn_cls` | `Op.autograd.grad_fn_class_name` | removed |
+| `BackendSpec.maturity` | none (no backend carries a maturity label; the backend table in `docs/backends.md` lists features) | removed |
+| `BackendProtocol.maturity` | none (as above) | removed |
 
 ## Module Paths
 

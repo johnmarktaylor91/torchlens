@@ -15,14 +15,14 @@ Speed: to steer or patch over many forwards or through `generate()`, use the cap
 `tl.when(site, action).bind(model)` rather than a `tl.trace` per step. The costs of every path
 are in [Performance: choosing a fast path](guides/fast_paths.md).
 
-Backend note: `backend=None` preserves the torch eager default, and EVERY preview backend
+Backend note: `backend=None` preserves the torch eager default, and EVERY non-PyTorch backend
 auto-routes genuine framework models (MLX, JAX, tinygrad, Paddle, TensorFlow).
 `tl.record()` (sparse recording) and true backward capture are torch-only in backend v1. Backend-neutral
 metadata lives on `Trace.provenance.backend`, `Trace.options.module_identity_mode`, `Trace.provenance.param_source`,
 `Trace.autograd.derived_grads`, `Trace.autograd.intermediate_derived_grads`, `Trace.payload_load_status`,
 `Trace.validation_replay_status`, `dtype_ref`, `device_ref`, `backend_address`, and
-`resolver_status`. Every backend fills one contract, `tl.backends.BackendProtocol`; torch is
-`stable` and the five others are `preview`. Which capabilities each backend supports, its
+`resolver_status`. Every backend fills one contract, `tl.backends.BackendProtocol`; the five
+non-PyTorch backends have fewer features than PyTorch. Which capabilities each backend supports, its
 measured conformance scorecard and its tutorial are in [Backend Support](backends.md) and the
 per-backend pages it links; `tl.report.doctor()` shows each backend's `backend_scorecard:<name>`
 row, and refusals carry an `exc.code` from `tl.backends.REFUSAL_CODES`.
@@ -50,8 +50,8 @@ derived gradients are requested with
 `GradOptions(intermediate_grads=True, max_intermediate_grads=...)` and expose only exact replay
 matches through `Trace.autograd.intermediate_derived_grads` and `Op.autograd.derived_grad`. Paddle capture is
 dygraph/eager only; in-place mutation, RNG, tensor-derived Python scalar escapes, and active
-stochastic/training composites are denied in the preview.
-TensorFlow uses `backend="tf"` / `backend="tensorflow"` for the Keras-3 / TF>=2.16 preview when
+stochastic/training composites are denied.
+TensorFlow uses `backend="tf"` / `backend="tensorflow"` for the Keras-3 / TF>=2.16 backend when
 `keras.backend.backend() == "tensorflow"`. Eager `op_callbacks` capture is the primary shipped
 mechanism and records real values, real taken-branch control flow, op-level records, and
 Keras/`tf.Module` module stacks. Graph-only FuncGraph fallback is the static-mode design for

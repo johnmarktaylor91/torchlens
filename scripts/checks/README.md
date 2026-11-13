@@ -95,7 +95,7 @@ lists them in `MOVED`; `run_all.py` runs each through `governance.as_check`.
 | `schema-lockstep` | `schema_lockstep.py` | Field catalogs and their ledgers; generated files are current, byte for byte |
 | `golden-governance-lint` | `golden_governance_lint.py` | Every golden file is governed or ledgered; golden generators carry the wrap-state guard |
 | `global-state-inventory` | `global_state_inventory.py` | Every mutable module global in `torchlens/` has exactly one lifecycle class, its weak/strong storage matches the ledger, and the hot capture/wrapper subset is classified (rows in `global_state_rows.py`) |
-| `backend-docs-lockstep` | `backend_docs_lockstep.py` | Each registered backend's page has its Tutorial and Can and cannot sections, `docs/backends.md`'s maturity table matches the registry, and each page's can and cannot table equals the backend's shipped scorecard (one line per backend; the tutorial fences still execute in `tests/test_backend_docs_lockstep.py`) |
+| `backend-docs-lockstep` | `backend_docs_lockstep.py` | Each registered backend's page has its Tutorial and Can and cannot sections, `docs/backends.md`'s backend table matches the registry, and each page's can and cannot table equals the backend's shipped scorecard (one line per backend; the tutorial fences still execute in `tests/test_backend_docs_lockstep.py`) |
 
 Unlike the checks above them, these import `torchlens` (and so torch), and
 `known-failures-ledger` runs a collect-only pass of the test suite, so their

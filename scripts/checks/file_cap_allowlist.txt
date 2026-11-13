@@ -713,10 +713,10 @@ torchlens/attribution/_text.py	1089
 torchlens/attribution/_text.py::_resolve_baseline	160
 torchlens/attribution/_text.py::_resolve_target	178
 torchlens/attribution/_text.py::text	284
-torchlens/backends/_default_specs.py	1291
+torchlens/backends/_default_specs.py	1285
 torchlens/backends/_default_specs.py::_simple_leaves	72
 torchlens/backends/_default_specs.py::_tf_can_handle	79
-torchlens/backends/_default_specs.py::register_default_backend_specs	191
+torchlens/backends/_default_specs.py::register_default_backend_specs	186
 torchlens/backends/_finalize.py	1239
 torchlens/backends/_finalize.py::_apply_recurrence_relabel_epilogue	106
 torchlens/backends/_finalize.py::_finalize_single_op	77

@@ -225,9 +225,9 @@ latch a stop request on the active trace before raising. If the forward then
 returns "normally" — user code swallowed the control signal in a broad
 `except:` — the boundary checkpoint raises
 `tl.errors.StopSignalSwallowedError` and the capture settles FAILED, never
-COMPLETE. The halt-capable preview backends (paddle's shipped `stop_after=`, MLX's
+COMPLETE. The halt-capable non-PyTorch backends (paddle's shipped `stop_after=`, MLX's
 halt selector) hold the same contract: their `StopSignal` raise sites latch
-the request on the trace, and `stamp_backend_finalized` — the one preview
+the request on the trace, and `stamp_backend_finalized` — the one non-PyTorch
 settlement stamp — consumes the latch, refusing a latched-but-unhalted
 capture with the same typed error and a FAILED settlement instead of the
 COMPLETE arm. A swallowed nonfinite abort is FAILED, never a clean
@@ -240,10 +240,10 @@ Every product constructor settles through the authority: the torch
 orchestrator's arms (success, halted partial-return, halted re-raise,
 failure, interrupt), `Recording.to_trace()` (`cooked_from=recording`
 provenance note; a halted cooked trace is STOPPED and hits N4/N5), each
-recorder pass and the recorder exit, and every preview backend's capture
+recorder pass and the recorder exit, and every non-PyTorch backend's capture
 entry (`stamp_backend_finalized` as the LAST act after all tail work). A
 failure BEFORE any product is reachable — configuration errors, backend
-constructor failures, preview-backend tail failures between the structural
+constructor failures, non-PyTorch backend tail failures between the structural
 `_tracing_finished` write and the stamp — is a productless escape: the
 exception propagates and no stamp exists, so a hypothetical pickle of the
 escaped object derives UNATTESTED, never COMPLETE. Post-settlement teardown
@@ -273,7 +273,7 @@ sits inside a region whose only success exit reaches an authority stamp.
 - `TerminalState` / `RunOutcome.state` is the first-transition log; it and
   the outcome may legitimately disagree only in the demotion direction,
   disclosed by `note`.
-- Preview cleanup asymmetry vs the torch orchestrator: MLX and Paddle run
+- Cleanup asymmetry of the non-PyTorch backends vs the torch orchestrator: MLX and Paddle run
   `cleanup_model_session` in a `finally` positioned BEFORE their settlement
   stamp (settlement is the last act, per the path-20 contract), so a
   cleanup/teardown failure there is a PRODUCTLESS escape — the exception
@@ -283,7 +283,7 @@ sits inside a region whose only success exit reaches an authority stamp.
   so the same failure class on torch yields a settled FAILED product with
   `exc.partial_trace`. Net semantics are equivalent on the never-COMPLETE
   guarantee (path 7 minus the demoted record); the missing settled record on
-  previews is the disclosed residual.
+  the non-PyTorch backends is the disclosed residual.
 
 ## Public surface added by this design
 

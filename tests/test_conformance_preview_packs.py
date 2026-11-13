@@ -187,7 +187,6 @@ def _golden_payload() -> dict[str, Any]:
         ],
         "counts": {"denominator": 16, "failed": 1, "not_run": 5, "passed": 9, "unsupported": 1},
         "highest_tier": "C0",
-        "maturity": "",
         "framework_requirement": {},
         "capabilities": {},
         "roster_groups": {"config_built": 2},

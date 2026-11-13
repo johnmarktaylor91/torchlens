@@ -119,11 +119,12 @@ also accepts final-label selections.
 suffice, falling back to two-pass resolution otherwise. An
 unqualified recurrent layer label saves all passes, while `"label:2"` saves only pass 2.
 
-Current 2.x backend surface: torch eager is the stable default; MLX, JAX, tinygrad, Paddle, and
-TensorFlow are technical previews behind `BackendSpec`. Paddle is dygraph/eager only, uses
-`tl.backends.paddle.GradOptions` for derived-gradient previews, materializes `.tlspec` array
+Current 2.x backend surface: torch eager is the default and the reference; MLX, JAX, tinygrad, Paddle, and
+TensorFlow sit behind `BackendSpec` with fewer features than PyTorch (see the feature table in
+`docs/backends.md`). Paddle is dygraph/eager only, uses
+`tl.backends.paddle.GradOptions` for derived gradients, materializes `.tlspec` array
 payloads through the Paddle codec, and does not provide true backward capture.
-TensorFlow preview targets Keras 3 on TF>=2.16 with
+The TensorFlow backend targets Keras 3 on TF>=2.16 with
 `keras.backend.backend() == "tensorflow"`; its shipped primary path is eager live capture via
 `op_callbacks` with real values/control flow/op-level records/module stacks. The graph-only
 FuncGraph static path is implemented for compiled/SavedModel entries (opaque regions stay

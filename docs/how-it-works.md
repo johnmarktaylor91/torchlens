@@ -328,12 +328,12 @@ recorded something wrong, and the fix belongs in the capture code, never in the 
 
 ## Backends
 
-Torch is the reference backend and the only stable one. The capture machinery talks to a backend
-through a protocol (`tl.backends.BackendProtocol`), and backends are registered with a spec saying
-whether they are stable or preview and whether they execute eagerly or lazily. TensorFlow, JAX and
-Paddle are eager preview backends; MLX and tinygrad are lazy preview backends, captured by
-realizing the computation once. You select one with `tl.trace(..., backend=...)`. The preview
-backends build their traces through a shared finalizer that reuses the torch pipeline's loop
+Torch is the reference backend; the other five have fewer features than PyTorch (see the table in
+[Backend Support](backends.md)). The capture machinery talks to a backend through a protocol
+(`tl.backends.BackendProtocol`), and backends are registered with a spec saying whether they
+execute eagerly or lazily. TensorFlow, JAX and Paddle are eager backends; MLX and tinygrad are
+lazy backends, captured by realizing the computation once. You select one with
+`tl.trace(..., backend=...)`. The non-PyTorch backends build their traces through a shared finalizer that reuses the torch pipeline's loop
 grouping and module-record steps, so they produce the same `Trace`, `Layer` and `Op` types and the
 same label and lookup rules. What each backend supports is listed in its scorecard. See
 [Backends](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/backends.md).

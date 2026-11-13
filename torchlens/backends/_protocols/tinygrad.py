@@ -1,4 +1,4 @@
-"""tinygrad preview ``BackendProtocol`` shell (delegating; lazy, realize-once).
+"""tinygrad ``BackendProtocol`` shell (delegating; lazy, realize-once).
 
 The shell delegates capture and validation to the registered spec and adds
 the framework-specific members: ``is_tensor``, ``host_copy`` (a NumPy copy
@@ -28,12 +28,11 @@ TINYGRAD_FRAMEWORK = FrameworkRequirement(
 
 
 class TinygradProtocol(SpecBackedProtocol):
-    """The tinygrad preview's protocol object."""
+    """The tinygrad backend's protocol object."""
 
     def __init__(self) -> None:
         super().__init__(
             name="tinygrad",
-            maturity="preview",
             framework=TINYGRAD_FRAMEWORK,
             materialization="lazy",
             trace_options=TINYGRAD_TRACE_OPTIONS,

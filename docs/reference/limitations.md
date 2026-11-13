@@ -149,14 +149,14 @@ HYPOTHESIS until discharged against a real capture.
 | Point-to-point pipeline graphs or DTensor topologies are passed to rank merge. | Typed construction refusal; merged replay does not exist. | Keep rank-local traces for inspection or capture a supported dense explicit-collective SPMD program. |
 | Distributed state is hidden behind descriptor-only/slots-only holders, opaque wrapped TP hooks, beyond the bounded walk, or created inside `forward`. | These are disclosed scan residuals; preflight cannot positively certify absence through opaque state. | Expose registered state/hooks through inspectable module attributes and run `tl.report.doctor(model, inputs)` on the concrete inputs. |
 
-## Preview backends
+## Non-PyTorch backends
 
 | When it can occur | What you see | Remedy |
 | --- | --- | --- |
-| A JAX/MLX/tinygrad/Paddle/TensorFlow preview is asked for torch-only capabilities such as sparse recording, halt, streaming, true backward, or unsupported intervention. | Backend-specific typed capability refusal. Static-label `save=` filters exposed results after full capture and may not reduce capture memory. | Use PyTorch eager for the full surface, or stay within the backend table in [Backends](../backends.md). |
+| A JAX/MLX/tinygrad/Paddle/TensorFlow backend is asked for torch-only capabilities such as sparse recording, halt, streaming, true backward, or unsupported intervention. | Backend-specific typed capability refusal. Static-label `save=` filters exposed results after full capture and may not reduce capture memory. | Use PyTorch eager for the full surface, or stay within the backend table in [Backends](../backends.md). |
 | A loaded non-torch artifact is asked to replay-validate. | `trace.validation_replay_status` is unavailable, commonly reason `loaded_trace_runtime_capture_stripped` or `backend_validation_replay_unsupported`. | Validate while the original backend runtime capture is live; use the loaded artifact for analysis. |
 | JAX importer-owned `model_id`/`while_loop` regions exceed expansion caps or include forward `custom_vjp_call`; TensorFlow contains pure/effect regions outside exact replay. | Validation state is `unverified`; `bool(status)` raises so partial coverage cannot be mistaken for a pass. | Inspect the status counts/reason, reduce the region, or validate the opaque computation with its native framework. |
-| tinygrad capture uses JIT, mutation/realization, or a runtime other than the pinned Python device; Paddle uses mutation, RNG, tensor-to-Python control, or active stochastic training composites. | The preview refuses or reports an unverified boundary rather than silently importing it. | Use the pinned runtime and deterministic eval-mode code, or capture the equivalent PyTorch model. |
+| tinygrad capture uses JIT, mutation/realization, or a runtime other than the pinned Python device; Paddle uses mutation, RNG, tensor-to-Python control, or active stochastic training composites. | The backend refuses or reports an unverified boundary rather than silently importing it. | Use the pinned runtime and deterministic eval-mode code, or capture the equivalent PyTorch model. |
 
 ## Numeric and structural interpretation
 

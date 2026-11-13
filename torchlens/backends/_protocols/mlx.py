@@ -1,4 +1,4 @@
-"""MLX preview ``BackendProtocol`` shell (delegating; lazy, realize-once)."""
+"""MLX ``BackendProtocol`` shell (delegating; lazy, realize-once)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from .._errors import BackendUnsupportedError
 from .._trace_options import MLX_TRACE_OPTIONS
 from .mlx_wrapped_state import mlx_wrappers_installed
 
-#: Every refusal code the MLX preview raises today (subset of ``REFUSAL_CODES``).
+#: Every refusal code the MLX backend raises today (subset of ``REFUSAL_CODES``).
 MLX_REFUSAL_CODES: tuple[str, ...] = (
     "trace_option_unsupported",
     "explicit_seed_unsupported",
@@ -37,19 +37,18 @@ MLX_FRAMEWORK = FrameworkRequirement(
 )
 
 #: Test-only dependencies of the MLX ecosystem roster rows: installed by the
-#: nightly preview leg only, never by a pyproject extra or the per-change leg.
+#: nightly backend leg only, never by a pyproject extra or the per-change leg.
 #: The range follows the ``mlx`` pin: mlx-lm 0.26.x needs ``mlx>=0.26`` and
 #: 0.27 needs ``mlx>=0.29``. The pins test holds the nightly install to it.
 MLX_ECOSYSTEM_TEST_REQUIREMENTS: tuple[str, ...] = ("mlx-lm>=0.26,<0.27",)
 
 
 class MLXProtocol(SpecBackedProtocol):
-    """The MLX preview's protocol object."""
+    """The MLX backend's protocol object."""
 
     def __init__(self) -> None:
         super().__init__(
             name="mlx",
-            maturity="preview",
             framework=MLX_FRAMEWORK,
             materialization="lazy",
             trace_options=MLX_TRACE_OPTIONS,

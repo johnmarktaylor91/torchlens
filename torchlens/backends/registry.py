@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from typing import Any, Final, Literal, TypeAlias
 
 from ._backend_names import TORCH_BACKEND_NAME as TORCH_BACKEND_NAME
-from ._backend_protocol import MATURITIES, _install_spec_lookup, protocol_problems
+from ._backend_protocol import _install_spec_lookup, protocol_problems
 from ._entry_refusals import refuse_backend_registered
 from ._errors import (
     AmbiguousBackendError as AmbiguousBackendError,
@@ -45,10 +45,10 @@ default fake backend.
 """
 
 JAX_BACKEND_NAME: Final[BackendName] = "jax"
-"""Canonical registry name of the JAX preview backend."""
+"""Canonical registry name of the JAX backend."""
 
 TINYGRAD_BACKEND_NAME: Final[BackendName] = "tinygrad"
-"""Canonical registry name of the tinygrad preview backend."""
+"""Canonical registry name of the tinygrad backend."""
 
 CanHandleFn: TypeAlias = Callable[[object, object, dict[Any, Any] | None], bool]
 CaptureTraceFn: TypeAlias = Callable[..., Any]
@@ -187,9 +187,6 @@ class BackendSpec:
         Lazy factory for this backend's ``BackendProtocol`` object (the one
         protocol every backend fills; ``_backend_protocol.py``). Validated at
         registration like ``capture_backend``.
-    maturity:
-        Launch label, ``"preview"`` or ``"stable"``; only a recorded
-        maintainer decision changes it.
 
     Examples
     --------
@@ -197,10 +194,8 @@ class BackendSpec:
     ...     capture_trace=lambda *a, **k: None, validate_entry=lambda *a, **k: None,
     ...     validate_trace=lambda *a, **k: None,
     ...     capabilities=tl.backends.BackendCapabilities(*[False] * 7))
-    >>> (demo.name, demo.priority, demo.maturity)
-    ('demo', 0, 'preview')
-    >>> tl.backends.spec("torch").maturity
-    'stable'
+    >>> (demo.name, demo.priority)
+    ('demo', 0)
     """
 
     name: BackendName
@@ -220,7 +215,6 @@ class BackendSpec:
         default=None, compare=False
     )
     protocol: Callable[[], Any] | None = None
-    maturity: str = "preview"
 
 
 _REGISTRY: dict[str, BackendSpec] = {}
@@ -298,7 +292,7 @@ def _validate_capture_backend_factory(spec: BackendSpec) -> None:
 
 
 def _validate_protocol_factory(spec: BackendSpec) -> None:
-    """Validate a supplied ``BackendProtocol`` factory and the maturity label.
+    """Validate a supplied ``BackendProtocol`` factory.
 
     Parameters
     ----------
@@ -308,24 +302,15 @@ def _validate_protocol_factory(spec: BackendSpec) -> None:
     Returns
     -------
     None
-        Returns when the label is valid and the protocol object (if any)
-        satisfies every member of the protocol.
+        Returns when the protocol object (if any) satisfies every member of
+        the protocol.
 
     Raises
     ------
-    BackendRegistryError
-        ``backend_maturity_invalid`` for a label outside the closed set.
     TypeError
         When the protocol object misses members or contradicts the spec.
     """
 
-    if spec.maturity not in MATURITIES:
-        raise BackendRegistryError(
-            f"Backend {spec.name!r} declares maturity {spec.maturity!r}; the labels are "
-            f"{sorted(MATURITIES)}",
-            code="backend_maturity_invalid",
-            remedy='register the spec with maturity "preview" or "stable"',
-        )
     if spec.protocol is None:
         return
     try:
@@ -335,10 +320,6 @@ def _validate_protocol_factory(spec: BackendSpec) -> None:
             return
         raise
     problems = protocol_problems(candidate, expected_name=str(spec.name))
-    if not problems and candidate.maturity != spec.maturity:
-        problems = (
-            f"protocol maturity {candidate.maturity!r} differs from the spec's {spec.maturity!r}",
-        )
     if problems:
         raise TypeError(
             f"Backend {spec.name!r} protocol does not satisfy BackendProtocol: "

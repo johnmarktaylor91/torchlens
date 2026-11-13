@@ -26,7 +26,7 @@ print([op.func_name for op in trace])
 assert tl.validate(model, x, scope="forward")
 
 protocol = get_backend_spec("torch").protocol()
-print(protocol.name, protocol.maturity, protocol.materialization)
+print(protocol.name, protocol.materialization)
 reference = protocol.reference_output(model, x, None)
 captured = protocol.capture(model, x, None)
 status = protocol.validate(captured, reference)
@@ -49,7 +49,7 @@ object, never a bare boolean.
 | `structure_only_capture` | supported | `structure_only=True`. |
 | `has_validation_replay` | supported | Ground-truth rerun plus per-op replay and perturbation. |
 | `payload_materialization` | supported | Loaded payloads materialize as tensors. |
-| `intermediate_derived_grads` | unsupported | Refuses with `intermediate_derived_grads_unsupported`: torch records true gradients through `backward_capture`; the derived-gradient path is a preview-backend feature torch does not implement. |
+| `intermediate_derived_grads` | unsupported | Refuses with `intermediate_derived_grads_unsupported`: torch records true gradients through `backward_capture`; the derived-gradient path belongs to the other backends and torch does not implement it. |
 
 Torch cannot log `torch.compile`, TorchScript or `torch.export` artifacts (log the eager source
 module), and fused kernels expose no hidden internal tensors.

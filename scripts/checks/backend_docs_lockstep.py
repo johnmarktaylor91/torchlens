@@ -4,8 +4,8 @@ Graduation item G5 and acceptance criterion A26 hold the docs to measured facts:
 
 - every registered backend has ``docs/backends/<name>.md`` with a ``## Tutorial`` and a
   ``## Can and cannot`` section;
-- the maturity table in ``docs/backends.md`` lists exactly the registered backends, each with
-  its registered ``maturity``, its protocol's ``materialization`` and a link to its page;
+- the backend table in ``docs/backends.md`` lists exactly the registered backends, each with
+  its protocol's ``materialization`` and a link to its page;
 - each page's can and cannot table equals the capability summary of the backend's shipped
   scorecard record: every ``BackendCapabilities`` flag the summary reads appears in exactly one
   row, spelled exactly in that row's first cell, and the row's state cell reads ``supported``,
@@ -41,7 +41,7 @@ _DOCS = REPO_ROOT / "docs"
 _GUIDE = _DOCS / "backends.md"
 _PAGES = _DOCS / "backends"
 
-_GUIDE_SECTION = "## Backend protocol and maturity"
+_GUIDE_SECTION = "## Backend protocol"
 _TUTORIAL = "## Tutorial"
 _CAN_AND_CANNOT = "## Can and cannot"
 
@@ -185,28 +185,25 @@ def check_page_sections(backend: str) -> None:
     )
 
 
-def guide_maturity_table_matches_the_registry() -> None:
-    """``docs/backends.md`` lists every registered backend with its maturity and page link."""
+def guide_backend_table_matches_the_registry() -> None:
+    """``docs/backends.md`` lists every registered backend, its materialization and page link."""
 
     rows = _first_table_rows(_section(_GUIDE.read_text(encoding="utf-8"), _GUIDE_SECTION))
     assert rows, f"docs/backends.md lacks the {_GUIDE_SECTION!r} table"
-    documented: dict[str, tuple[str, str, str]] = {}
+    documented: dict[str, tuple[str, str]] = {}
     for cells in rows:
-        assert len(cells) == 4, f"maturity table row needs four cells: {cells}"
+        assert len(cells) == 3, f"backend table row needs three cells: {cells}"
         name = cells[0].strip("` ")
         assert name not in documented, f"docs/backends.md lists {name} twice"
-        link = _LINK_RE.search(cells[3])
+        link = _LINK_RE.search(cells[2])
         assert link is not None, f"docs/backends.md: {name} row has no page link"
-        documented[name] = (_plain(cells[1]), _plain(cells[2]), link.group("target"))
+        documented[name] = (_plain(cells[1]), link.group("target"))
     assert sorted(documented) == list(_BACKENDS), (
         f"docs/backends.md lists {sorted(documented)}; the registry has {list(_BACKENDS)}"
     )
-    for name, (maturity, materialization, target) in documented.items():
+    for name, (materialization, target) in documented.items():
         spec = tl_backends.spec(name)
         protocol = spec.protocol() if spec.protocol is not None else None
-        assert maturity == spec.maturity, (
-            f"docs/backends.md says {name} is {maturity!r}; the registry says {spec.maturity!r}"
-        )
         assert protocol is not None
         assert materialization == protocol.materialization, (
             f"docs/backends.md says {name} is {materialization!r}; "
@@ -283,7 +280,7 @@ def _per_backend(check: Callable[[str], None], label: str) -> tuple[Callable[[],
 CHECKS = (
     registry_has_the_six_protocol_backends,
     *_per_backend(check_page_sections, "page_has_tutorial_and_can_and_cannot_sections"),
-    guide_maturity_table_matches_the_registry,
+    guide_backend_table_matches_the_registry,
     *_per_backend(check_can_and_cannot_table, "can_and_cannot_table_equals_the_scorecard"),
 )
 

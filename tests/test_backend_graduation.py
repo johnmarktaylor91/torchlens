@@ -1,8 +1,8 @@
 """Graduation items G1 to G6 on synthetic scorecards (SPEC 5; criterion A22).
 
 Each item is driven to met and unmet with hand-built scorecards and a
-synthetic repository, the report embeds in the record, and nothing here or in
-the report writes ``maturity``.
+synthetic repository, and the report embeds in the record as evidence; no
+record carries a maturity label.
 """
 
 from __future__ import annotations
@@ -85,7 +85,6 @@ def _card(
             cells,
             {"denominator": len(cells)},
             "C2",
-            maturity="preview",
             framework_requirement=requirement
             if requirement is not None
             else {
@@ -194,6 +193,32 @@ def test_g1_unmet_on_failed_not_run_untested_or_missing_reference(tmp_path: Path
     )
     item = _item(graduation_items(card, reference=reference, repo_root=repo), "G1")
     assert not item.met and "c1_only_torch_has" in item.detail
+
+
+def test_g1_counts_a_supported_capability_in_place_of_torchs_refusal_cell(
+    tmp_path: Path,
+) -> None:
+    """Torch passes ``c1_refusal_<flag>`` by refusing a flag it lacks; a backend that supports
+    the flag has no refusal cell, and that absence is covered only when the flag is supported.
+    """
+
+    repo = _repo(tmp_path)
+    card = _card()
+    flag = "intermediate_derived_grads"
+    refusal = ScorecardCell("C1", f"c1_refusal_{flag}", "", "passed")
+    reference = _card(cells=card.cells + (refusal,))
+    assert card.capabilities[flag] == "supported"
+    assert _item(graduation_items(card, reference=reference, repo_root=repo), "G1").met
+    lacking = _card(capabilities={flag: "unsupported"})
+    item = _item(graduation_items(lacking, reference=reference, repo_root=repo), "G1")
+    assert not item.met and f"c1_refusal_{flag}" in item.detail
+    # A trace-option refusal cell is never covered by a capability flag.
+    option = ScorecardCell("C1", f"c1_refusal_trace_option_{flag}", "", "passed")
+    item = _item(
+        graduation_items(card, reference=_card(cells=card.cells + (option,)), repo_root=repo),
+        "G1",
+    )
+    assert not item.met and f"c1_refusal_trace_option_{flag}" in item.detail
 
 
 def test_g2_needs_the_flag_and_every_validation_cell(tmp_path: Path) -> None:

@@ -1,11 +1,12 @@
 """The one backend protocol: registry wiring, closed registries, shells.
 
-Runs in a torch-only environment: the preview shells must construct and
+Runs in a torch-only environment: the backend shells must construct and
 answer ``runtime_available`` without their framework installed.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import re
 from typing import Any
 
@@ -23,7 +24,6 @@ from torchlens.backends import (
 )
 from torchlens.backends._backend_protocol import (
     BACKEND_PROTOCOL_MEMBERS,
-    MATURITIES,
     SpecBackedProtocol,
     protocol_problems,
 )
@@ -58,20 +58,20 @@ def test_every_registered_backend_supplies_a_protocol_object(backend: str) -> No
     assert isinstance(candidate, BackendProtocol)
     assert protocol_problems(candidate, expected_name=backend) == ()
     assert candidate.name == backend
-    assert candidate.maturity == spec.maturity
-    assert candidate.maturity in MATURITIES
     assert candidate.materialization in {"eager", "lazy"}
     assert candidate.refusal_codes() <= REFUSAL_CODES
     assert candidate.capabilities() is spec.capabilities
     assert tuple(candidate.trace_options()) == tuple(spec.capabilities.trace_options)
 
 
-def test_torch_is_the_stable_reference_and_previews_are_preview() -> None:
-    """Maturity labels match the launch decision: torch stable, the rest preview."""
+def test_no_backend_carries_a_maturity_label() -> None:
+    """The ``preview``/``stable`` label is retired: no spec field, no protocol member."""
 
-    assert get_backend_spec("torch").maturity == "stable"
-    for backend in ALL_BACKENDS[1:]:
-        assert get_backend_spec(backend).maturity == "preview"
+    assert "maturity" not in {f.name for f in dataclasses.fields(BackendSpec)}
+    assert "maturity" not in BACKEND_PROTOCOL_MEMBERS
+    for backend in ALL_BACKENDS:
+        assert not hasattr(get_backend_spec(backend), "maturity")
+        assert not hasattr(get_backend_spec(backend).protocol(), "maturity")
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
@@ -141,7 +141,7 @@ def test_torch_protocol_host_copy_keeps_scalar_shape_and_widens_bfloat16() -> No
     candidate.realize_once([torch.ones(1)])  # eager: a no-op
 
 
-def _make_spec(name: str, *, protocol: Any = None, maturity: str = "preview") -> BackendSpec:
+def _make_spec(name: str, *, protocol: Any = None) -> BackendSpec:
     """A throwaway spec with no framework entries, for registration checks."""
 
     def _no(*args: Any, **kwargs: Any) -> Any:
@@ -165,13 +165,11 @@ def _make_spec(name: str, *, protocol: Any = None, maturity: str = "preview") ->
         serialization_policy=SerializationPolicy(runtime_name=name),
         priority=999,
         protocol=protocol,
-        maturity=maturity,
     )
 
 
 class _Incomplete:
     name = "incomplete"
-    maturity = "preview"
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of backends/_backend_protocol.py.
@@ -185,28 +183,29 @@ def test_registration_refuses_an_incomplete_protocol_object() -> None:
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of backends/registry.py.
-def test_registration_refuses_a_maturity_outside_the_closed_set() -> None:
-    """``maturity`` is ``preview`` or ``stable``; anything else refuses typed."""
+def test_registration_refuses_a_duplicate_name_typed() -> None:
+    """Registering over a built-in without ``replace=True`` refuses typed."""
 
     with pytest.raises(BackendRegistryError) as excinfo:
-        tl.backends.register(_make_spec("mislabelled", maturity="beta"))
-    assert excinfo.value.fields["code"] == "backend_maturity_invalid"
+        tl.backends.register(_make_spec("torch"))
+    assert excinfo.value.fields["code"] == "backend_already_registered"
+    assert get_backend_spec("torch").priority != 999
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of backends/registry.py.
-def test_registration_refuses_a_protocol_whose_maturity_disagrees_with_the_spec() -> None:
-    """The protocol object and the spec state one label."""
+def test_registration_refuses_a_protocol_whose_name_disagrees_with_the_spec() -> None:
+    """The protocol object reports the name its spec registers."""
 
     shell = SpecBackedProtocol(
-        name="disagree",
-        maturity="stable",
+        name="someone_else",
         framework=FrameworkRequirement(("x",), "1.0", None, "1.0", None, "x"),
         materialization="eager",
         trace_options=(),
         refusal_codes=(),
     )
-    with pytest.raises(TypeError, match="maturity"):
-        tl.backends.register(_make_spec("disagree", protocol=lambda: shell, maturity="preview"))
+    with pytest.raises(TypeError, match="differs from the spec name"):
+        tl.backends.register(_make_spec("disagree", protocol=lambda: shell))
+    assert all(s.name != "disagree" for s in registered_backend_specs())
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of backends/registry.py.
@@ -215,7 +214,6 @@ def test_registration_accepts_a_complete_shell_and_the_c0_cells_pass() -> None:
 
     shell = SpecBackedProtocol(
         name="shelled",
-        maturity="preview",
         framework=FrameworkRequirement(("torchlens",), "0.0", None, "0.0", None, "shelled"),
         materialization="eager",
         trace_options=(),

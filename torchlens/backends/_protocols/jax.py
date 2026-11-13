@@ -1,4 +1,4 @@
-"""JAX preview ``BackendProtocol`` (delegating; jaxpr-first, eager values)."""
+"""JAX ``BackendProtocol`` (delegating; jaxpr-first, eager values)."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from .._trace_options import JAX_TRACE_OPTIONS
 
 #: The JAX requirement, stated once (SPEC 1.2; F-M ``tested_through`` arm).
 #: The ``jax`` extra is unpinned, so the pin is what the CI leg resolved when
-#: the preview suite last ran green; the pins test keeps the three in step.
+#: the JAX suite last ran green; the pins test keeps the three in step.
 JAX_FRAMEWORK = FrameworkRequirement(
     distributions=("jax",),
     minimum="0.4.30",
@@ -21,7 +21,7 @@ JAX_FRAMEWORK = FrameworkRequirement(
     extra="jax",
 )
 
-#: Refusal codes the JAX preview raises today (a subset of the registry).
+#: Refusal codes the JAX backend raises today (a subset of the registry).
 JAX_REFUSAL_CODES: tuple[str, ...] = (
     "trace_option_unsupported",
     "explicit_seed_unsupported",
@@ -41,12 +41,11 @@ JAX_REFUSAL_CODES: tuple[str, ...] = (
 
 
 class JAXProtocol(SpecBackedProtocol):
-    """The JAX preview's protocol object."""
+    """The JAX backend's protocol object."""
 
     def __init__(self) -> None:
         super().__init__(
             name="jax",
-            maturity="preview",
             framework=JAX_FRAMEWORK,
             materialization="eager",
             trace_options=JAX_TRACE_OPTIONS,
