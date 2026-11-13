@@ -47,6 +47,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any
 
+from ..._ir.capture_events import CaptureEvents
 from ..._ir.events import (
     BackwardPassEnd,
     BackwardPassStart,
@@ -148,6 +149,25 @@ def _flat_tensors(value: Any) -> list[Any]:
     return []
 
 
+def _walked(root: Any, targets: set[Any]) -> set[int]:
+    """``id()`` of the UOps whose rule ``compute_gradient`` applies.
+
+    tinygrad differentiates a UOp only when one of its sources leads to a
+    target, and never through ``DETACH``: the gradient a ``DETACH`` receives
+    stops there. A recorded op outside this set gets its gradient recorded
+    and no backward node, as a PyTorch tensor without a ``grad_fn``.
+    """
+
+    on_path: set[int] = set()
+    walked: set[int] = set()
+    for uop in root.toposort():
+        if any(id(src) in on_path or src in targets for src in uop.src):
+            on_path.add(id(uop))
+            if _uop_name(uop) != "DETACH":
+                walked.add(id(uop))
+    return walked
+
+
 @dataclass(frozen=True)
 class _PreparedNode:
     """One gradient rule before the realize: its forward UOp and outgoing gradients."""
@@ -240,13 +260,13 @@ class BackwardScope:
         wanted = {uop for uop in ordered if _is_float(uop.dtype)}
         seed = Tensor(1.0, dtype=loss.dtype, device=loss.device)
         grads = compute_gradient(loss.uop, seed.uop, wanted)
-        source_ids = {id(uop) for uop in sources}
+        walked = _walked(loss.uop, wanted)
         for uop in ordered:
             grad = grads.get(uop) if uop in wanted else None
             if grad is None or _uop_name(grad) == "NOOP":
                 continue
             self.op_grads.append((uop, self._target(grad)))
-            if id(uop) not in source_ids:
+            if id(uop) in walked:
                 self._prepare_node(uop, grad, rules, labelled)
         output_ids = {id(tensor.uop) for tensor in _flat_tensors(raw_output)}
         self.root_uops = [node.uop for node in self.nodes if id(node.uop) in output_ids]
@@ -408,6 +428,10 @@ def retain_backward_state(trace: Any, session: Any) -> None:
     uop_labels = getattr(session, "uop_labels", None) or {}
     params = getattr(session, "param_addresses", None) or {}
     trace.__dict__[STATE_KEY] = _retain(trace, scope, uop_labels, params)
+    if getattr(trace, "_capture_events", None) is None:
+        # The capture releases its forward stream after materializing; the
+        # backward pass journals into a fresh stream extending the projection.
+        trace._capture_events = CaptureEvents.detached_from(trace)
 
 
 def _refusal_reason(
