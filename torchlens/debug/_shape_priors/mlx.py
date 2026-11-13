@@ -26,6 +26,9 @@ from ._fn_roots import (
     parse_ints,
 )
 
+#: Module whose presence in ``sys.modules`` lets the search route a callable
+#: that names no framework to this prior.
+FRAMEWORK = "mlx.core"
 _PREFIXES = ("mlx",)
 _UNIFORM: ValueRange = ("uniform", 0.0, 1.0)
 _MATMUL_MISMATCH = re.compile(

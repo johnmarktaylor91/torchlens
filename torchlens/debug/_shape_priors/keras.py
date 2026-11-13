@@ -29,6 +29,9 @@ from ._fn_roots import (
     parse_ints,
 )
 
+#: Module whose presence in ``sys.modules`` lets the search route a callable
+#: that names no framework to this prior.
+FRAMEWORK = "tensorflow"
 _PREFIXES = ("tensorflow", "keras", "tf_keras")
 _UNIFORM: ValueRange = ("uniform", 0.0, 1.0)
 _SPEC_MISMATCH = re.compile(
@@ -113,7 +116,7 @@ def lazy_reason(model: Any) -> str | None:
     return (
         f"The Keras {type(model).__name__} is not built: its weights are created on the first "
         "call, so their shapes are unknown. Call it once on a real input (or build it from "
-        "keras.Input), then retry; the model was left untouched."
+        "keras.Input), then retry."
     )
 
 

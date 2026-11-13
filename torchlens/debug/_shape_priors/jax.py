@@ -32,6 +32,9 @@ from ._fn_roots import (
     names_framework,
 )
 
+#: Module whose presence in ``sys.modules`` lets the search route a callable
+#: that names no framework to this prior.
+FRAMEWORK = "jax"
 _PREFIXES = ("jax", "jaxlib", "flax", "equinox")
 _UNIFORM: ValueRange = ("uniform", 0.0, 1.0)
 #: Mode attributes ``nnx.Module.eval`` flips; saved and restored per submodule.
