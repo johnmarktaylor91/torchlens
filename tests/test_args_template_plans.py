@@ -24,6 +24,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens.backends.torch import (
+    _arg_observation,
     _args_template_cache,
     _ops_arguments,
     _ops_predicate_events,
@@ -279,12 +280,22 @@ def test_validated_parameter_memo_fills_once_per_parameter(monkeypatch: pytest.M
     real_meta = _ops_arguments.get_param_meta
 
     def counting_meta(value: Any) -> Any:
-        """Count one parameter-log validation (a meta read from the validator)."""
-        if sys._getframe(1).f_code.co_name == "_session_validated_parameter":
+        """Count one parameter-log validation (a meta read from either validator).
+
+        The flat observation's ``validated_parameter`` takes the rung itself on a
+        parameter's first sight and falls back to ``_session_validated_parameter``; that
+        nested read belongs to the one validation already counted.
+        """
+        caller = sys._getframe(1).f_code.co_name
+        if caller == "validated_parameter" or (
+            caller == "_session_validated_parameter"
+            and sys._getframe(2).f_code.co_name != "validated_parameter"
+        ):
             rungs.append(id(value))
         return real_meta(value)
 
     monkeypatch.setattr(_ops_arguments, "get_param_meta", counting_meta)
+    monkeypatch.setattr(_arg_observation, "get_param_meta", counting_meta)
     torch.manual_seed(0)
     model = _Varied()
     tl.trace(model, torch.randn(2, 6))
