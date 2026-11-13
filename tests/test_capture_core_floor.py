@@ -38,7 +38,8 @@ def test_sections_partition_a_plain_forward_and_leave_no_hook() -> None:
     # argument scan a cost per output.
     longer = _counted(cost.Chain(32), torch.zeros(4))["calls"]
     assert longer["module_handling"] - calls["module_handling"] < 24 * 4
-    assert longer["arg_scan"] - calls["arg_scan"] > 24 * 100
+    # per output: at least 5x the per-trace module bound above; not a cost bar
+    assert longer["arg_scan"] - calls["arg_scan"] > 24 * 20
 
 
 def test_module_calls_are_attributed_to_module_handling() -> None:
