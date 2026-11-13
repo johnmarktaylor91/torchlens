@@ -235,6 +235,7 @@ _BINDINGS: Mapping[str, Mapping[str, Callable[[], object]]] = MappingProxyType(
             "can_intervene": _tinygrad_interventions_implementation,
         },
         "paddle": {
+            "backward_capture": _native_backward_binding("paddle"),
             "can_intervene": _paddle_interventions_implementation,
             "fastlog": _lazy_binding(
                 "torchlens.backends.paddle._record", "paddle_record_producer", call=True
@@ -243,6 +244,7 @@ _BINDINGS: Mapping[str, Mapping[str, Callable[[], object]]] = MappingProxyType(
             "has_streaming": _lazy_binding("torchlens.backends.paddle._stream_capture"),
         },
         "tf": {
+            "backward_capture": _native_backward_binding("tf"),
             "can_intervene": _tf_interventions_implementation,
             "fastlog": _lazy_binding(
                 "torchlens.backends.tf._record", "tf_record_producer", call=True

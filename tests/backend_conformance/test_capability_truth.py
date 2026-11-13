@@ -137,7 +137,9 @@ EXPECTED_GATED_CAPABILITIES: dict[str, dict[str, bool]] = {
         "structure_only_capture": False,
     },
     "paddle": {
-        "backward_capture": False,
+        # Lifted 2026-11 (parity wave B): native backward capture through
+        # torchlens.backends._backward_native.paddle (tests/test_parity_b_backward_flips.py).
+        "backward_capture": True,
         # Lifted 2026-11 (pp-b-paddle-cap): tl.record lean events (tests/test_parity_b_paddle_cap_record.py).
         "fastlog": True,
         # Lifted 2026-08: live intervene=/halt= dispatch through the eager
@@ -151,7 +153,9 @@ EXPECTED_GATED_CAPABILITIES: dict[str, dict[str, bool]] = {
         "structure_only_capture": True,
     },
     "tf": {
-        "backward_capture": False,
+        # Lifted 2026-11 (parity wave B): native backward capture through
+        # torchlens.backends._backward_native.tf (tests/test_parity_b_backward_flips.py).
+        "backward_capture": True,
         # Lifted 2026-11 (pp-b-tf-cap): tl.record lean eager events (tests/test_parity_b_tf_cap_record.py).
         "fastlog": True,
         # Lifted 2026-08: intervene= and halt= for eager entries via the
@@ -376,7 +380,7 @@ class _StubTrace:
         self._provenance_backend = backend
 
 
-@pytest.mark.parametrize("name", ("mlx", "tinygrad", "paddle", "tf"))
+@pytest.mark.parametrize("name", ("mlx", "tinygrad"))
 def test_backward_accessor_guard_redirects_to_derived_grads(name: str) -> None:
     """Derived-grads backends refuse with the derived-gradient redirect."""
 
@@ -417,7 +421,7 @@ def test_backward_accessor_guard_torch_passes_unknown_refuses() -> None:
 
 
 def test_backward_accessors_raise_for_all_non_backward_backends() -> None:
-    """paddle/tf join jax/mlx/tinygrad: no silent-empty backward accessors."""
+    """Backends without backward capture refuse the accessors; none is silently empty."""
 
     model = nn.Linear(2, 2)
     trace = tl.trace(model, torch.randn(1, 2))

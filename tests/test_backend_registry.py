@@ -832,7 +832,7 @@ def test_paddle_preview_unsupported_options_raise_typed_error() -> None:
             _PaddleLayer(),
             paddle.to_tensor([1.0]),
             backend="paddle",
-            capture=tl.options.CaptureOptions(backward_ready=True),
+            capture=tl.options.CaptureOptions(save_rng=True),
         )
 
 
