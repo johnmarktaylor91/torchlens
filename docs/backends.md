@@ -488,9 +488,19 @@ What it does:
 - Each op records the user source lines that ran it, as on PyTorch (`op.source.frames`,
   `save_source_context`, `source_context_lines`).
 - Refused: transformed root callables (`jax.jit`, `jax.vmap`, `jax.grad`) and capture from inside
-  them, unsupported nested-jaxpr primitives, callback effects, `intervene=`, `stop_after=`,
-  streaming, `save_grads=` and `tl.record(backend="jax")`. `save=` applies after finalization.
-  For intervention and sparse recording, use the PyTorch backend.
+  them, unsupported nested-jaxpr primitives, callback effects, streaming and `save_grads=`.
+  `save=` on `tl.trace` applies after finalization.
+- `intervene=` edits equation outputs at capture, with the six builtin helpers and callables;
+  with `grad_options=`, derived gradients follow the edited program and `tl.grad(...)` sites
+  edit the gradient at each matched output. Finished traces take edits through
+  `trace.fork().do(...)`. `stop_after=` stops interpreting at the first matching equation and
+  unwinds every nested frame before any later primitive binds.
+- `tl.record(..., backend="jax")` records per-equation values with the same raw labels as
+  `tl.trace`; only selected values are kept, and `stop_after=` stops at the frontier.
+- Inside an Equinox or NNX module, submodules called in `jax.jit`, a taken `lax.cond` branch,
+  `lax.scan` or `lax.while_loop` are attributed; each loop iteration is its own module call, and
+  their returns are unrecorded (`CaptureGapWarning`). `checkpoint`/`remat`, `custom_vjp` and
+  `shard_map` inside a module refuse typed.
 - Backward capture: `trace.backward(lambda out: jnp.sum(out ** 2))` records a backward pass from
   JAX's own derivative rules, one `GradFn` per backward equation, with per-op gradients. The loss
   is a callable of `trace.output` returning a real scalar; custom-VJP calls and whole control-flow

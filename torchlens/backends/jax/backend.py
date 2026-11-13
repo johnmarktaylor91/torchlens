@@ -39,7 +39,6 @@ from ..._ir.predicate import RecordContext
 from ..._ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
 from ..._ir.semantics import BackendSemantics, CapturePolicy
 from ..._ir.workspaces import _init_module_hierarchy_data
-from ..._output_slot import returned
 from ..._postprocess._grouping_stamp import build_grouping_policy_stamp
 from ..._postprocess._materialize import materialize_from_events
 from ..._postprocess._selective_save import (
@@ -100,6 +99,7 @@ from ._capture_scopes import forward_scopes, retain_backward_state
 from ._closure_consts import _readable_closure_consts
 from ._converted_grads import DerivedGradCapture, attach_jax_derived_grads
 from ._edits import append_session_event, open_equation_session, pop_edit_kwargs, replay_with_edits
+from ._halt import JaxStop
 from ._host_state import _reject_closed_over_host_state
 from ._input_kwargs import bind_input_kwargs
 from ._module_frames import jax_event_module_frames
@@ -578,6 +578,7 @@ class JAXBackend:
         save_predicate = pop_static_label_save_predicate({"save": save}, backend_name="JAX")
         facet_recipes = pop_facet_recipes(kwargs)
         intervene = pop_edit_kwargs(kwargs)
+        stop = JaxStop.pop(kwargs)
         self._reject_extra_kwargs(kwargs)
         _reject_transformed_callable(model)
         # N5: ``trace()`` passes the grouped ``capture=CaptureOptions(...)`` only,
@@ -725,16 +726,14 @@ class JAXBackend:
                 flat_args,
                 jax_control_flow=cast(str, jax_control_flow),
                 jax_max_control_flow_unroll=cast(int, jax_max_control_flow_unroll),
-                equation_hook=session.hook,
-                hooks=hooks,
+                **stop.interpreter_kwargs(session, hooks),
             )
-        result, output = session.finish(return_probe.split_outputs(result, tree), output)
+        result, output = stop.finish(return_probe.split_outputs(result, tree), session, output)
         output_leaf_paths = self._output_leaf_paths(output)
         output_container_spec = self._builtin_output_container_spec(output)
         trace._cost_forward_duration = Duration(time.time() - trace._provenance_start_time)
 
-        trace._output_slot = returned(output)
-        trace.transformed_output = output_transform(output) if callable(output_transform) else None
+        stop.stamp_output(trace, output, output_transform)
         self._emit_arg_sources(trace, args)
         self._emit_const_sources(trace, closure_consts)
         self._emit_equations(trace, result)
@@ -749,7 +748,7 @@ class JAXBackend:
             stamp_pytree_param_barcodes(trace, tree, result.captures)
         else:
             self._attach_params(trace, args[0] if args else None)
-        self._finish_trace(trace, tree, result.equations)
+        self._finish_trace(trace, tree, result.captures)
         _stamp_jaxpr_results(trace, closed_jaxpr, result, static_argnums)
         retain_backward_state(trace, session, events, backward_ready=cast(bool, backward_ready))
         apply_static_label_save_policy(trace, save_predicate, backend_name="JAX")

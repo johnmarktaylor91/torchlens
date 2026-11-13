@@ -3,8 +3,7 @@
 The JAX spec declares ``can_intervene=True`` with the capture-time edit runtime
 bound, so ``tl.trace(..., backend="jax", intervene=...)`` reaches the jaxpr
 interpreter without any test-side flag flip. ``stop_after=`` shares the
-capability's options and refuses typed in the backend, because the capture
-interprets the whole jaxpr and has no partial-capture finalization.
+capability's options and halts the interpreter at the first matching equation.
 """
 
 from __future__ import annotations
@@ -16,7 +15,6 @@ import pytest
 
 import torchlens as tl
 from torchlens.backends.registry import require_capability_implementation
-from torchlens.errors import BackendUnsupportedError
 
 jax = pytest.importorskip("jax")
 jnp = pytest.importorskip("jax.numpy")
@@ -73,12 +71,11 @@ def test_jax_live_helper_capture_validates(action: Any) -> None:
     assert bool(trace.validate_forward_pass([]))
 
 
-def test_jax_stop_after_refuses_typed_in_backend() -> None:
-    """``stop_after=`` reaches the backend and refuses with a typed code and option."""
+def test_jax_stop_after_halts_in_backend() -> None:
+    """``stop_after=`` reaches the backend and stops the trace at the first tanh."""
 
-    with pytest.raises(BackendUnsupportedError, match=r"trace\(stop_after=\.\.\.\)") as caught:
-        tl.trace(cast(Any, _model), jnp.asarray(_X), backend="jax", stop_after=tl.func("tanh"))
-    error = cast(Any, caught.value)
-    assert (getattr(error, "code", None) or error.fields.get("code")) == (
-        "interventions_unsupported"
-    )
+    trace = tl.trace(cast(Any, _model), jnp.asarray(_X), backend="jax", stop_after=tl.func("tanh"))
+    assert trace.is_stopped is True
+    frontier = trace[trace.stop_reason]
+    assert frontier.layer_type == "tanh"
+    np.testing.assert_allclose(np.asarray(frontier.out), np.tanh(_X @ _W), rtol=1e-6, atol=1e-6)

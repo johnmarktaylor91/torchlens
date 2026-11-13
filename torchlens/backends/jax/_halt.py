@@ -193,14 +193,16 @@ class JaxStop:
             kwargs["stop_after"] = stop.stop_site
         return stop
 
-    def interpreter_kwargs(self, session: Any) -> dict[str, Any]:
-        """Return the interpreter's ``equation_hook`` and ``hooks`` for this capture."""
+    def interpreter_kwargs(self, session: Any, hooks: InterpreterHooks) -> dict[str, Any]:
+        """Return the interpreter's ``equation_hook`` and ``hooks`` for this capture.
+
+        ``hooks`` are the capture scopes' interpreter hooks; a stop adds its halt check.
+        """
 
         if self.selector is None:
-            return {"equation_hook": session.hook, "hooks": InterpreterHooks(session=session)}
+            return {"equation_hook": session.hook, "hooks": hooks}
         self.site = JaxHaltSite(session, self.selector)
-        hooks = InterpreterHooks(session=session, halt=self.site.check)
-        return {"equation_hook": self.site.hook, "hooks": hooks}
+        return {"equation_hook": self.site.hook, "hooks": replace(hooks, halt=self.site.check)}
 
     def finish(self, result: Any, session: Any, output: Any) -> tuple[Any, Any]:
         """Finish the run: a halted run's outputs are the frontier capture's outputs."""

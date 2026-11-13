@@ -32,7 +32,6 @@ from ..._ir.selector_eval import selector_contains_kind
 from ..._selection.selectors import BaseSelector
 from ...intervention._types import Edit, InterventionDecision
 from ...recording._exceptions import PredicateError
-from .._options import pop_stop_directive
 from ..registry import BackendUnsupportedError
 from ._edit_helpers import checked_replacement, resolve_helper_applier
 from ._edited_grads import EditedProgram
@@ -463,7 +462,9 @@ def _warn_zero_matches(intervene: Any) -> None:
 
 
 def pop_edit_kwargs(kwargs: dict[str, Any]) -> Any:
-    """Pop ``intervene`` and the stop directive from the backend kwargs.
+    """Pop ``intervene`` from the backend kwargs.
+
+    The stop directive (``stop_after=`` / ``halt``) stays for ``_halt.JaxStop.pop``.
 
     Parameters
     ----------
@@ -474,24 +475,9 @@ def pop_edit_kwargs(kwargs: dict[str, Any]) -> Any:
     -------
     Any
         The ``intervene`` predicate, or ``None``.
-
-    Raises
-    ------
-    BackendUnsupportedError
-        ``interventions_unsupported`` for ``stop_after=``: the JAX capture path
-        interprets the whole jaxpr and has no partial-capture finalization yet.
     """
 
-    intervene = kwargs.pop("intervene", None)
-    if pop_stop_directive(kwargs) is not None:
-        raise BackendUnsupportedError(
-            "JAX backend trace(stop_after=...) is not supported: the capture interprets "
-            "the whole jaxpr and has no partial-capture finalization. Capture the full "
-            "forward (trace(intervene=...) edits are supported), or use the PyTorch backend.",
-            code="interventions_unsupported",
-            option="stop_after",
-        )
-    return intervene
+    return kwargs.pop("intervene", None)
 
 
 def open_equation_session(

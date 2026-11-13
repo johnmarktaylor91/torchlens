@@ -1080,12 +1080,9 @@ def test_jax_rejects_callback_effects() -> None:
     ("kwargs", "pattern"),
     (
         ({"save": ["tanh"]}, "full-save only"),
-        # can_intervene is True (intervene= edits equation outputs); stop_after=
-        # refuses typed in the backend until partial-capture finalization lands.
-        ({"stop_after": tl.func("tanh")}, r"trace\(stop_after=\.\.\.\) is not supported"),
-        # Gated options refuse through the central capability gate, whose
-        # canonical message names the owning flag and the refused option.
-        ({"save_grads": True}, "backward_capture=False.*save_grads"),
+        # backward_capture is True, but trace.backward(loss_fn) honors no
+        # save_grads selection, so the JAX option policy refuses it by name.
+        ({"save_grads": True}, "JAX backend does not support save_grads"),
     ),
 )
 def test_jax_rejects_save_shaping_kwargs(kwargs: dict[str, Any], pattern: str) -> None:

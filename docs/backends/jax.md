@@ -39,7 +39,7 @@ print(status.state)
 | backward_capture | supported | `trace.backward(loss_fn)` records one backward pass per call from JAX's own derivative rules; custom-VJP calls and whole control-flow regions refuse. |
 | has_validation_replay | supported | Replay distinguishes verified operations and partial regions. |
 | fastlog | unsupported | Sparse recording is not declared. |
-| can_intervene | supported | `intervene=` edits equation outputs at capture and, with `grad_options=`, the gradient at `tl.grad(...)` sites; derived gradients follow the edited program; `stop_after=` refuses. See Edits. |
+| can_intervene | supported | `intervene=` edits equation outputs at capture and, with `grad_options=`, the gradient at `tl.grad(...)` sites; derived gradients follow the edited program; `stop_after=` halts at the first matching equation. See Edits. |
 | rng_replay | unsupported | RNG replay is not declared. |
 | payload_materialization | supported | Portable forward and derived array payloads are materialized. |
 | has_streaming | unsupported | Streaming capture refuses. |
@@ -86,9 +86,11 @@ These shapes refuse with a typed error:
 - a hook result that is not an array or changes the shape or dtype
   (`intervention_result_invalid`);
 - a predicate that returns something other than a decision, helper, callable or
-  `None` (`predicate_return_invalid`);
-- `stop_after=`: the capture interprets the whole jaxpr and has no partial-capture
-  finalization (`interventions_unsupported`).
+  `None` (`predicate_return_invalid`).
+
+`stop_after=` stops interpreting at the first matching equation: the trace keeps the
+captures up to that frontier, unwinds every nested frame before any later primitive binds,
+and reports `is_stopped` and `stop_reason` as on PyTorch.
 
 #### Edits with derived gradients
 
@@ -137,6 +139,19 @@ typed error before anything is committed:
   (`backend_replay_not_differentiable`);
 - `tl.patch_from` with a JAX donor array (`backend_replay_edit_helper_unsupported`; the
   callable form `fork.do(site, lambda out, *, ctx: donor)` works).
+
+### Recording
+
+`tl.record(..., backend="jax")` records per-equation values with the same raw labels as
+`tl.trace`; only selected values are kept, and `stop_after` stops interpreting at the
+frontier.
+
+### Modules inside transforms
+
+Inside an Equinox or NNX module, submodules called in `jax.jit`, a taken `lax.cond`
+branch, `lax.scan` or `lax.while_loop` are attributed; each loop iteration is its own module
+call, and their returns are unrecorded (`CaptureGapWarning`). `checkpoint`/`remat`,
+`custom_vjp` and `shard_map` inside a module refuse typed.
 
 ### Source lines
 

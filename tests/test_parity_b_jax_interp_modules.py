@@ -249,23 +249,17 @@ def test_shared_submodule_in_scan_gets_one_call_per_run() -> None:
         ({"jax_control_flow": "region"}, "scan_region_requested"),
     ],
 )
-def test_scan_imported_as_region_inside_module_refuses_typed(
-    options: dict[str, Any], reason: str
-) -> None:
-    """A scan that would import as a region in a module capture refuses typed.
-
-    Module parameters are paired with ops in a pass that does not count region ops yet,
-    so the region would leave inconsistent parameter links; refusing keeps every module
-    capture sound.
-    """
+def test_scan_imported_as_region_inside_module(options: dict[str, Any], reason: str) -> None:
+    """A scan imported as a region inside an attributed module becomes one region op."""
 
     model = _Twin(_Lin(1), _Lin(2), "scan", length=5)
-    with pytest.raises(BackendUnsupportedError, match="unsupported nested primitive") as excinfo:
-        tl.trace(model, _input(), backend="jax", capture=tl.options.CaptureOptions(**options))
+    trace = _trace(model, _input(), capture=tl.options.CaptureOptions(**options))
 
-    assert excinfo.value.code == "jax_nested_primitive_unsupported"
-    notes = " ".join(getattr(excinfo.value, "__notes__", []))
-    assert reason in notes and "jax_max_control_flow_unroll" in notes
+    regions = [op for op in trace._layer_list if op.annotations.get("jax_capture_kind") == "region"]
+    assert len(regions) == 1
+    assert regions[0].annotations["jax_region_reason"] == reason
+    assert not _labels(trace, "a")
+    assert trace.validate_forward_pass([]).state == "unverified"
 
 
 def test_reject_mode_still_refuses_control_flow_inside_module() -> None:
