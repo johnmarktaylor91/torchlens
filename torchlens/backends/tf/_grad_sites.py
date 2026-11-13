@@ -79,7 +79,7 @@ def arm_tf_grad_sites(trace: Any, tf: Any) -> None:
             build_grad_site_edits(
                 clause.selector,
                 apply,
-                lambda inner: _labels(trace, inner),
+                lambda inner: resolve_forward_labels(trace, inner),
                 operands=selector_operands,
                 name=f"tf_grad_{index}",
             )
@@ -136,7 +136,7 @@ def _tape_edit(apply: Callable[[Any, Any], Any], tf: Any) -> Callable[..., Any]:
     return action
 
 
-def _labels(trace: Any, selector: Any) -> tuple[str, ...]:
+def resolve_forward_labels(trace: Any, selector: Any) -> tuple[str, ...]:
     """Op labels a forward selector names on a finished trace, in trace order."""
 
     sites = trace.find_sites(selector, max_fanout=len(trace._layer_list) + 1)
@@ -151,6 +151,7 @@ def _labels(trace: Any, selector: Any) -> tuple[str, ...]:
 __all__ = [
     "arm_tf_grad_sites",
     "grad_replay_clauses",
+    "resolve_forward_labels",
     "gradient_replay_intervene",
     "selector_operands",
     "stage_tf_grad_clauses",
