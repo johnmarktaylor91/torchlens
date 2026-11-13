@@ -174,7 +174,7 @@ class _EventEmitter:
 
         for _path, value in backend._tree_leaves_with_paths(tuple(args)):
             if backend.is_tensor(value):
-                self._emit("input", "input", value, (), (), kind="input")
+                self._emit("input", "input", value, (), kind="input")
         for _value in consts:
             self.labels.reserve_label("constant")
 
@@ -190,7 +190,7 @@ class _EventEmitter:
         self.emit_pending(captures)
         self.seen += 1
         self.producer.equations_bound += 1
-        self._emit(eqn.primitive.name, eqn.primitive.name, outputs, stacks, ())
+        self._emit(eqn.primitive.name, eqn.primitive.name, outputs, stacks)
         return outputs
 
     def emit_pending(self, captures: Sequence[Any]) -> None:
@@ -199,7 +199,7 @@ class _EventEmitter:
         for capture in captures[self.seen :]:
             layer_type = _REGION_LAYER_TYPES.get(capture.kind, capture.primitive)
             capture_stacks = (capture.module_stack, capture.module_call_stack)
-            self._emit(layer_type, capture.primitive, capture.output_values, capture_stacks, ())
+            self._emit(layer_type, capture.primitive, capture.output_values, capture_stacks)
         self.seen = max(self.seen, len(captures))
 
     def _emit(
@@ -208,11 +208,13 @@ class _EventEmitter:
         func_name: str,
         value: Any,
         stacks: Any,
-        parents: tuple[str, ...],
         *,
         kind: str = "op",
     ) -> None:
-        """Emit one event, deliver its value when requested, unwind when told to stop."""
+        """Emit one event, deliver its value when requested, unwind when told to stop.
+
+        JAX record events carry no parent labels (the lean stream is per-op values).
+        """
 
         reserved = self.labels.reserve_label(layer_type)
         if isinstance(value, tuple):
@@ -224,7 +226,7 @@ class _EventEmitter:
             layer_type=reserved.layer_type,
             type_index=reserved.type_index,
             raw_index=reserved.raw_index,
-            parent_labels=parents,
+            parent_labels=(),
             func_name=func_name,
             shape=None if shape is None else tuple(shape),
             dtype=getattr(value, "dtype", None),
