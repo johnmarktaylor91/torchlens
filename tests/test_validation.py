@@ -6668,10 +6668,12 @@ def test_non_function_root_cyclic_address_parent_raises() -> None:
 
 
 def test_plain_non_function_root_unattributed_compute_op_raises() -> None:
-    """A non-function-root trace with an unattributed compute op is invalid."""
+    """An unclaimed compute op the root call does not list is invalid (listed top-level ops pass)."""
 
     log = _relabel_as_mlx_object_module(_make_root_only_log())
     try:
+        for index in log.modules["self"].calls:
+            log.modules["self"].calls.get(index).ops = []
         with pytest.raises(MetadataInvariantError, match="module_attribution"):
             check_metadata_invariants(log)
     finally:
