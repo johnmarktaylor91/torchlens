@@ -413,14 +413,23 @@ def _framework_version() -> str:
         return ""
 
 
-def bind_recipes(trace: Any, recipes: Mapping[str, OpRecipe]) -> None:
+def bind_recipes(
+    trace: Any,
+    recipes: Mapping[str, OpRecipe],
+    *,
+    param_payloads: Mapping[str, Any] | None = None,
+) -> None:
     """Rebuild ``trace.tinygrad_uop_captures`` from recipes and the trace's saved payloads.
 
     Every op that is not an input source needs a recipe; a missing, foreign,
     unlisted or inconsistent recipe raises :class:`ReplayRefusal` before
-    the trace is changed.
+    the trace is changed. A tinygrad parameter op is a saved value whose recipe
+    carries its captured value, and this adapter reports no live parameter
+    payloads, so ``param_payloads`` must be empty or ``None``.
     """
 
+    if param_payloads:
+        raise ReplayRefusal("type", "tinygrad recipes take no parameter payloads")
     ops_by_raw = {getattr(op, "_label_raw", ""): op for op in trace._layer_list}
     final_to_raw = _final_to_raw_labels(ops_by_raw)
     by_raw: dict[str, Any] = {}

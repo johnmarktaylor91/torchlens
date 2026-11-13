@@ -98,7 +98,7 @@ def test_recipes_are_data_only_and_name_their_inputs() -> None:
 
 
 def test_bind_refuses_missing_foreign_and_corrupt_recipes() -> None:
-    """A missing recipe, another backend's, an unlisted op or a bad source position is refused."""
+    """A missing recipe, another backend's, an unlisted op, a bad source position or parameter payloads are refused."""
 
     trace = _trace(ROWS[0])
     recipes = _round_tripped_recipes(trace)
@@ -112,6 +112,9 @@ def test_bind_refuses_missing_foreign_and_corrupt_recipes() -> None:
     for bad in cases:
         with pytest.raises(ReplayRefusal):
             adapter.bind_recipes(trace, bad)
+    with pytest.raises(ReplayRefusal):
+        adapter.bind_recipes(trace, recipes, param_payloads={"fc.weight": [0.0]})
+    adapter.bind_recipes(trace, recipes, param_payloads={})
     with pytest.raises(ReplayRefusal):
         decode_recipe(
             {**encode_recipe(item), "op_identity": "tinygrad.uop.CUSTOM"},
