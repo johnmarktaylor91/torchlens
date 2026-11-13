@@ -194,6 +194,17 @@ def _lazy_binding(
     return _resolve
 
 
+def _native_backward_binding(name: str) -> Callable[[], object]:
+    """Return a resolver for ``name``'s native backward surface (imports no framework)."""
+
+    def _resolve() -> object:
+        from ._backward_native import native_backward_surface
+
+        return native_backward_surface(name)
+
+    return _resolve
+
+
 _BINDINGS: Mapping[str, Mapping[str, Callable[[], object]]] = MappingProxyType(
     {
         "torch": {
@@ -205,6 +216,7 @@ _BINDINGS: Mapping[str, Mapping[str, Callable[[], object]]] = MappingProxyType(
             "structure_only_capture": _torch_structure_only_implementation,
         },
         "jax": {
+            "backward_capture": _native_backward_binding("jax"),
             "can_intervene": _jax_interventions_implementation,
             "fastlog": _lazy_binding(
                 "torchlens.backends.jax._record", "jax_record_producer", call=True
@@ -223,6 +235,7 @@ _BINDINGS: Mapping[str, Mapping[str, Callable[[], object]]] = MappingProxyType(
             "can_intervene": _tinygrad_interventions_implementation,
         },
         "paddle": {
+            "backward_capture": _native_backward_binding("paddle"),
             "can_intervene": _paddle_interventions_implementation,
             "fastlog": _lazy_binding(
                 "torchlens.backends.paddle._record", "paddle_record_producer", call=True
@@ -231,6 +244,7 @@ _BINDINGS: Mapping[str, Mapping[str, Callable[[], object]]] = MappingProxyType(
             "has_streaming": _lazy_binding("torchlens.backends.paddle._stream_capture"),
         },
         "tf": {
+            "backward_capture": _native_backward_binding("tf"),
             "can_intervene": _tf_interventions_implementation,
             "fastlog": _lazy_binding(
                 "torchlens.backends.tf._record", "tf_record_producer", call=True

@@ -380,10 +380,6 @@ JAX_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
             "The JAX backend does not support save_args; full-save forward capture "
             "only. Use full-save JAX trace capture or the PyTorch backend."
         ),
-        "backward_ready": (
-            "The JAX backend does not support backward_ready; full-save forward capture "
-            "only. Use tl.backends.jax.GradOptions for derived gradients."
-        ),
         "transform": (
             "The JAX backend does not support transform; full-save forward capture only. "
             "Use full-save JAX trace capture or the PyTorch backend."
@@ -445,7 +441,6 @@ PADDLE_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
             "save_grads",
             "save_args",
             "save_rng",
-            "backward_ready",
             "transform",
             "layer_visualizers",
             "save_visualizations",
@@ -503,10 +498,8 @@ TF_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
         for name in (
             "activation_transform",
             "detach_saved_activations",
-            "save_grads",
             "save_args",
             "save_rng",
-            "backward_ready",
             "transform",
             "layer_visualizers",
             "save_visualizations",
