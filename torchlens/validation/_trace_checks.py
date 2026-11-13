@@ -15,7 +15,7 @@ from .._capture.finalize.settle import save_new_outs as _save_new_outs_impl
 from .._capture.outcome import require_capture_capability
 from .._capture.structure_only import require_structure_only_capability
 from .._capture_state_helpers import unwrap_compiled_model
-from .._io._replay_recipe_codec import loaded_replay_recipe_status
+from .._io._replay_recipe_adapter import loaded_replay_recipe_status
 from .._runnable import refuse_poisoned_trace
 from .._utils.rng import restores_rng_streams
 from ..backends.registry import get_backend_spec
