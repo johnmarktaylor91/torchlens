@@ -3475,6 +3475,7 @@ docs-md	docs/maintainers/where.md	144
 docs-md	docs/maintainers/where.md	1440
 docs-md	docs/maintainers/where.md	145
 docs-md	docs/maintainers/where.md	146
+docs-md	docs/maintainers/where.md	1460
 docs-md	docs/maintainers/where.md	14666
 docs-md	docs/maintainers/where.md	1467
 docs-md	docs/maintainers/where.md	147
@@ -4060,6 +4061,7 @@ docs-md	docs/maintainers/where.md	64820
 docs-md	docs/maintainers/where.md	64845
 docs-md	docs/maintainers/where.md	649
 docs-md	docs/maintainers/where.md	64998
+docs-md	docs/maintainers/where.md	64917
 docs-md	docs/maintainers/where.md	65
 docs-md	docs/maintainers/where.md	651
 docs-md	docs/maintainers/where.md	653
@@ -4120,6 +4122,7 @@ docs-md	docs/maintainers/where.md	727332
 docs-md	docs/maintainers/where.md	727402
 docs-md	docs/maintainers/where.md	727559
 docs-md	docs/maintainers/where.md	727297
+docs-md	docs/maintainers/where.md	727644
 docs-md	docs/maintainers/where.md	728
 docs-md	docs/maintainers/where.md	728040
 docs-md	docs/maintainers/where.md	728021
@@ -9028,6 +9031,7 @@ test-docstrings	tests/test_episode_truth_refusals.py	13
 test-docstrings	tests/test_episode_truth_refusals.py	40
 test-docstrings	tests/test_episode_truth_refusals.py	42
 test-docstrings	tests/test_episode_truth_travel_policy.py	11
+test-docstrings	tests/test_equivalence_resolve.py	1.0
 test-docstrings	tests/test_error_code_coverage.py	25
 test-docstrings	tests/test_error_code_coverage.py	900
 test-docstrings	tests/test_escape_disclosure_persistence.py	16

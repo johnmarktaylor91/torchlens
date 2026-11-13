@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1850 modules, 729666 lines, 0 modules without a docstring.
+85 packages, 1851 modules, 729835 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -61,7 +61,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6537 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8522 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 10 | 4482 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 168 | 66390 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 169 | 66559 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8876 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2741 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 28 | 9426 |
@@ -1544,12 +1544,12 @@ tinygrad backend preview. (10 modules, 4482 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (168 modules, 66390 lines)
+Torch backend implementation package for TorchLens capture. (169 modules, 66559 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Torch backend implementation package for TorchLens capture. | 5 |
-| `_arg_hash` | Structural argument hash for the equivalence class of a parameter-free op. | 181 |
+| `_arg_hash` | Structural argument hash for the equivalence class of a parameter-free op. | 252 |
 | `_arg_observation` | Planned argument observation for flat calls: the slot facts and the witness. | 337 |
 | `_arg_template_resolve` | Resolve one call's replay argument template from the facts observed at the call. | 117 |
 | `_args_template_cache` | Per-capture plans of the replay argument template, keyed on the call's argument layout. | 278 |
@@ -1582,6 +1582,7 @@ Torch backend implementation package for TorchLens capture. (168 modules, 66390 
 | `_completeness_storage` | Storage observation and scalar-escape helpers. | 866 |
 | `_completeness_types` | State and value types shared by completeness-witness slices. | 311 |
 | `_consumer_kind` | Raise-time branch-kind classification for a scalar escape. | 66 |
+| `_equivalence_resolve` | Equivalence class and call-site class as resolvers over recorded inputs. | 75 |
 | `_escape_detection_fields` | Field table copying escape/completeness diagnostics from a trace onto a fastlog recording. | 33 |
 | `_failed_session` | Torch stopped and failed forward-session cleanup for the FINALIZE stage. | 228 |
 | `_fire_timing` | Per-fire backward timing helpers. | 143 |
@@ -1620,7 +1621,7 @@ Torch backend implementation package for TorchLens capture. (168 modules, 66390 
 | `_module_state` | Which modules own state, the fact call-site grouping (''callsite_v2'') scopes on. | 56 |
 | `_op_markers` | Per-call op markers: NVTX ranges + join markers. | 250 |
 | `_opaque_call_advisory` | Name the opaque call behind a completeness-witness gap. | 366 |
-| `_ops_activations` | Output tensor metadata and activation persistence. | 772 |
+| `_ops_activations` | Output tensor metadata and activation persistence. | 778 |
 | `_ops_arg_slots` | One per-op snapshot of the tensor argument slots the shared-fields derivations read. | 331 |
 | `_ops_argument_fields` | Argument family of the shared op fields: argument scan, slot snapshot and templates. | 430 |
 | `_ops_arguments` | Argument templates, edge uses, and tensor provenance. | 799 |
@@ -1714,7 +1715,7 @@ Torch backend implementation package for TorchLens capture. (168 modules, 66390 
 | `rescue` | Rescue re-run: recover escaped ops with a TorchFunctionMode net. | 933 |
 | `sources` | Log torch capture source tensors. | 782 |
 | `structure_only_belt` | Structure-only teaching-refusal belts. | 656 |
-| `tensor_tracking` | Track torch tensor provenance, family links, and equivalence classes. | 1431 |
+| `tensor_tracking` | (syntax error at line 1421) | 1448 |
 | `wrappers` | Lazy torch function wrapping for capture-time operation interception. | 2722 |
 
 ### `torchlens.bridge`

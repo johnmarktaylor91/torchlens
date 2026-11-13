@@ -31,8 +31,12 @@ from ..._utils.display import _record_phase_timing
 from ..._utils.hashing import make_random_barcode
 from ..._utils.tensor_utils import SaveMode, safe_copy
 from ...recording._types import CaptureSpec
-from ._arg_hash import _get_hash_from_args
+from ._arg_hash import (
+    _get_hash_from_args as _get_hash_from_args,  # re-exported
+    observe_arg_inputs,
+)
 from ._completeness_origins import internal_scalar_read
+from ._equivalence_resolve import resolve_equivalence_class
 from ._graph_pins import _STATE_BOUNDARY_GRAD_FNS
 from ._ops_arg_slots import current_arg_slots, parent_arg_positions_from_slots
 from ._parent_arg_containers import _is_supported_parent_arg_container, _iter_arg_container_items
@@ -1401,29 +1405,22 @@ def _get_equivalence_class(
 
     This fingerprint is used by loop detection.  Two operations with the same
     fingerprint are candidates for being "the same layer on different ops."
-
-    Note: non-parameterized ops default to ``call_index=1`` because without
-    parameters to track reuse, there's no reliable way to count ops.
+    It is the resolver applied to the call's recorded inputs
+    (:mod:`._equivalence_resolve`), so resolving later gives the same string.
 
     Args:
         args: Positional arguments to the function call.
         kwargs: Keyword arguments to the function call.
         i: Index of this output tensor within a multi-output call.
         layer_type: The normalized operation name.
-        fields_dict: Must contain ``in_multi_output`` and
-            ``module``.
+        fields_dict: Must contain ``in_multi_output`` and ``module``.
 
     Returns:
         A string key identifying this operation's equivalence class.
     """
-    arg_hash = _get_hash_from_args(args, kwargs)
-    equivalence_class = f"{layer_type}_{arg_hash}"
-    if fields_dict["in_multi_output"]:
-        equivalence_class += f"_outindex{i}"
-    if fields_dict["module"] is not None:
-        module_str = fields_dict["module"][0]
-        equivalence_class += f"_module{module_str}"
-    return equivalence_class
+    output_index = i if fields_dict["in_multi_output"] else None
+    record = observe_arg_inputs(args, kwargs)
+    return resolve_equivalence_class(layer_type, record, output_index, fields_dict["module"])
 
 
 # ``backward`` imports this module at its top; bound here, at the bottom, so the cycle
