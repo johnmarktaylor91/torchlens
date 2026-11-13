@@ -132,7 +132,7 @@ class _observe_tensor_ops:
                 return result
             return self.edits.apply(self, result, name)
 
-        # tinygrad deliberately exposes this as a method; preview capture replaces it temporarily.
+        # tinygrad deliberately exposes this as a method; capture replaces it temporarily.
         setattr(Tensor, "_apply_uop", wrapped)
         return self
 
@@ -156,5 +156,5 @@ class _observe_tensor_ops:
 
         from tinygrad import Tensor
 
-        # Restore the deliberately replaced tinygrad method after preview capture.
+        # Restore the deliberately replaced tinygrad method after capture.
         setattr(Tensor, "_apply_uop", self.original)

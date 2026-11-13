@@ -1,4 +1,4 @@
-"""Execution guard for tinygrad preview capture.
+"""Execution guard for tinygrad capture.
 
 Realizing a tensor, assigning into one, or running a ``TinyJit`` inside the
 traced callable executes the lazy UOp graph and truncates the lineage the
@@ -43,7 +43,7 @@ class _reject_mid_capture_execution:
 
             del args, kwargs
             raise BackendUnsupportedError(
-                "tinygrad backend preview cannot capture Tensor.realize(), Tensor.assign(), "
+                "the tinygrad backend cannot capture Tensor.realize(), Tensor.assign(), "
                 "or TinyJit execution inside the traced callable yet; return a lazy tinygrad "
                 "expression instead.",
                 code="mid_capture_execution_unsupported",

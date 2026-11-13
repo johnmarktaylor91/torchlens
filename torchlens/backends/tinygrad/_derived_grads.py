@@ -1,4 +1,4 @@
-"""Derived-gradient helpers for the tinygrad preview backend.
+"""Derived-gradient helpers for the tinygrad backend.
 
 Bracketed backward on tinygrad leaves: normalize the differentiated input
 argnums, walk the positional inputs to their tensor leaves, snapshot any

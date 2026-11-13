@@ -719,7 +719,7 @@ def _paddle_interventions_implementation() -> object:
 
 
 def _paddle_capture_trace(*args: Any, **kwargs: Any) -> Any:
-    """Dispatch to the Paddle backend preview.
+    """Dispatch to the Paddle backend.
 
     Parameters
     ----------
@@ -738,7 +738,7 @@ def _paddle_capture_trace(*args: Any, **kwargs: Any) -> Any:
 
 
 def _tf_capture_trace(*args: Any, **kwargs: Any) -> Any:
-    """Dispatch to the TensorFlow backend preview.
+    """Dispatch to the TensorFlow backend.
 
     Parameters
     ----------

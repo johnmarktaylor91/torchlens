@@ -1,6 +1,6 @@
 """tinygrad adoption of the shared backend rules: typed refusals, named verdicts, constants.
 
-Three small contracts the preview-backend protocol asks of every backend,
+Three small contracts the backend protocol asks of every backend,
 written here once so ``backend.py`` only calls them:
 
 - Typed refusals (SPEC 1.3): a payload that has no readable buffer refuses
@@ -110,7 +110,7 @@ def refuse_constant_unrealizable(
     """
 
     return BackendUnsupportedError(
-        "tinygrad backend preview cannot read the payload of op "
+        "the tinygrad backend cannot read the payload of op "
         f"{describe_uop(uop)}: the value has no readable buffer ({cause}). A closure "
         "constant built outside the traced callable (Tensor(ndarray) or a tinygrad.nn layer "
         "not yet realized) stays a host-side source buffer",
@@ -160,7 +160,7 @@ def refuse_rng_state_in_graph(uop: Any, *, code: str) -> BackendUnsupportedError
     """
 
     return BackendUnsupportedError(
-        "tinygrad backend preview cannot capture a forward that draws random numbers "
+        "the tinygrad backend cannot capture a forward that draws random numbers "
         f"itself (op {describe_uop(uop)}): replay validation would draw them again and get "
         "different values. Random-init weights created before the forward are captured; "
         "Tensor.rand, dropout or other RNG calls inside the traced callable are refused",

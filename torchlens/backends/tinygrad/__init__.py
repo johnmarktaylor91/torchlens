@@ -1,4 +1,4 @@
-"""tinygrad backend preview."""
+"""tinygrad backend."""
 
 from __future__ import annotations
 

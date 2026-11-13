@@ -1,4 +1,4 @@
-"""Registry-backed capability exports for the tinygrad backend preview."""
+"""Registry-backed capability exports for the tinygrad backend."""
 
 from __future__ import annotations
 

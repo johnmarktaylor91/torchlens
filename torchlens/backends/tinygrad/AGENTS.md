@@ -1,9 +1,8 @@
 # backends/tinygrad/ - Implementation Guide
 
-tinygrad preview backend: UOp-snapshot capture of an eager forward. It fills the backend protocol (`maturity="preview"`, no `capture_backend`); its
+tinygrad backend: UOp-snapshot capture of an eager forward. It fills the backend protocol (no `capture_backend`); its
 `BackendSpec` in `../default_specs.py` and its protocol shell in
-`../_protocols/tinygrad.py` are the capability truth (contract: `../AGENTS.md`). This is the smallest
-preview: `backend.py` plus registry-backed `capabilities.py` only.
+`../_protocols/tinygrad.py` are the capability truth (contract: `../AGENTS.md`).
 
 ## _uop_graph.py
 - The UOp walk helpers `backend.py` uses (file cap). `_data_flow_uops` decides
