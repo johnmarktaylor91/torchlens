@@ -24,8 +24,15 @@ reruns the Yes and Partial cells so the table cannot quietly go stale.
 | tinygrad | Partial (1) | Partial (2) | Yes | Partial (4) | Partial (6) | Yes | Partial (7) | Yes | Yes |
 
 1. You can select operations by function, by module, or both. Selecting by influence (which
-   later units a given unit can reach) works only on PyTorch; on the other frameworks it refuses
-   with `influence_geometry_unavailable` or returns only a whole-input upper bound.
+   later units a given unit can reach) with `method="gradient"` works on every framework in both
+   directions: TorchLens replays the captured operations between the two units and differentiates
+   the replay with the framework's own autodiff, after checking the replay reproduces the
+   capture. A trace without runtime replay records (a loaded trace) refuses with
+   `gradient_replay_unavailable`. On PaddlePaddle, tinygrad, and MLX graphs with convolutions (no
+   forward-mode rule in MLX 0.26), a projective probe runs one reverse probe per target element
+   and refuses above 4096 target elements. Geometric influence selection works only on PyTorch;
+   on the other frameworks it refuses with `influence_geometry_unavailable` or returns only a
+   whole-input upper bound.
 2. You can save only the operations you choose. Stopping the forward pass early and fast
    repeated recording (`tl.record`) work only on PyTorch.
 3. You can save only the operations you choose and stop the forward pass early. Fast repeated
@@ -40,9 +47,10 @@ reruns the Yes and Partial cells so the table cannot quietly go stale.
    function or by module; a condition on their values raises an error. You cannot edit a
    finished trace or patch in activations from another run; asking for either raises an error
    that names the framework.
-7. The NaN finder and the dead-unit counter work. Guessing a model's input shape works only on
-   PyTorch, and on a convolution output the dead-unit counter needs the channel axis passed as
-   `dim`.
+7. The NaN finder and the dead-unit counter work. Guessing a model's input shape works on
+   PyTorch, Paddle, tinygrad, TensorFlow, MLX and JAX; for a plain function it reports a working
+   or ambiguous shape, never a determined one. On a convolution output the dead-unit counter
+   needs the channel axis passed as `dim`.
 
 Compare means comparing two runs on the same framework, for example two inputs through one
 model. Comparing a run from one framework with a run from another (a PyTorch trace against an
@@ -474,7 +482,11 @@ What it does:
 - Refused: transformed root callables (`jax.jit`, `jax.vmap`, `jax.grad`) and capture from inside
   them, unsupported nested-jaxpr primitives, callback effects, `intervene=`, `stop_after=`,
   streaming, `save_grads=` and `tl.record(backend="jax")`. `save=` applies after finalization.
-  For intervention, sparse recording and true backward graphs, use the PyTorch backend.
+  For intervention and sparse recording, use the PyTorch backend.
+- Backward capture: `trace.backward(lambda out: jnp.sum(out ** 2))` records a backward pass from
+  JAX's own derivative rules, one `GradFn` per backward equation, with per-op gradients. The loss
+  is a callable of `trace.output` returning a real scalar; custom-VJP calls and whole control-flow
+  regions refuse.
 - `.tlspec` saves use `payload_policy="array_payloads"` and load back as `jax.Array`; typed PRNG
   keys round-trip as typed keys. Fully addressable single-host sharded arrays are saved as
   assembled host values with versioned `jax_sharding_*` fields and a `jax_named_sharding` block
@@ -598,7 +610,7 @@ The implementation view of the same facts, one row per backend:
 |---|---|---|---|---|---|
 | `torch` | Stable eager wrapper capture | Replay validation | Materialized `.tlspec` payloads | `torch_module` | True backward capture |
 | `mlx` | Eager-dispatch capture; live `intervene=`/`stop_after=` (static or value-dependent) | Live per-op replay and parent perturbation over the captured (whitelisted) op set | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.autograd.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads` |
-| `jax` | Jaxpr-first functional capture | Live per-equation replay and parent perturbation | Materialized forward/derived array `.tlspec` payloads | `function_root`, Equinox/NNX `pytree_module` | `trace.autograd.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads` |
+| `jax` | Jaxpr-first functional capture | Live per-equation replay and parent perturbation | Materialized forward/derived array `.tlspec` payloads | `function_root`, Equinox/NNX `pytree_module` | `trace.autograd.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads`; true backward capture via `trace.backward(loss_fn)` |
 | `tinygrad` | UOp-snapshot functional capture; live static-selector `intervene=` | Live UOp replay and parent perturbation on `DEV=PYTHON` payloads | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.autograd.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads` |
 | `paddle` | Dygraph/eager capture with live forward `intervene=`/`stop_after=` | Live replay/perturbation plus static inventory guard; corroborated user-intervention carve-out | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.autograd.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads` |
 | `tf` | Eager op-callback capture with live `intervene=`/`stop_after=` (static or value-dependent); implemented graph-only FuncGraph static path for compiled/SavedModel entries | Callback self-consistency plus per-op replay/perturbation accounting | Materialized forward array `.tlspec` payloads | `function_root`, Keras/`tf.Module` object `object_module` | `trace.autograd.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads` (eager entries only) |
