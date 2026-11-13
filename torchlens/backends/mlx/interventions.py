@@ -1,12 +1,13 @@
-"""Static-label live interventions for the technical-preview MLX backend.
+"""Live interventions and stop sites for the MLX backend.
 
 The MLX wrapper sees each concrete lazy output before the caller, and the
 derived-grad tap observer already proved mid-forward output substitution, so
-static-label ``trace(intervene=tl.when(...))`` and ``trace(stop_after=...)`` sites
-apply at the wrapper boundary. Value-dependent conditions (``tl.where``
-predicates and bare callables) are admitted too: ``_live_sites`` fills the
-predicate context's value fields for that run only, evaluating at the op where
-a value is read, so plain and static-label captures stay realize-once.
+``trace(intervene=tl.when(...))`` and ``trace(stop_after=...)`` sites apply at
+the wrapper boundary. Static selectors and value-dependent conditions
+(``tl.where`` predicates and bare callables) are both admitted; a
+value-dependent condition sees torch's live predicate context (value fields
+``None``), so nothing is evaluated at the op and every capture stays
+realize-once (see "Live site matching" below).
 
 Everything here fails closed. A predicate that is not the ``tl.when`` shape, a
 selector kind outside the admitted set, a non-forward or
@@ -32,7 +33,7 @@ from ..._ir.selector_eval import (
     selector_contains_kind,
 )
 from ..._postprocess._selective_save import _STATIC_INTERVENTION_SELECTOR_KINDS
-from ..._selection.selectors import BaseSelector, WhereSelector
+from ..._selection import selectors as _selectors
 from ...intervention._types import Edit, InterventionDecision
 from ...intervention.hooks import make_hook_context, normalize_hook
 from ..registry import BackendUnsupportedError
@@ -100,11 +101,11 @@ class MLXInterventionPlan:
         MLX-native hook application for matched output leaves.
     """
 
-    selector: BaseSelector
+    selector: _selectors.BaseSelector
     applier: MLXHookApplier
 
 
-def selector_matches_capture_context(selector: BaseSelector, ctx: Any) -> bool:
+def selector_matches_capture_context(selector: _selectors.BaseSelector, ctx: Any) -> bool:
     """Evaluate a static selector against one capture-time record context.
 
     Parameters
@@ -137,7 +138,7 @@ def resolve_mlx_intervention_plan(
     intervene: Any | None,
     halt: Any | None,
     mx: Any,
-) -> tuple[MLXInterventionPlan | None, BaseSelector | None]:
+) -> tuple[MLXInterventionPlan | None, _selectors.BaseSelector | None]:
     """Validate and resolve the MLX intervention/halt surface.
 
     Parameters
@@ -151,7 +152,7 @@ def resolve_mlx_intervention_plan(
 
     Returns
     -------
-    tuple[MLXInterventionPlan | None, BaseSelector | None]
+    tuple[MLXInterventionPlan | None, _selectors.BaseSelector | None]
         Resolved intervention plan and halt selector.
 
     Raises
@@ -161,11 +162,13 @@ def resolve_mlx_intervention_plan(
     """
 
     plan: MLXInterventionPlan | None = None
-    halt_selector: BaseSelector | None = None
+    halt_selector: _selectors.BaseSelector | None = None
     if intervene is not None:
         selector = _as_selector(getattr(intervene, "selector", None))
         decision = getattr(intervene, "decision", None)
-        if not isinstance(selector, BaseSelector) or not isinstance(decision, InterventionDecision):
+        if not isinstance(selector, _selectors.BaseSelector) or not isinstance(
+            decision, InterventionDecision
+        ):
             raise BackendUnsupportedError(
                 "MLX backend supports trace(intervene=...) only as a one-rule "
                 "tl.when(condition, action), where the condition is a selector "
@@ -182,7 +185,7 @@ def resolve_mlx_intervention_plan(
         )
     if halt is not None:
         halt_selector = _as_selector(halt)
-        if not isinstance(halt_selector, BaseSelector):
+        if not isinstance(halt_selector, _selectors.BaseSelector):
             raise BackendUnsupportedError(
                 "MLX backend supports trace(stop_after=...) for selectors "
                 "(tl.func, tl.label, tl.label_contains, tl.in_module, tl.where and "
@@ -200,14 +203,14 @@ def _as_selector(condition: Any) -> Any:
     caller's typed refusal.
     """
 
-    if isinstance(condition, (BaseSelector, type)):
+    if isinstance(condition, (_selectors.BaseSelector, type)):
         return condition
     if callable(condition):
-        return WhereSelector(condition)
+        return _selectors.WhereSelector(condition)
     return condition
 
 
-def _reject_gradient_site(selector: BaseSelector) -> None:
+def _reject_gradient_site(selector: _selectors.BaseSelector) -> None:
     """Refuse a site outside the activation universe: MLX has no backward capture."""
 
     from ...intervention.hooks import split_site_branches
@@ -221,7 +224,7 @@ def _reject_gradient_site(selector: BaseSelector) -> None:
         )
 
 
-def _reject_non_static_selector(selector: BaseSelector, *, surface: str) -> None:
+def _reject_non_static_selector(selector: _selectors.BaseSelector, *, surface: str) -> None:
     """Refuse selector trees containing kinds outside the admitted live set.
 
     Parameters
