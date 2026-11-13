@@ -135,7 +135,7 @@ typed error before anything is committed:
   (`backend_replay_op_unreplayable`);
 - a gradient edit (`replay_gradient_edit_unsupported`) and a differentiable replay
   (`backend_replay_not_differentiable`);
-- `tl.patch_from` with a JAX donor array (`backend_replay_helper_unsupported`; the
+- `tl.patch_from` with a JAX donor array (`backend_replay_edit_helper_unsupported`; the
   callable form `fork.do(site, lambda out, *, ctx: donor)` works).
 
 ### Source lines

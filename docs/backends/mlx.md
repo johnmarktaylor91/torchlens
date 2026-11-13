@@ -161,7 +161,7 @@ named code), `not yet proven` (False, refusal not yet pinned by a passing suite 
 | `tl.grad` of a module site, and one selector mixing forward and gradient sites | unsupported | `backward_capture_unsupported` |
 | An edit that reads forward state (`tl.patch_from`) at a `tl.grad` site | unsupported | `edit_signal_mismatch` |
 | A built-in helper outside the MLX helper table, live | unsupported | `interventions_unsupported` |
-| A built-in helper outside the MLX helper table, on a fork | unsupported | `backend_replay_helper_unsupported` |
+| A built-in helper outside the MLX helper table, on a fork | unsupported | `backend_replay_edit_helper_unsupported` |
 | Helper arguments that do not fit the matched output (zero-norm projection direction, direction of the wrong length) | unsupported | `intervention_helper_arguments_invalid` |
 | An intervention that returns a non-`mx.array` or changes shape or dtype | unsupported | `intervention_result_invalid` |
 | `intervene=` as a raw decision callable (not `tl.when`) | unsupported | `backend_unsupported` |

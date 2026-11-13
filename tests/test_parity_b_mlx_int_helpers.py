@@ -160,7 +160,7 @@ def test_fork_helper_outside_the_table_refuses_typed() -> None:
     clean = tl.trace(_chain(lambda o: o), mx.array(_X), backend="mlx")
     with pytest.raises(Exception, match="no replay application") as info:
         clean.fork().do(_rectifier_label(clean), tl.add_noise(0.1))
-    assert info.value.fields["code"] == "backend_replay_helper_unsupported"
+    assert info.value.fields["code"] == "backend_replay_edit_helper_unsupported"
 
 
 def test_live_helper_outside_the_table_refuses_typed() -> None:
