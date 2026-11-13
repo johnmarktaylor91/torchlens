@@ -742,7 +742,7 @@
   "c1.chain1000.phase.post.build_layer_logs": 1.2019461077844311,
   "c1.chain1000.phase.post.build_lookup_keys": 8.053143712574851,
   "c1.chain1000.phase.post.build_module_logs": 0.15823353293413175,
-  "c1.chain1000.phase.post.compaction": 142.59775449101798,
+  "c1.chain1000.phase.post.compaction": 182.49041916167664,
   "c1.chain1000.phase.post.find_output_ancestors": 0.06706586826347305,
   "c1.chain1000.phase.post.group_recurrent_layers": 48.56511976047904,
   "c1.chain1000.phase.post.hash_graph_shape": 59.11961077844312,
