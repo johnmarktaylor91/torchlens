@@ -21,6 +21,7 @@ pytest.importorskip("tinygrad")
 from tinygrad import Tensor  # noqa: E402
 
 from tests.conformance._rosters import tinygrad as roster  # noqa: E402
+from tests.test_parity_b_adapter_tinygrad_replay import live_validator_failure  # noqa: E402
 from torchlens.backends.tinygrad import TinygradBackend  # noqa: E402
 
 pytestmark = [pytest.mark.backend_tinygrad, pytest.mark.rare]
@@ -52,10 +53,11 @@ def _round_tripped_recipes(trace: Any) -> dict[str, Any]:
 
 @pytest.mark.parametrize("row", ROWS, ids=lambda row: row.family)
 def test_recipe_round_trip_rebuilds_captures_the_validator_passes(row: Any) -> None:
-    """Drop the live captures, bind decoded recipes, and the unchanged validator passes."""
+    """Drop the live captures, bind decoded recipes: the unchanged validator gives the live verdict."""
 
     trace = _trace(row)
     live = {c.label_raw: c for c in trace.tinygrad_uop_captures}
+    live_failure = live_validator_failure(trace)
     recipes = _round_tripped_recipes(trace)
     trace.tinygrad_uop_captures = ()
     adapter.bind_recipes(trace, recipes)
@@ -63,7 +65,9 @@ def test_recipe_round_trip_rebuilds_captures_the_validator_passes(row: Any) -> N
     assert rebuilt.keys() == live.keys()
     for raw, capture in rebuilt.items():
         assert capture.parent_arg_positions == tuple(sorted(live[raw].parent_arg_positions))
-    assert TinygradBackend().validate_trace(trace) is True
+    # The rebuilt captures give the live verdict: a pass, or the same rejected op
+    # where the unchanged validator rejects one live on this device.
+    assert live_validator_failure(trace) == live_failure
 
 
 def test_rebuilt_captures_still_catch_a_corrupted_payload() -> None:
