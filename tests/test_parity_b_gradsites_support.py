@@ -18,6 +18,7 @@ import numpy as np
 from torchlens.backends._replay_adapters import get_adapter
 from torchlens.intervention._grad_site_neutral import (
     GradSiteEdit,
+    GradSitePass,
     GradSiteResult,
     edited_gradients_for_backend,
 )
@@ -120,7 +121,11 @@ def run_neutral(
     loss = adapter.recipe(trace, graph_ops[-1]).output_slots[0]
     armed = [GradSiteEdit(site, lambda grad, call, fn=fn: fn(grad), name) for name, fn in edits]
     result = edited_gradients_for_backend(
-        trace, backend, graph_ops, values.__getitem__, {loss: ones_like(values[loss])}, armed
+        trace,
+        backend,
+        graph_ops,
+        values.__getitem__,
+        GradSitePass({loss: ones_like(values[loss])}, armed),
     )
     input_label = next(label for label in source if label in result.grads)
     return NeutralRun(result=result, site=site, input_label=input_label, adapter=adapter)
