@@ -72,7 +72,11 @@ from .._options import (
     reject_unsupported_trace_options,
     resolve_optional_capture_field as _resolve_optional_capture_field,
 )
-from .._validation_shared import float_replay_tolerances_for_dtype_name, scalar_replay_close
+from .._validation_shared import (
+    float_replay_tolerances_for_dtype_name,
+    replay_payload,
+    scalar_replay_close,
+)
 from ._captures import TinygradIntermediateCandidate, TinygradUOpCapture
 from ._derived_grads import (
     _differentiated_input_leaves,
@@ -2742,18 +2746,8 @@ def _saved_single_output(
         Saved tinygrad tensor payload.
     """
 
-    if not getattr(op, "has_saved_activation", False):
-        label_raw = getattr(op, "_label_raw", None)
-        if (
-            isinstance(label_raw, str)
-            and hidden_outputs_by_label
-            and label_raw in hidden_outputs_by_label
-        ):
-            return hidden_outputs_by_label[label_raw]
+    if (output := replay_payload(op, hidden_outputs_by_label or {})) is None:
         raise ValueError("tinygrad validation requires every replay payload to be saved.")
-    output = op.out
-    if output is None:
-        raise ValueError("tinygrad validation found a missing saved payload.")
     return output
 
 

@@ -12,7 +12,11 @@ import numpy as np
 from ..._validation_status import ValidationReplaySource, ValidationStatus
 from .._constants import CONSTANT_PARENT_PAYLOAD_REASON, CONSTANT_PRODUCER_LEAF_REASON
 from .._invariants import run_metadata_invariants
-from .._validation_shared import float_replay_tolerances, ops_by_label as _ops_by_label
+from .._validation_shared import (
+    float_replay_tolerances,
+    ops_by_label as _ops_by_label,
+    replay_payload,
+)
 from ._raw_op_replay import _import_tensorflow, _replay_raw_op
 from .op_callback_capture import TFOpCapture
 
@@ -1028,22 +1032,11 @@ def _to_tf_tensor(tf: Any, value: Any) -> Any:
 
 
 def _saved_payload(op: Any) -> Any:
-    """Return an op's saved output payload or raise on missing data.
+    """Return ``op.out``, else the hidden copy a filtered or shaped trace keeps; raise if neither."""
 
-    Parameters
-    ----------
-    op
-        Materialized TorchLens op.
-
-    Returns
-    -------
-    Any
-        Saved output payload.
-    """
-
-    if not bool(getattr(op, "has_saved_activation", False)):
+    if (output := replay_payload(op)) is None:
         raise ValueError(f"op has no saved activation: {getattr(op, 'label', op)!r}")
-    return op.out
+    return output
 
 
 def _captures_by_label(trace: Any) -> dict[str, TFOpCapture]:

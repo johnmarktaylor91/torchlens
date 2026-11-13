@@ -79,6 +79,7 @@ from .._protocols.paddle import (
     PADDLE_REFUSAL_SEED,
 )
 from .._root_frames import strip_root_frames
+from .._validation_shared import replay_payload
 from ._capture_helpers import (
     _alias_to_primary,
     _append_intervention_events,
@@ -1059,7 +1060,7 @@ class PaddleBackend:
         )
 
         label = public_label(getattr(capture, "label_raw", None), ops_by_label)
-        expected_output = op.out
+        expected_output = replay_payload(op)
         intervention = getattr(capture, "intervention", None)
         if intervention is not None:
             failed, expected_output = _intervened_replay_target(
@@ -2103,12 +2104,11 @@ def _device_ref_from_paddle_place(place: object) -> DeviceRef | None:
 def _constant_capture_decision(label: str | None, op: Any) -> dict[str, Any]:
     """The decision for a closure-constant capture: an exempted leaf with a saved payload.
 
-    SPEC 2 rule 3 / FORKS F-L: a closure constant has no function and nothing
-    upstream to replay from; it is a leaf whose saved payload feeds its
-    consumers' replays. A missing payload still fails.
+    SPEC 2 rule 3 / FORKS F-L: a closure constant has no function and nothing upstream to
+    replay from; its saved (or replay-visible) payload feeds its consumers. None still fails.
     """
 
-    if not bool(getattr(op, "has_saved_activation", False)) or op.out is None:
+    if replay_payload(op) is None:
         return validation_decision(
             label, OUTCOME_FAILED, REASON_PARENT_PAYLOAD_MISSING, "constant has no payload"
         )
