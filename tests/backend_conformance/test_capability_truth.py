@@ -122,7 +122,7 @@ EXPECTED_GATED_CAPABILITIES: dict[str, dict[str, bool]] = {
         "fastlog": True,
         # Lifted 2026-11 (pp-b-jax-int): live intervene= edits equation outputs
         # in the jaxpr interpreter (tests/test_parity_b_jax_int_flip.py);
-        # stop_after= refuses typed in the backend.
+        # stop_after= halts the interpreter at the first matching equation.
         "can_intervene": True,
         "rng_replay": False,
         "has_streaming": False,
@@ -233,8 +233,9 @@ def test_extra_kwarg_gates_are_fail_closed_biconditional(name: str) -> None:
 
 @pytest.mark.parametrize("name", _PREVIEW_NAMES)
 def test_option_policy_gates_are_fail_closed_biconditional(name: str) -> None:
-    """save_grads/backward_ready/save_rng refuse in every flag state:
-    False via the policy message, True via the undispatched-binding refusal."""
+    """save_grads/backward_ready/save_rng refuse in every flag state unless lifted:
+    False via the policy message, True via the undispatched-binding refusal. A
+    lifted option is admitted only with its flag True and bound."""
 
     spec = tl.backends.spec(name)
     policy = _OPTION_POLICIES[name]
@@ -244,6 +245,13 @@ def test_option_policy_gates_are_fail_closed_biconditional(name: str) -> None:
     for option, flag in cases:
         options = dict(_OPTION_POLICY_DEFAULTS)
         options[option] = True
+        if option not in (policy.rejected_truthy_messages or {}):
+            # Lifted option: the capture path consumes it, which only a True,
+            # bound flag may claim; the backend's own suite covers the dispatch.
+            assert getattr(spec.capabilities, flag)
+            assert require_capability_implementation(spec, flag) is not None
+            reject_unsupported_trace_options(options, policy, spec=spec)
+            continue
         if not getattr(spec.capabilities, flag):
             with pytest.raises(BackendUnsupportedError):
                 reject_unsupported_trace_options(options, policy, spec=spec)

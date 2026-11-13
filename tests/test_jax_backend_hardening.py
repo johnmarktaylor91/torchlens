@@ -1080,9 +1080,9 @@ def test_jax_rejects_callback_effects() -> None:
     ("kwargs", "pattern"),
     (
         ({"save": ["tanh"]}, "full-save only"),
-        # backward_capture is True, but trace.backward(loss_fn) honors no
-        # save_grads selection, so the JAX option policy refuses it by name.
-        ({"save_grads": True}, "JAX backend does not support save_grads"),
+        # backward_capture is True, but the JAX capture path does not consume
+        # save_grads, so the gate refuses it as an undispatched option.
+        ({"save_grads": True}, r"rejects option 'save_grads' and never\s+dispatches"),
     ),
 )
 def test_jax_rejects_save_shaping_kwargs(kwargs: dict[str, Any], pattern: str) -> None:

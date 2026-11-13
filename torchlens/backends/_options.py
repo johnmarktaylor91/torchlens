@@ -375,8 +375,8 @@ JAX_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
             "capture only. Use full-save JAX trace capture or the PyTorch backend."
         ),
         "save_grads": (
-            "The JAX backend does not support save_grads; trace.backward(loss_fn) keeps "
-            "every gradient it records. Use tl.backends.jax.GradOptions for derived gradients."
+            "The JAX backend does not support save_grads; full-save forward capture only. "
+            "Use tl.backends.jax.GradOptions for derived gradients."
         ),
         "save_args": (
             "The JAX backend does not support save_args; full-save forward capture "
