@@ -296,8 +296,7 @@ ablated = tl.trace(model, x, backend="tf", intervene=tl.when(tl.func("relu"), tl
 
 - `tl.record(..., backend="tf")` runs the eager forward with lean per-op events and keeps values
   only for the selected ops; graph-only callables refuse.
-- Not available: true backward capture and streaming (`storage=`); each refuses with a typed
-  error.
+- Not available: streaming (`storage=`); it refuses with a typed error.
 
 Leaf gradients are derived gradients, not backward capture:
 
@@ -439,7 +438,7 @@ What it does:
   still apply after capture). `capture=CaptureOptions(structure_only=True)` runs the real forward
   with no payloads; validation refuses typed. `storage=tl.to_disk(path)` streams payloads into a
   bundle during capture (not combined with `save=` or structure-only). `tl.record(backend="paddle")`
-  works. Refused: `save_grads=`, `backward_ready=True`.
+  works. Refused: `save_grads=`.
 - Live `intervene=` and `stop_after=`: the wrapper holds each concrete output before the caller
   sees it, so predicates run with real values and may be callables (the eager `RecordContext`
   carries `tensor_requires_grad`, `is_scalar_bool` and `bool_value`), and replacements flow into
