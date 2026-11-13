@@ -18,8 +18,8 @@ reruns the Yes and Partial cells so the table cannot quietly go stale.
 |---|---|---|---|---|---|---|---|---|---|
 | PyTorch | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
 | JAX | Partial (1) | Partial (2) | Partial (4) | Partial (5) | No (6) | Yes | Partial (8) | Yes | Partial (9) |
-| TensorFlow | Partial (1) | Partial (2) | Partial (4) | Partial (5) | Partial (7) | Yes | Partial (8) | Yes | Yes |
-| MLX | Partial (1) | Partial (3) | Partial (4) | Partial (5) | Partial (7) | Yes | Partial (8) | Yes | Yes |
+| TensorFlow | Partial (1) | Partial (3) | Yes | Partial (5) | Partial (7) | Yes | Partial (8) | Yes | Yes |
+| MLX | Partial (1) | Partial (3) | Yes | Partial (5) | Partial (7) | Yes | Partial (8) | Yes | Yes |
 | PaddlePaddle | Partial (1) | Partial (3) | Yes | Partial (5) | Partial (7) | Yes | Partial (8) | Yes | Yes |
 | tinygrad | Partial (1) | Partial (2) | Partial (4) | Partial (5) | No (6) | Yes | Partial (8) | Yes | Yes |
 
@@ -37,8 +37,8 @@ reruns the Yes and Partial cells so the table cannot quietly go stale.
    cannot list the backward operations. Gradient values for every recorded operation are
    available.
 6. Edits are not available yet; asking for one raises an error.
-7. Edits work during a new run, on operations chosen by function or module before the run. You
-   cannot edit a finished trace or patch in activations from another run; asking for either
+7. Edits work during a new run, on operations chosen by function, by module or by a condition on
+   their values (`tl.where` or a plain callable). You cannot edit a finished trace or patch in activations from another run; asking for either
    raises an error that names the framework.
 8. The NaN finder and the dead-unit counter work. Guessing a model's input shape works only on
    PyTorch, and on a convolution output the dead-unit counter needs the channel axis passed as
@@ -153,11 +153,12 @@ then replace the value (`intervene=`) or stop the forward (`stop_after=`). Which
 expose that point decides what they support:
 
 - **Paddle and MLX** see each concrete output in their wrapper before the caller does, so both
-  support live `intervene=tl.when(...)` and `stop_after=` on a new run. Paddle additionally accepts
-  callable (value-dependent) intervention and stop predicates; MLX requires static selectors.
+  support live `intervene=tl.when(...)` and `stop_after=` on a new run, with static selectors or
+  value-dependent conditions (`tl.where`, plain callables).
 - **TensorFlow** records through read-only `op_callbacks` (a returned replacement is ignored, re-checked
-  on TF 2.21), so `intervene=` runs through a writable wrap layer on top of the callback capture,
-  with static selectors only; `stop_after=` refuses.
+  on TF 2.21), so `intervene=` and `stop_after=` run through a writable wrap layer on top of the
+  callback capture, with static selectors or value-dependent conditions. Graph-only entries
+  (`tf.function` bodies, SavedModels) refuse both.
 - **JAX** evaluates its recorded jaxpr one equation at a time with concrete values, and the
   interpreter can replace an equation's outputs (its gradient checks already do). That is the edit
   point, but edits through it are not built yet, so `intervene=` and `stop_after=` refuse with
@@ -238,15 +239,20 @@ What it does:
   `tf.nn` and `tf.math` entry points. A selector matching ops whose calls never passed through the
   wrap layer (gen_ops or C++ paths) raises a typed unreachable error rather than silently not
   intervening. Actions: `zero_ablate`, `scale`, `add` and plain callables; replacements keep shape
-  and dtype. Gradient sites (`tl.grad(...)`), value-dependent conditions, shape-changing
-  replacements, graph-only entries and combining `intervene=` with `grad_options=` refuse.
+  and dtype. Value-dependent conditions (`tl.where`, plain callables) work as on PyTorch, and
+  `stop_after=` stops an eager forward at the matched op. On the TensorFlow conformance roster the
+  wrap layer reaches about 99.8% of recorded compute ops; `tf.raw_ops.*` calls and ops inside a
+  `tf.function` body stay read-only. Gradient sites (`tl.grad(...)`), shape-changing replacements,
+  graph-only entries and combining `intervene=` with `grad_options=` refuse.
+- Each op records the user source lines that ran it, as on PyTorch (`op.source.frames`;
+  `CaptureOptions(save_source_context=True)` loads the source text).
 
 ```python
 ablated = tl.trace(model, x, backend="tf", intervene=tl.when(tl.func("relu"), tl.zero_ablate()))
 ```
 
-- Not available: true backward capture, `stop_after=`, sparse recording (`tl.record()`), streaming
-  and value-dependent predicates; each refuses with a typed error.
+- Not available: true backward capture, sparse recording (`tl.record()`), streaming and
+  value-dependent `save=` predicates; each refuses with a typed error.
 
 Leaf gradients are derived gradients, not backward capture:
 
@@ -305,18 +311,25 @@ What it does:
   and boolean composites with `&`, `|` and `~`. Saved payloads stay live MLX arrays and round-trip
   through `.tlspec` with `payload_policy="array_payloads"`; a loaded MLX trace reports replay
   validation as unavailable, not as a pass, when its runtime captures were stripped.
-- Live `intervene=tl.when(static_selector, action)` substitutes matched outputs at the wrapper
-  boundary, and `stop_after=static_selector` finalizes a partial trace at the matched frontier
+- Live `intervene=tl.when(selector, action)` substitutes matched outputs at the wrapper
+  boundary, and `stop_after=selector` finalizes a partial trace at the matched frontier
   (`trace.is_stopped`, `trace.stop_reason`; parameter accounting covers the captured ops only).
   `tl.module(...)` fires once at the call's exit on its output arrays; a union of `tl.module` terms
   works, and mixing `tl.module` with another selector kind refuses before the forward runs.
   Actions: `tl.zero_ablate()`, `tl.scale(...)`, `tl.add(scalar | mx.array)`, `tl.clamp(...)`,
   `tl.mean_ablate(dim=None)`, `tl.replace_with(...)` and callables written against `mx.array`;
   hooks keep shape and dtype. Replay validation re-applies the declared hook to the recomputed
-  producer output and compares; a stripped or forged declaration fails validation.
-- Refused: `tl.model_output(...)`, `tl.where(...)`, `tl.followed_by(...)`, `tl.preceded_by(...)`,
-  value-dependent predicates, gradient-site interventions, streaming, `save_grads=`,
-  `backward_ready=True` and `tl.record(backend="mlx")`.
+  producer output and compares; a stripped or forged declaration fails validation. The selector
+  may be static or a value-dependent condition (`tl.where(...)`, a plain callable); a module
+  selector combined with a non-module condition refuses, and `ctx.tensor_requires_grad` raises
+  `MLXValueUnavailableError` because MLX arrays carry no gradient flag.
+- Each op records the user source lines that ran it, as on PyTorch (`op.source.frames`,
+  `save_source_context`, `source_context_lines`).
+- Refused: `tl.model_output(...)`, `tl.followed_by(...)`, `tl.preceded_by(...)`, value-dependent
+  `save=` predicates, `intervene=` as a raw decision callable (not `tl.when`), gradient-site
+  interventions, streaming, `save_grads=`, `backward_ready=True` and `tl.record(backend="mlx")`.
+  MLX builds its backward pass inside C++, so TorchLens cannot list the backward operations
+  (a framework limit); gradient values for every recorded operation are available.
 
 Leaf gradients are derived gradients, not backward capture:
 
@@ -573,11 +586,11 @@ The implementation view of the same facts, one row per backend:
 | Backend | Capture | Validation | Payloads | Modules | Gradients |
 |---|---|---|---|---|---|
 | `torch` | Stable eager wrapper capture | Replay validation | Materialized `.tlspec` payloads | `torch_module` | True backward capture |
-| `mlx` | Eager-dispatch capture; static-label `intervene=`/`stop_after=` | Live per-op replay and parent perturbation over the captured (whitelisted) op set | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.autograd.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads` |
+| `mlx` | Eager-dispatch capture; live `intervene=`/`stop_after=` (static or value-dependent) | Live per-op replay and parent perturbation over the captured (whitelisted) op set | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.autograd.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads` |
 | `jax` | Jaxpr-first functional capture | Live per-equation replay and parent perturbation | Materialized forward/derived array `.tlspec` payloads | `function_root`, Equinox/NNX `pytree_module` | `trace.autograd.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads` |
 | `tinygrad` | UOp-snapshot functional capture | Live UOp replay and parent perturbation on `DEV=PYTHON` payloads | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.autograd.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads` |
 | `paddle` | Dygraph/eager capture with live forward `intervene=`/`stop_after=` | Live replay/perturbation plus static inventory guard; corroborated user-intervention carve-out | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.autograd.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads` |
-| `tf` | Eager op-callback capture; implemented graph-only FuncGraph static path for compiled/SavedModel entries | Callback self-consistency plus per-op replay/perturbation accounting | Materialized forward array `.tlspec` payloads | `function_root`, Keras/`tf.Module` object `object_module` | `trace.autograd.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads` (eager entries only) |
+| `tf` | Eager op-callback capture with live `intervene=`/`stop_after=` (static or value-dependent); implemented graph-only FuncGraph static path for compiled/SavedModel entries | Callback self-consistency plus per-op replay/perturbation accounting | Materialized forward array `.tlspec` payloads | `function_root`, Keras/`tf.Module` object `object_module` | `trace.autograd.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads` (eager entries only) |
 
 Replay validation on the non-PyTorch backends (`has_validation_replay`) replays each captured op from
 its parents' saved payloads and perturbation-checks the dependency. Unlike torch's validator it

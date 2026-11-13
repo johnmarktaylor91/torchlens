@@ -104,9 +104,9 @@ EXPECTED_GATED_CAPABILITIES: dict[str, dict[str, bool]] = {
     "mlx": {
         "backward_capture": False,
         "fastlog": False,
-        # Lifted 2026-08: static-label intervene=/halt= dispatch for real
-        # (tests/test_mlx_interventions.py); value-dependent predicates and
-        # recipes= keep typed refusals inside the dispatch path.
+        # Lifted 2026-08: live intervene=/halt= dispatch for real
+        # (tests/test_mlx_interventions.py), with static selectors or
+        # value-dependent conditions.
         "can_intervene": True,
         "rng_replay": False,
         "has_streaming": False,
@@ -142,9 +142,9 @@ EXPECTED_GATED_CAPABILITIES: dict[str, dict[str, bool]] = {
     "tf": {
         "backward_capture": False,
         "fastlog": False,
-        # Lifted 2026-08: static-label intervene= for eager entries via the
-        # two-level writable wrap layer (tests/backends/test_tf_interventions.py);
-        # halt= and value-dependent predicates keep typed refusals.
+        # Lifted 2026-08: intervene= and halt= for eager entries via the
+        # two-level writable wrap layer (tests/backends/test_tf_interventions.py),
+        # with static selectors or value-dependent conditions.
         "can_intervene": True,
         "rng_replay": False,
         "has_streaming": False,

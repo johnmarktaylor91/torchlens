@@ -119,6 +119,10 @@ named code), `not yet proven` (False, refusal not yet pinned by a passing suite 
 | Ops outside the wrapped surface | flagged (`unwrapped_op_in_capture`) or refused under `unwrapped_policy("refuse")` | `unwrapped_op_in_capture` |
 | Arrays constructed inside the forward (`mx.array(...)`) | flagged as unwrapped (build constants outside the forward) | `unwrapped_op_in_capture` |
 
+Backward capture is a framework limit. MLX builds its backward pass inside C++, so TorchLens
+cannot list the backward operations. Gradient values for every recorded operation are
+available.
+
 ## Validation decisions
 
 `validate_trace` never returns a bare bool. The status carries one decision per op with a
