@@ -626,8 +626,13 @@ def _rebuild_node(
     raise ReplayRefusal("shape", f"bad call skeleton node at {path!r}")
 
 
-def _param_value(trace: Any, address: str) -> Any | None:
-    """The trace's recorded value of parameter ``address``, if it has one."""
+def _param_value(trace: Any, address: str, payloads: Mapping[str, Any]) -> Any | None:
+    """Parameter ``address``'s value: a loader-supplied payload, else the live parameter."""
+    if address in payloads:
+        import paddle
+
+        with _state.pause_logging():
+            return paddle.to_tensor(np.asarray(payloads[address]))
     logs = getattr(trace, "_param_logs", None)
     try:
         param = logs[address] if logs is not None else None
@@ -636,7 +641,23 @@ def _param_value(trace: Any, address: str) -> Any | None:
     return getattr(param, "value", None) if param is not None else None
 
 
-def _bind_one(trace: Any, item: OpRecipe) -> Any:
+def live_param_payloads(trace: Any) -> dict[str, Any]:
+    """``{parameter address: host array}`` for every parameter the live captures read.
+
+    The values a saver persists and a loader hands back as
+    ``bind_recipes(..., param_payloads=...)`` (a loaded trace keeps no parameter bytes).
+    """
+    payloads: dict[str, Any] = {}
+    for capture in getattr(trace, "_paddle_op_captures", ()) or ():
+        values = getattr(capture, "param_inputs", None) or {}
+        for leaf in getattr(capture, "tensor_inputs", ()):
+            address = getattr(leaf, "param_address", None)
+            if address is not None and leaf.path in values and address not in payloads:
+                payloads[address] = to_host(values[leaf.path])
+    return payloads
+
+
+def _bind_one(trace: Any, item: OpRecipe, payloads: Mapping[str, Any]) -> Any:
     """Rebuild one ``PaddleOpCapture`` from a recipe (fail-closed on missing params)."""
     label = item.output_slots[0] if item.output_slots else None
     if item.backend != BACKEND:
@@ -653,7 +674,7 @@ def _bind_one(trace: Any, item: OpRecipe) -> Any:
     param_inputs: dict[tuple[Any, ...], Any] = {}
     markers: list[str] = []
     for path, address in params.items():
-        value = _param_value(trace, address)
+        value = _param_value(trace, address, payloads)
         if value is None:
             markers.append(f"parameter value unavailable at load at {path!r}: {address}")
         else:
@@ -692,12 +713,21 @@ def _gap_capture(label: str) -> Any:
     )
 
 
-def bind_recipes(trace: Any, recipes: Mapping[str, OpRecipe]) -> None:
+def bind_recipes(
+    trace: Any,
+    recipes: Mapping[str, OpRecipe],
+    *,
+    param_payloads: Mapping[str, Any] | None = None,
+) -> None:
     """Rebuild ``trace._paddle_op_captures`` from recipes plus the trace's payloads.
 
-    Every non-input op the recipes do not cover gets a gap capture, so the
-    unchanged validator fails naming it instead of skipping it.
+    ``param_payloads`` maps parameter addresses to saved arrays (from
+    :func:`live_param_payloads` at save); it is read before the live parameter,
+    which a loaded trace does not have. Every non-input op the recipes do not
+    cover gets a gap capture, so the unchanged validator fails naming it
+    instead of skipping it.
     """
+    payloads = dict(param_payloads or {})
 
     by_first: dict[str, OpRecipe] = {}
     for key, item in recipes.items():
@@ -711,7 +741,7 @@ def bind_recipes(trace: Any, recipes: Mapping[str, OpRecipe]) -> None:
         if not isinstance(label, str) or bool(record_member(op, "is_input", False)):
             continue
         if label in by_first:
-            captures.append(_bind_one(trace, by_first[label]))
+            captures.append(_bind_one(trace, by_first[label], payloads))
         elif label not in covered:
             captures.append(_gap_capture(label))
     trace._paddle_op_captures = captures
@@ -727,6 +757,7 @@ __all__ = [
     "can_replay",
     "close",
     "forward",
+    "live_param_payloads",
     "recipe",
     "recipe_refusal",
     "to_host",

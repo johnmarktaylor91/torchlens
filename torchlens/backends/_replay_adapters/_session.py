@@ -1,6 +1,7 @@
 """Replay session: owns values, substitutions, last-use counts and cleanup.
 
-A :class:`ReplaySession` replays an ordered list of :class:`ReplayStep`
+A :class:`ReplaySession` replays a :class:`ReplayPlan` (an ordered list of
+:class:`ReplayStep` plus initial values, substitutions and kept labels)
 through one replay adapter. It checks the whole plan before the first
 framework call (every op replayable, every parent available, no output slot
 produced twice) and refuses with :class:`ReplayRefusal`; nothing runs
@@ -18,19 +19,20 @@ During the run it
 - releases a value once its last consumer has run, unless the label is kept.
 
 :func:`pullback_step` maps one step's output cotangents onto its parents
-with the adapter's ``vjp``, summing the contributions of repeated parents.
+with the adapter's ``vjp``, summing the contributions of repeated parents;
+:func:`merge_grads` folds those contributions into running totals.
 """
 
 from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Collection, Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from ._contract import InputOccurrence, OpRecipe, ReplayAdapter, ReplayRefusal
 
-__all__ = ("ReplaySession", "ReplayStep", "pullback_step")
+__all__ = ("ReplayPlan", "ReplaySession", "ReplayStep", "merge_grads", "pullback_step")
 
 
 @dataclass(frozen=True)
@@ -55,8 +57,33 @@ class ReplayStep:
         return cls(op=op, inputs=recipe.inputs, output_slots=recipe.output_slots)
 
 
+@dataclass(frozen=True)
+class ReplayPlan:
+    """What a :class:`ReplaySession` replays.
+
+    Attributes
+    ----------
+    steps:
+        Ops in graph order.
+    initial:
+        Values available before the first step, keyed by output label: only
+        the cone's sources (a label a step also produces is refused).
+    substitutions:
+        Edited values keyed by output label; they take precedence over
+        initial and replayed values.
+    keep:
+        Labels whose values outlive their last consumer (the requested
+        outputs). ``None`` keeps every value.
+    """
+
+    steps: tuple[ReplayStep, ...]
+    initial: Mapping[str, Any]
+    substitutions: Mapping[str, Any] = field(default_factory=dict)
+    keep: Collection[str] | None = None
+
+
 class ReplaySession:
-    """Replay ``steps`` in order through ``adapter``.
+    """Replay a :class:`ReplayPlan` in order through ``adapter``.
 
     Parameters
     ----------
@@ -64,17 +91,8 @@ class ReplaySession:
         A replay adapter (module or object filling :class:`ReplayAdapter`).
     trace:
         The trace passed through to the adapter.
-    steps:
-        Ops in graph order.
-    initial:
-        Values available before the first step (saved payloads of the cone's
-        sources), keyed by output label.
-    substitutions:
-        Edited values keyed by output label; they take precedence over
-        initial and replayed values.
-    keep:
-        Labels whose values outlive their last consumer (the requested
-        outputs). ``None`` keeps every value.
+    plan:
+        The steps, initial values, substitutions and kept labels.
 
     Raises
     ------
@@ -83,22 +101,13 @@ class ReplaySession:
         ``can_replay``.
     """
 
-    def __init__(
-        self,
-        adapter: ReplayAdapter,
-        trace: Any,
-        steps: Iterable[ReplayStep],
-        *,
-        initial: Mapping[str, Any],
-        substitutions: Mapping[str, Any] | None = None,
-        keep: Collection[str] | None = None,
-    ) -> None:
+    def __init__(self, adapter: ReplayAdapter, trace: Any, plan: ReplayPlan) -> None:
         self._adapter = adapter
         self._trace = trace
-        self._steps = tuple(steps)
-        self._subs = dict(substitutions or {})
-        self._keep = None if keep is None else frozenset(keep)
-        self._values: dict[str, Any] = dict(initial)
+        self._steps = tuple(plan.steps)
+        self._subs = dict(plan.substitutions)
+        self._keep = None if plan.keep is None else frozenset(plan.keep)
+        self._values: dict[str, Any] = dict(plan.initial)
         self._remaining: Counter[str] = Counter(
             occ.parent_label for step in self._steps for occ in step.inputs
         )
@@ -247,13 +256,12 @@ def pullback_step(
     step: ReplayStep,
     parent_values: Sequence[Any],
     cotangents: Sequence[Any],
-    grads: dict[str, Any],
-) -> None:
-    """Accumulate one step's parent cotangents into ``grads`` (label to value).
+) -> dict[str, Any]:
+    """Return one step's gradient contribution per parent label.
 
     ``cotangents`` holds one entry per output slot (``None`` for a slot with
-    no incoming gradient); a repeated parent receives the sum of its
-    occurrences' cotangents through ``adapter.add``.
+    no incoming gradient). A repeated parent's occurrences are summed through
+    ``adapter.add``; a parent whose every occurrence gets ``None`` is absent.
 
     Raises
     ------
@@ -268,8 +276,22 @@ def pullback_step(
             f"vjp produced {len(result)} cotangents for {len(step.inputs)} parents",
             op_label=step.label,
         )
-    for occ, cot in zip(step.inputs, result, strict=True):
+    contributions = [(occ.parent_label, cot) for occ, cot in zip(step.inputs, result, strict=True)]
+    return merge_grads(adapter, {}, contributions)
+
+
+def merge_grads(
+    adapter: ReplayAdapter,
+    grads: Mapping[str, Any],
+    contributions: Mapping[str, Any] | Iterable[tuple[str, Any]],
+) -> dict[str, Any]:
+    """Return a new label-to-gradient mapping: ``grads`` plus ``contributions``
+    (``None`` contributions skipped, repeats summed through ``adapter.add``)."""
+
+    merged = dict(grads)
+    items = contributions.items() if isinstance(contributions, Mapping) else contributions
+    for name, cot in items:
         if cot is None:
             continue
-        name = occ.parent_label
-        grads[name] = cot if name not in grads else adapter.add(grads[name], cot)
+        merged[name] = cot if name not in merged else adapter.add(merged[name], cot)
+    return merged

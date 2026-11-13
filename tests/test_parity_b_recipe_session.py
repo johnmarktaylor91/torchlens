@@ -56,7 +56,7 @@ def _steps(trace: fake.FakeTrace, skip_inputs: bool = True) -> list[ra.ReplaySte
 
 def _session(trace: fake.FakeTrace, adapter: Any = fake, **kw: Any) -> ra.ReplaySession:
     kw.setdefault("initial", {"x": trace.payloads["x"]})
-    return ra.ReplaySession(adapter, trace, _steps(trace), **kw)
+    return ra.ReplaySession(adapter, trace, ra.ReplayPlan(tuple(_steps(trace)), **kw))
 
 
 def test_replay_reproduces_every_payload_exactly() -> None:
@@ -171,7 +171,7 @@ def test_unreplayable_op_late_in_the_plan_refuses_before_any_forward() -> None:
     steps = _steps(trace) + [ra.ReplayStep(opaque, (ra.InputOccurrence("u", (0,)),), ("z",))]
     adapter = CountingAdapter()
     with pytest.raises(ra.ReplayRefusal) as info:
-        ra.ReplaySession(adapter, trace, steps, initial={"x": trace.payloads["x"]})
+        ra.ReplaySession(adapter, trace, ra.ReplayPlan(tuple(steps), {"x": trace.payloads["x"]}))
     assert info.value.reason == "cannot_replay"
     assert info.value.op_label == "z"
     assert adapter.forward_calls == []
@@ -182,7 +182,7 @@ def test_out_of_order_plan_is_refused() -> None:
     steps = _steps(trace)
     steps[0], steps[1] = steps[1], steps[0]
     with pytest.raises(ra.ReplayRefusal) as info:
-        ra.ReplaySession(fake, trace, steps, initial={"x": trace.payloads["x"]})
+        ra.ReplaySession(fake, trace, ra.ReplayPlan(tuple(steps), {"x": trace.payloads["x"]}))
     assert info.value.reason == "missing_parent"
 
 
@@ -209,7 +209,7 @@ def test_reverse_pass_with_pullback_matches_the_hand_gradient() -> None:
         if all(c is None for c in cts):
             continue
         parents = [values[occ.parent_label] for occ in step.inputs]
-        ra.pullback_step(fake, trace, step, parents, cts, grads)
+        grads = ra.merge_grads(fake, grads, ra.pullback_step(fake, trace, step, parents, cts))
     x = trace.payloads["x"]
     # u = 3*sum(x[2:]**2) + sum(x[:2]**4)
     expected = np.concatenate([4.0 * x[:2] ** 3, 6.0 * x[2:]])
@@ -226,5 +226,26 @@ def test_pullback_refuses_a_wrong_cotangent_count() -> None:
             return (np.ones(5),)
 
     with pytest.raises(ra.ReplayRefusal) as info:
-        ra.pullback_step(Bad(), trace, step, [np.ones(5)] * 2, [np.ones(5)], {})
+        ra.pullback_step(Bad(), trace, step, [np.ones(5)] * 2, [np.ones(5)])
     assert info.value.reason == "arity"
+
+
+def test_pullback_sums_repeated_parents_and_merge_is_pure() -> None:
+    trace = _trace()
+    step = _steps(trace)[0]  # sq = x * x
+    x = trace.payloads["x"]
+    contrib = ra.pullback_step(fake, trace, step, [x, x], [np.ones(5)])
+    assert set(contrib) == {"x"}
+    assert fake.close(2.0 * x, contrib["x"])
+    base = {"x": np.ones(5)}
+    merged = ra.merge_grads(fake, base, contrib)
+    assert fake.close(np.ones(5), base["x"])  # input untouched
+    assert fake.close(2.0 * x + 1.0, merged["x"])
+    assert ra.merge_grads(fake, base, [("y", None)]) == base
+
+
+def test_plan_is_frozen_data() -> None:
+    trace = _trace()
+    plan = ra.ReplayPlan(tuple(_steps(trace)), {"x": trace.payloads["x"]})
+    with pytest.raises(AttributeError):
+        plan.keep = ()  # type: ignore[misc]

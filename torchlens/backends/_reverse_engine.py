@@ -23,12 +23,17 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from .._runnable import RunnableErrorCode
 from ..errors import RunCapabilityUnavailableError
 
-__all__ = ["EngineNode", "ReplayGraph", "graph_from_recipes", "reverse_gradients"]
+__all__ = (
+    "EngineNode",
+    "ReplayGraph",
+    "graph_from_recipes",
+    "reverse_gradients",
+)
 
 _DETECTION_STAGE = "reverse_engine"
+_CODE = "run_capability_unavailable"  # RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE
 
 
 @dataclass(frozen=True)
@@ -75,16 +80,6 @@ class ReplayGraph:
         return None
 
 
-def _refuse(problem: str) -> RunCapabilityUnavailableError:
-    """Typed refusal for a gradient the engine cannot compute."""
-
-    return RunCapabilityUnavailableError(
-        f"reverse gradients are unavailable: {problem}",
-        code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
-        detection_stage=_DETECTION_STAGE,
-    )
-
-
 def graph_from_recipes(
     trace: Any, adapter: Any, ops: Iterable[Any], value: Callable[[str], Any]
 ) -> ReplayGraph:
@@ -115,7 +110,12 @@ def _check_forward_order(graph: ReplayGraph) -> None:
     for node in graph.nodes:
         late = [p for p in node.parents if p in all_outputs and p not in produced]
         if late:
-            raise _refuse(f"op {node.label!r} consumes {late[0]!r} before it is produced")
+            raise RunCapabilityUnavailableError(
+                f"reverse gradients are unavailable: op {node.label!r} consumes "
+                f"{late[0]!r} before it is produced",
+                code=_CODE,
+                detection_stage=_DETECTION_STAGE,
+            )
         produced.update(node.outputs)
 
 
@@ -135,7 +135,11 @@ def _node_contributions(
 
     reason = node.blocked or adapter.can_replay(trace, node.op)
     if reason is not None:
-        raise _refuse(f"op {node.label!r} cannot be replayed ({reason})")
+        raise RunCapabilityUnavailableError(
+            f"reverse gradients are unavailable: op {node.label!r} cannot be replayed ({reason})",
+            code=_CODE,
+            detection_stage=_DETECTION_STAGE,
+        )
     filled = [
         adapter.zeros_like(graph.value(slot)) if cotangent is None else cotangent
         for slot, cotangent in zip(node.outputs, incoming, strict=True)
@@ -143,9 +147,12 @@ def _node_contributions(
     parent_values = [graph.value(parent) for parent in node.parents]
     contributions = tuple(adapter.vjp(trace, node.op, parent_values, filled))
     if len(contributions) != len(node.parents):
-        raise _refuse(
-            f"the adapter's derivative of op {node.label!r} returned {len(contributions)} "
-            f"cotangents for {len(node.parents)} parent occurrences"
+        raise RunCapabilityUnavailableError(
+            f"reverse gradients are unavailable: the adapter's derivative of op "
+            f"{node.label!r} returned {len(contributions)} cotangents for "
+            f"{len(node.parents)} parent occurrences",
+            code=_CODE,
+            detection_stage=_DETECTION_STAGE,
         )
     return contributions
 
