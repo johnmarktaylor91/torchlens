@@ -724,8 +724,8 @@ torchlens/backends/_finalize.py::attach_object_module_logs	63
 torchlens/backends/_finalize.py::finalize_single_pass_trace	150
 torchlens/backends/_finalize.py::new_preview_function_trace	100
 torchlens/backends/_finalize.py::populate_object_module_build_data	72
-torchlens/backends/jax/backend.py	4324
-torchlens/backends/jax/backend.py::JAXBackend._append_event	173
+torchlens/backends/jax/backend.py	4218
+torchlens/backends/jax/backend.py::JAXBackend._append_event	168
 torchlens/backends/jax/backend.py::JAXBackend._attach_derived_grads	170
 torchlens/backends/jax/backend.py::JAXBackend._build_jax_recurrence_grouping_graph	71
 torchlens/backends/jax/backend.py::JAXBackend._builtin_container_spec	63
@@ -740,14 +740,14 @@ torchlens/backends/jax/backend.py::_experimental_per_op_boundary_vjp_oracle	79
 torchlens/backends/jax/backend.py::_finite_difference_directional_check	83
 torchlens/backends/jax/backend.py::_jax_intermediate_oracle_passes	62
 torchlens/backends/jax/backend.py::_validate_region_boundary	85
-torchlens/backends/jax/jaxpr.py	2491
+torchlens/backends/jax/jaxpr.py	2490
 torchlens/backends/jax/jaxpr.py::_interpret_cond	77
 torchlens/backends/jax/jaxpr.py::_interpret_region	113
 torchlens/backends/jax/jaxpr.py::_interpret_scan	141
 torchlens/backends/jax/jaxpr.py::_interpret_while	132
 torchlens/backends/jax/jaxpr.py::_region_metadata	100
 torchlens/backends/jax/jaxpr.py::_replay_while_decision	63
-torchlens/backends/jax/jaxpr.py::interpret_closed_jaxpr_with_inlining	339
+torchlens/backends/jax/jaxpr.py::interpret_closed_jaxpr_with_inlining	332
 torchlens/backends/jax/jaxpr.py::interpret_closed_jaxpr_with_inlining.interpret_inner	252
 torchlens/backends/jax/modules.py	932
 torchlens/backends/jax/modules.py::_walk_equinox_modules	79
