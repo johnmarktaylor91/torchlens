@@ -1096,12 +1096,12 @@ torchlens/intervention/_regions.py	990
 torchlens/intervention/_regions.py::_evaluate_instance	106
 torchlens/intervention/_regions.py::apply_region_do	106
 torchlens/intervention/_regions.py::region	99
-torchlens/intervention/_replay.py	1635
+torchlens/intervention/_replay.py	1627
 torchlens/intervention/_replay.py::_commit_replay_updates	71
 torchlens/intervention/_replay.py::_reconstruct_args_from_template	63
 torchlens/intervention/_replay.py::_resolve_arg_component	96
 torchlens/intervention/_replay.py::_run_differentiable_replay	62
-torchlens/intervention/_replay.py::_run_replay	149
+torchlens/intervention/_replay.py::_run_replay	127
 torchlens/intervention/_rerun.py	1579
 torchlens/intervention/_rerun.py::_append_rerun	103
 torchlens/intervention/_rerun.py::_capture_with_active_spec	86
