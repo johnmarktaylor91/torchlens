@@ -9,6 +9,7 @@ from collections import defaultdict
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import AbstractContextManager, contextmanager, nullcontext
 from dataclasses import dataclass, replace
+from functools import partial
 from typing import Any, cast
 
 import numpy as np
@@ -39,13 +40,16 @@ from ..._ir.events import (
 from ..._ir.intervention import FireResult, FunctionEventInput
 from ..._ir.predicate import _DEFERRED_VALUE, RecordContext
 from ..._ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
+from ..._ir.selector_eval import first_selector_kind_outside
 from ..._ir.semantics import BackendSemantics, CapturePolicy
 from ..._ir.workspaces import RawGraphWorkspace
 from ..._output_slot import returned, stopped
 from ..._postprocess._materialize import materialize_from_events
+from ..._postprocess._selective_save import apply_save_keep_set
 from ..._quantities import Duration
+from ..._selection.errors import LiveModeLabelError
 from ..._trace_core.relation_views import freeze_trace_relation_views
-from ..._validation_status import ValidationReplaySource, ValidationStatus  # noqa: TC001
+from ..._validation_status import ValidationStatus  # noqa: TC001
 from ...backends.registry import (
     BackendName,
     get_backend_spec,
@@ -74,6 +78,7 @@ from .._invariants import run_metadata_invariants
 from .._options import MLX_PREVIEW_TRACE_OPTION_POLICY, reject_unsupported_trace_options
 from . import capabilities
 from ._capture_disclosures import _disclose_compiled_attributes, _disclose_unfired_selectors
+from ._capture_hooks import MLXHookSession, forward_hooks, retain_backward_state
 from ._grad_oracle import (
     _eval_mlx_tree,
     _has_mlx_array_leaf,
@@ -89,6 +94,17 @@ from ._param_tree import (
     _iter_parameter_tree,
     _iter_trainable_parameter_tree,
 )
+from ._replay_status import (
+    _mlx_detailed_counts,
+    _mlx_metadata_failed_decision,
+    _mlx_nothing_replayed_decision,
+    _mlx_trace_decision,
+    _mlx_unverified_count,
+    _mlx_validation_source,
+    _name_first_failure,
+    kept_or_unavailable_status,
+)
+from ._retention import LIVE_DECIDABLE_KINDS, RetentionDeps, RetentionRun, start_retention
 from ._source_frames import adopt_code_context_records, mlx_code_context
 from ._tap_observers import (
     _is_float_mlx_array,
@@ -98,7 +114,7 @@ from ._tap_observers import (
     _replace_mlx_array_leaves,
 )
 from .external_arrays import external_array_ids
-from .interventions import _match_live_sites
+from .interventions import _match_live_sites, selector_matches_capture_context
 from .model_prep import (
     MLXModuleTree,
     cleanup_model_session,
@@ -327,134 +343,6 @@ def _find_mlx_compiled_attributes(
     return tuple(sorted(found))
 
 
-def _name_first_failure(status: ValidationStatus) -> ValidationStatus:
-    """Return ``status`` with a failed message that names the first offending op.
-
-    Parameters
-    ----------
-    status
-        A folded replay status.
-
-    Returns
-    -------
-    ValidationStatus
-        Unchanged unless ``state == "failed"`` and a failed decision exists;
-        then the message reads ``Replay validation failed at <op_label>
-        (<reason>): <detail>.``
-    """
-
-    if status.state != "failed":
-        return status
-    first = next((d for d in status.decisions if d.get("decision") == "failed"), None)
-    if first is None:
-        return status
-    return replace(
-        status,
-        message=(
-            f"Replay validation failed at {first.get('op_label')!s} "
-            f"({first.get('reason')!s}): {first.get('detail', '')!s}."
-        ),
-    )
-
-
-def _mlx_loaded_replay_unavailable(trace: Trace) -> bool:
-    """Return whether a loaded MLX trace lacks live replay artifacts.
-
-    Parameters
-    ----------
-    trace
-        Trace being validated.
-
-    Returns
-    -------
-    bool
-        True when replay must report unavailable instead of a pass/fail bool.
-    """
-
-    if not bool(getattr(trace, "_loaded_from_bundle", False)):
-        return False
-    if not bool(getattr(trace, "_mlx_op_captures", ())):
-        return True
-    return str(getattr(trace, "payload_load_status", "")).startswith("audit_only")
-
-
-def _mlx_validation_source(trace: Trace) -> ValidationReplaySource:
-    """Return the validation source label for ``trace``.
-
-    Parameters
-    ----------
-    trace
-        Trace being validated.
-
-    Returns
-    -------
-    ValidationReplaySource
-        ``"loaded"`` for bundle-loaded traces, otherwise ``"live"``.
-    """
-
-    return "loaded" if getattr(trace, "_loaded_from_bundle", False) else "live"
-
-
-def _mlx_trace_decision(phase: str, reason: str, detail: str) -> dict[str, Any]:
-    """One failed trace-level validation decision row."""
-
-    return {
-        "op_label": "<trace>",
-        "func_name": None,
-        "phase": phase,
-        "decision": "failed",
-        "reason": reason,
-        "detail": detail,
-    }
-
-
-def _mlx_metadata_failed_decision(reasons: Mapping[str, str]) -> dict[str, Any]:
-    """The trace-level row recorded when backend-neutral metadata invariants fail."""
-
-    return _mlx_trace_decision(
-        "metadata", reasons["metadata_invariant"], "backend-neutral metadata invariants failed"
-    )
-
-
-def _mlx_nothing_replayed_decision(reasons: Mapping[str, str]) -> dict[str, Any]:
-    """The trace-level row recorded when no op was replay-validated."""
-
-    return _mlx_trace_decision(
-        "coverage", reasons["nothing_replayed"], "no op was replay-validated"
-    )
-
-
-def _mlx_unverified_count(
-    trace: Trace,
-    failed_count: int,
-    unverified_reasons: dict[str, int],
-    count_region_annotations: Callable[[Trace], int],
-) -> int:
-    """Unverified-op count for a passing replay; zero once anything failed."""
-
-    if failed_count != 0:
-        return 0
-    # Perturbation gaps stay UNVERIFIED evidence, never a silent
-    # pass; only the named constant leaves are exempted.
-    return count_region_annotations(trace) + sum(unverified_reasons.values())
-
-
-def _mlx_detailed_counts(
-    trace: Trace, validate_detailed: Callable[[Trace], Any]
-) -> tuple[int, int, tuple[dict[str, Any], ...], dict[str, int], dict[str, int]]:
-    """Run the detailed per-op oracle and unpack its counts, stamping perturbation gaps."""
-
-    outcome = validate_detailed(trace)
-    trace._mlx_perturbation_gaps = outcome.perturbation_gaps
-    return (
-        outcome.replayed_count,
-        outcome.failed_count,
-        outcome.decisions,
-        dict(outcome.exempted_reason_counts),
-        dict(outcome.unverified_reason_counts),
-    )
-
-
 def _append_replay_inventory(trace: Trace, capture: MLXOpCapture) -> None:
     """Append one op's emit-time fingerprint (from its capture) to the trace's replay inventory."""
 
@@ -501,6 +389,29 @@ def _stamp_param_logs(trace: Trace, module_tree: MLXModuleTree | None) -> None:
         trace._provenance_param_source = "none"
 
 
+def _live_save_match(selector: Any, ctx: RecordContext) -> bool:
+    """Live ``save=`` match; a finalized label cannot match before labels exist.
+
+    Such a selector answers "not now": the op becomes a witness and the final
+    keep set restores its payload from the spill when the trace is settled.
+    """
+
+    try:
+        return selector_matches_capture_context(selector, ctx)
+    except LiveModeLabelError:
+        return False
+
+
+#: The capture-stack callables MLX retention runs use (``_retention`` imports none).
+_RETENTION_DEPS = RetentionDeps(
+    undecidable=lambda selector: (
+        first_selector_kind_outside(selector, allowed=LIVE_DECIDABLE_KINDS) is not None
+    ),
+    live_match=_live_save_match,
+    apply_keep_set=partial(apply_save_keep_set, backend_name="MLX"),
+)
+
+
 class MLXBackend:
     """MLX adapter for the backend-neutral capture Protocol."""
 
@@ -512,6 +423,7 @@ class MLXBackend:
 
         self.mx, self.nn = self._import_mlx()
         self.tensor_store = MLXTensorLabelStore()
+        self._retention_run: RetentionRun | None = None
 
     def wrap(self, value: object, module_tree: MLXModuleTree | None = None) -> object:
         """Install MLX wrappers and return ``value`` unchanged."""
@@ -559,13 +471,15 @@ class MLXBackend:
         return prepare_model_once(model)
 
     def prepare_model_session(self, session: object, model: object) -> object:
-        """Apply per-session MLX model preparation."""
+        """Apply per-session MLX model preparation and start any retention run."""
 
+        self._retention_run = start_retention(self.mx, _RETENTION_DEPS)
         return prepare_model_session(session, model)
 
     def cleanup_model_session(self, session: object, prepared_model: object) -> None:
-        """Clean up per-session MLX model preparation."""
+        """Clean up per-session MLX model preparation and end the retention run."""
 
+        self._retention_run = None
         cleanup_model_session(session, prepared_model)
 
     def cleanup_stopped_forward_session(self, session: object, prepared_model: object) -> None:
@@ -849,8 +763,7 @@ class MLXBackend:
             if not self.is_tensor(output):
                 continue
             self.tensor_store.set_label(output, reserved.label_raw)
-            if policy.save_payload:
-                cast(Any, session)._mlx_saved_payloads.append(output)
+            out_policy = self._payload_policy(session, policy, reserved, func_event_input, output)
             parents, parent_arg_positions, edge_uses = self._parent_edges(
                 func_event_input.args,
                 dict(func_event_input.kwargs),
@@ -865,7 +778,7 @@ class MLXBackend:
                 parents=parents,
                 parent_arg_positions=parent_arg_positions,
                 edge_uses=edge_uses,
-                policy=policy,
+                policy=out_policy,
                 is_input=False,
                 fire_results=fire_results,
             )
@@ -891,7 +804,9 @@ class MLXBackend:
         payloads = list(getattr(session, "_mlx_saved_payloads", ()))
         seen = {id(value) for value in payloads}
         payloads.extend(value for value in extra_values if id(value) not in seen)
-        if payloads:
+        if self._retention_run is not None:
+            self._retention_run.realize(tuple(payloads))
+        elif payloads:
             cast(Any, self.mx).eval(*payloads)
 
     def capture_trace(
@@ -1022,8 +937,7 @@ class MLXBackend:
         fill_unset_declared_fields(trace)
         trace.name = name
         trace._provenance_backend = cast(BackendName, self.name)
-        # Root identity (C07X item (iv)), spelled as tf and new_preview_function_trace do; the
-        # qualname is also the saved root module record's class_qualname (a declared str).
+        # Root identity (C07X item (iv)); the qualname is also the root record's class_qualname.
         if module_tree is not None:
             qualname = f"{type(model).__module__}.{type(model).__qualname__}"
             trace._provenance_root_entry_point = f"module_call:{qualname}.__call__"
@@ -1063,7 +977,7 @@ class MLXBackend:
             trace._provenance_start_time = time.time()
             halt_signal: StopSignal | None = None
             try:
-                with self.active_logging(trace):
+                with self.active_logging(trace), forward_hooks(trace) as hooks:
                     output = cast(Any, model)(*args, **kwargs)
             except StopSignal as signal:
                 # Save-then-halt ordering: the frontier op's events were
@@ -1109,6 +1023,7 @@ class MLXBackend:
                     captured_output=output,
                     grad_options=grad_options,
                 )
+            self._settle_capture(trace, hooks)
             if hasattr(trace, "_mlx_module_stack"):
                 delattr(trace, "_mlx_module_stack")
             freeze_trace_relation_views(trace)
@@ -1446,9 +1361,9 @@ class MLXBackend:
             payload-stripped traces return the unavailable status.
         """
 
-        status = trace.validation_replay_status
-        if not status.is_available or _mlx_loaded_replay_unavailable(trace):
-            return self._stamp_unavailable_status(trace)
+        kept = kept_or_unavailable_status(trace, self._stamp_unavailable_status)
+        if kept is not None:
+            return kept
         replayed_count = 0
         failed_count = 0
         decisions: tuple[dict[str, Any], ...] = ()
@@ -1785,12 +1700,47 @@ class MLXBackend:
                 )
 
     def _capture_policy(self, session: Any) -> CapturePolicy:
-        """Return the MLX capture policy for one event."""
+        """Return the MLX capture policy for one event (none under structure-only)."""
 
+        run = self._retention_run
+        structure_only = run is not None and run.request.structure_only
         return CapturePolicy(
-            save_payload=bool(session._options_save_raw_activations),
+            save_payload=bool(session._options_save_raw_activations) and not structure_only,
             save_grad=False,
         )
+
+    def _payload_policy(
+        self,
+        session: Any,
+        policy: CapturePolicy,
+        reserved: ReservedLabel,
+        func_event_input: FunctionEventInput,
+        output: object,
+    ) -> CapturePolicy:
+        """Record one op output's payload and return the policy its event uses.
+
+        A plain capture queues the payload for the single evaluation. Under a
+        retention run the live decision keeps the payload public or makes it a
+        replay witness, whose event then carries no payload.
+        """
+
+        if not policy.save_payload:
+            return policy
+        run = self._retention_run
+        if run is None:
+            cast(Any, session)._mlx_saved_payloads.append(output)
+            return policy
+        context = partial(self.build_record_context, session, reserved, func_event_input, output)
+        if run.note(reserved.label_raw, output, context):
+            return policy
+        return replace(policy, save_payload=False)
+
+    def _settle_capture(self, trace: Trace, hooks: MLXHookSession) -> None:
+        """Hand off backward state and apply any retention run's final keep set."""
+
+        retain_backward_state(trace, hooks)
+        if self._retention_run is not None:
+            self._retention_run.settle(trace)
 
     @staticmethod
     def _input_reservation(label: str, raw_index: int) -> ReservedLabel:
