@@ -6200,3 +6200,11 @@ env: py3.11-torch2.15.0
 torch: 2.15.0
 source: e523c0fad2077b7d9cc6a0b2f61dfb22523e0d59
 recorded: 2026-11-13T06:39:22Z
+---
+generator: scripts/regen_ledgers.py (producer static half)
+flag: none (deterministic ledger step)
+reason: tinygrad capture: deferred retention for static save= selectors
+env: py3.11-torch2.15.0
+torch: 2.15.0
+source: 9e393ec03be12252081cac9864226534bf8781cb
+recorded: 2026-11-13T06:41:47Z

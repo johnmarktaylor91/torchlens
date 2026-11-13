@@ -8,6 +8,7 @@ reaches an output as data.
 from __future__ import annotations
 
 from collections.abc import Collection, Mapping, Sequence
+from hashlib import blake2b
 from typing import Any, cast
 
 
@@ -163,6 +164,37 @@ def _uop_name(uop: Any) -> str:
 
     op = getattr(uop, "op", None)
     return str(getattr(op, "name", op)).removeprefix("Ops.")
+
+
+def _uop_signature(uop: Any, memo: dict[int, str] | None = None) -> str:
+    """Return a structural UOp signature string.
+
+    Parameters
+    ----------
+    uop
+        tinygrad UOp.
+    memo
+        Signatures already computed in this call, by UOp id. Each source
+        enters as a digest of its own signature, computed once, so a value
+        the graph reuses is not re-expanded at every use (the fully expanded
+        string doubles per reuse: exponential time and memory in depth).
+
+    Returns
+    -------
+    str
+        Operation/dtype/arg signature over the source signatures' digests.
+    """
+
+    memo = {} if memo is None else memo
+    if id(uop) not in memo:
+        src = getattr(uop, "src", ()) or ()
+        kids = ",".join(
+            blake2b(_uop_signature(c, memo).encode(), digest_size=16).hexdigest() for c in src
+        )
+        memo[id(uop)] = (
+            f"{_uop_name(uop)}:{getattr(uop, 'dtype', None)}:{getattr(uop, 'arg', None)}[{kids}]"
+        )
+    return memo[id(uop)]
 
 
 def _op_func_name(observed_names: Sequence[str], op_name: str) -> str:

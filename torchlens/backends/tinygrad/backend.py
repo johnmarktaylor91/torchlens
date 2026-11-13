@@ -37,6 +37,8 @@ from ..._ir.semantics import BackendSemantics, CapturePolicy
 from ..._output_slot import returned
 from ..._postprocess._materialize import materialize_from_events
 from ..._postprocess._selective_save import (
+    _is_static_label_selector,
+    apply_save_keep_set,
     apply_static_label_save_policy,
     pop_static_label_save_predicate,
 )
@@ -83,6 +85,7 @@ from .._validation_shared import (
     replay_payload,
     scalar_replay_close,
 )
+from . import _captures as hooks
 from ._capture_state import begin_capture, event_module_frames, mark_edit, realize_with_state
 from ._captures import TinygradIntermediateCandidate, TinygradUOpCapture
 from ._derived_grads import (
@@ -107,6 +110,7 @@ from ._module_tree import (
 from ._observer import _observe_tensor_ops
 from ._raw_labels import _final_to_raw_labels
 from ._realize_once import RealizedCapture, live_tensor_uops, recorded_values
+from ._retention import replay_captures, sparse_status_counts
 from ._rules import (
     CONSTANT_KIND_ANNOTATION,
     CONSTANT_UNREALIZABLE_CODE,
@@ -117,7 +121,7 @@ from ._rules import (
     refuse_constant_unrealizable,
 )
 from ._source_lines import SourceLineRecorder
-from ._uop_graph import _data_flow_uops, _op_func_name, _unique_uops, _uop_name
+from ._uop_graph import _data_flow_uops, _op_func_name, _unique_uops, _uop_name, _uop_signature
 
 
 @dataclass(frozen=True)
@@ -227,6 +231,8 @@ class TinygradBackend:
     _call_kwargs: Mapping[str, Any] = MappingProxyType({})
     _source_lines: SourceLineRecorder | None = None
     _edit_session: TinygradEditSession | None = None
+    _capture_session: hooks.TinygradCaptureSession | None = None
+    _save_policy = (_is_static_label_selector, apply_save_keep_set)  # retention test, filter
     _warn_zero_fire = staticmethod(settle_capture_zero_fire)
 
     def capture_trace(
@@ -374,8 +380,6 @@ class TinygradBackend:
             save_visualizations=save_visualizations,
             module_identity_mode=module_identity_mode,
         )
-        layers_to_save = capture_options._layers_to_save
-        keep_orphans = capture_options.keep_orphans
         output_device = capture_options.output_device
         detach_saved_activations = capture_options.detach_saved_activations
         save_arg_values = capture_options.save_args
@@ -400,8 +404,8 @@ class TinygradBackend:
             capture, "layer_visualizers", layer_visualizers
         )
         random_seed = _resolve_optional_capture_field(capture, "seed", random_seed)
-        layers_to_save = _default_if_missing(layers_to_save, "all")
-        keep_orphans = _default_if_missing(keep_orphans, False)
+        layers_to_save = _default_if_missing(capture_options._layers_to_save, "all")
+        keep_orphans = _default_if_missing(capture_options.keep_orphans, False)
         output_device = _default_if_missing(output_device, "same")
         save_raw_activations = _default_if_missing(save_raw_activations, True)
         detach_saved_activations = _default_if_missing(detach_saved_activations, False)
@@ -458,6 +462,7 @@ class TinygradBackend:
         )
         self._assert_runtime_supported()
         self._assert_tinygrad_inputs(args)
+        hooks.arm_backward(self._capture_session, backward_ready, grad_options, save_predicate)
         trace = self._new_trace(
             model=model,
             keep_orphans=cast(bool, keep_orphans),
@@ -493,8 +498,8 @@ class TinygradBackend:
         )
         self._mark_output_events(trace, outputs, uop_labels, captures, realized.output_uops)
         _stamp_param_logs(trace, module_tree if use_object_module else None)
-        self._finish_trace(trace, module_tree if use_object_module else None)
         trace.tinygrad_uop_captures = captures
+        self._finish_trace(trace, module_tree if use_object_module else None)
         trace.tinygrad_payload_policy = REALIZE_ONCE_PAYLOAD_POLICY
         apply_static_label_save_policy(trace, save_predicate, backend_name="tinygrad")
         if grad_options is not None:
@@ -554,8 +559,11 @@ class TinygradBackend:
             observed_ops, observed_module_stacks, pinned_uops=pinned_uops
         )
         observer.source_lines, observer.edits = self._source_lines, self._edit_session
-        with module_call_context, observer, _reject_mid_capture_execution():
-            output = model(*args, **self._call_kwargs)
+        with hooks.capture_scopes(session := self._capture_session), module_call_context, observer:
+            with _reject_mid_capture_execution():
+                output = model(*args, **self._call_kwargs)
+            if session is not None:
+                session.raw_output = output
         if self._input_identities(args) != input_identities:
             raise BackendUnsupportedError(
                 "The tinygrad backend cannot capture Tensor.assign(), Tensor.replace(), "
@@ -610,11 +618,9 @@ class TinygradBackend:
                 num_replayed=0,
             )
             status_result = self._validation_status_from_counts(trace, verdict=verdict)
-        setattr(
-            trace,
-            "_validation_replay_status",
-            status_result,
-        )
+        setattr(trace, "_validation_replay_status", status_result)
+        if kwargs.get("verbose") and not verdict.passed:
+            print(f"tinygrad validation failed: {verdict.message()}")
         return status_result if status_result.state == "unverified" else verdict.passed
 
     def _validation_status_from_counts(
@@ -644,6 +650,8 @@ class TinygradBackend:
         source: ValidationReplaySource = (
             "loaded" if getattr(trace, "_loaded_from_bundle", False) else "live"
         )
+        if (sparse := sparse_status_counts(trace, verdict, source)) is not None:
+            return ValidationStatus.from_replay_counts(**sparse)
         payload_load_status = getattr(trace, "payload_load_status", None)
         passed = verdict.passed
         replayed_node_count = len(getattr(trace, "tinygrad_uop_captures", ())) if passed else 0
@@ -759,7 +767,7 @@ class TinygradBackend:
             Mapping from UOp object id to raw source label.
         """
 
-        uop_labels: dict[int, str] = {}
+        uop_labels = hooks.fresh_label_map(self._capture_session)
         for path, value, uop in capture.input_leaves:
             event = self._append_event(
                 trace=trace,
@@ -1227,6 +1235,7 @@ class TinygradBackend:
             finish_before_module_logs=False,
             recurrence_detection=bool(trace._options_recurrence_detection),
         )
+        hooks.retain_hook_state(trace, self._capture_session, module_tree)
 
     def _attach_object_module_logs(self, trace: Trace, tree: TinygradModuleTree) -> None:
         """Build public module logs for a tinygrad object-module trace.
@@ -1443,13 +1452,7 @@ class TinygradBackend:
             )
         ops_by_raw_label = {getattr(op, "_label_raw", ""): op for op in trace._layer_list}
         hidden_outputs_by_label = dict(getattr(trace, "_selective_save_hidden_payloads", {}))
-        for index, capture in enumerate(captures):
-            failure = self._uop_capture_failure(
-                index, capture, ops_by_raw_label, hidden_outputs_by_label
-            )
-            if failure is not None:
-                return failure
-        return ReplayVerdict.ok(len(captures))
+        return replay_captures(self, captures, ops_by_raw_label, hidden_outputs_by_label)
 
     def _uop_capture_failure(
         self,
@@ -1735,11 +1738,6 @@ class TinygradBackend:
         ----------
         **options
             Normalized public trace options.
-
-        Returns
-        -------
-        None
-            Returns when all options are supported.
         """
 
         reject_unsupported_trace_options(
@@ -1755,11 +1753,6 @@ class TinygradBackend:
         ----------
         kwargs
             Extra keyword arguments.
-
-        Returns
-        -------
-        None
-            Returns when no extras are present.
         """
 
         reject_extra_trace_kwargs(
@@ -2469,25 +2462,6 @@ def _resolve_tinygrad_module_identity_mode(
     if value == "function_root":
         return False
     return module_tree is not None
-
-
-def _uop_signature(uop: Any) -> str:
-    """Return a structural UOp signature string.
-
-    Parameters
-    ----------
-    uop
-        tinygrad UOp.
-
-    Returns
-    -------
-    str
-        Recursive operation/dtype/arg signature.
-    """
-
-    src = getattr(uop, "src", ()) or ()
-    children = ",".join(_uop_signature(child) for child in src)
-    return f"{_uop_name(uop)}:{getattr(uop, 'dtype', None)}:{getattr(uop, 'arg', None)}[{children}]"
 
 
 def _tinygrad_signature_key(

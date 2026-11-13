@@ -807,12 +807,12 @@ torchlens/backends/tf/op_callback_capture.py::TFEagerCaptureSession._record_cont
 torchlens/backends/tf/validation.py	1069
 torchlens/backends/tf/validation.py::_validate_self_consistency	85
 torchlens/backends/tf/validation.py::validate_tf_trace_detailed	79
-torchlens/backends/tinygrad/backend.py	2999
+torchlens/backends/tinygrad/backend.py	2973
 torchlens/backends/tinygrad/backend.py::TinygradBackend._append_event	168
 torchlens/backends/tinygrad/backend.py::TinygradBackend._attach_derived_grads	88
 torchlens/backends/tinygrad/backend.py::TinygradBackend._derive_intermediate_grads_no_realize	74
 torchlens/backends/tinygrad/backend.py::TinygradBackend._replay_uop_from_trace_graph	71
-torchlens/backends/tinygrad/backend.py::TinygradBackend.capture_trace	280
+torchlens/backends/tinygrad/backend.py::TinygradBackend.capture_trace	279
 torchlens/backends/tinygrad/backend.py::_parent_perturbations_change_output	73
 torchlens/backends/tinygrad/backend.py::_walk_tinygrad_modules	78
 torchlens/backends/tinygrad/backend.py::scoped_tinygrad_module_calls	71
