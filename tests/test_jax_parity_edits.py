@@ -100,7 +100,7 @@ def test_jax_intervene_helpers_edit_and_validate(action: Any, expected: Any) -> 
     np.testing.assert_allclose(_out(trace), np.asarray(expected(x)), rtol=1e-6, atol=1e-6)
     edited = _edited(trace)
     assert [op.func_name for op in edited] == ["tanh"]
-    assert edited[0].fire_results
+    assert edited[0].edits
     assert trace.validate_forward_pass([])
 
 
