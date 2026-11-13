@@ -38,7 +38,7 @@ def _setup() -> tuple[fake.FakeTrace, ReplayGraph, RecordedBackward, dict[str, A
         incoming = tuple(grads.get(slot) for slot in node.outputs)
         filled = [
             fake.zeros_like(trace.payloads[s]) if g is None else g
-            for s, g in zip(node.outputs, incoming)
+            for s, g in zip(node.outputs, incoming, strict=True)
         ]
         outgoing = fake.vjp(trace, node.op, [trace.payloads[p] for p in node.parents], filled)
         calls[node.label] = (incoming, tuple(outgoing))

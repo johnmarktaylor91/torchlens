@@ -297,7 +297,7 @@ def _call_raw(op_type: str, inputs: Sequence[Any], attrs: dict[str, Any]) -> Any
     tf = _tf()
     function = getattr(tf.raw_ops, op_type)
     names = [p for p in inspect.signature(function).parameters if p != "name"]
-    kwargs = dict(zip(names, inputs))
+    kwargs = dict(zip(names, inputs, strict=False))
     kwargs.update({k: v for k, v in attrs.items() if k in names and k not in kwargs})
     with _state.pause_logging():
         return function(**kwargs)

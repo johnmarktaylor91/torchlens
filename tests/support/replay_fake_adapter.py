@@ -66,7 +66,7 @@ def build_trace(ops: Sequence[FakeOp], inputs: Mapping[str, np.ndarray]) -> Fake
             trace.payloads[op.label] = np.asarray(inputs[op.label], dtype=np.float64)
             continue
         outputs = forward(trace, op, [trace.payloads[p] for p in op.parents])
-        trace.payloads.update(zip(op.output_slots, outputs))
+        trace.payloads.update(zip(op.output_slots, outputs, strict=False))
     return trace
 
 

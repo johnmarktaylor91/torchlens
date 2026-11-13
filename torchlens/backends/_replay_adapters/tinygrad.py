@@ -670,7 +670,7 @@ def _decode_dtype(node: Any) -> Any:
     if not isinstance(node, Mapping) or type(node.get("count")) is not int:
         raise _not_data("malformed dtype")
     name = node.get("scalar")
-    if name not in DTYPES_DICT and name not in ("void", "weakint"):
+    if not isinstance(name, str) or (name not in DTYPES_DICT and name not in ("void", "weakint")):
         raise _not_data(f"unknown dtype {name!r}")
     base = getattr(dtypes, name)
     return base if node["count"] == 1 else base.vec(node["count"])

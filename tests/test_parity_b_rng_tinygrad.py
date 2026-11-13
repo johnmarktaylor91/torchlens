@@ -29,7 +29,7 @@ def _replay_all(log: object, outputs: tuple[Tensor, ...], x: Tensor) -> None:
     """Every draw replays bit for bit, also after a data round trip."""
 
     assert len(log.draws) == len(outputs)
-    for draw, out in zip(log.draws, outputs):
+    for draw, out in zip(log.draws, outputs, strict=True):
         assert rng.can_replay_draw(draw) is None, draw.reason
         parents = (x,) if draw.op_name == "dropout" else ()
         loaded = RngDraw.from_data(pickle.loads(pickle.dumps(draw.to_data())))
@@ -51,7 +51,7 @@ def test_draws_replay_and_caller_counter_is_unchanged(seed: int) -> None:
     with rng.rng_scope(session) as log:
         outputs = _forward(x)
     Tensor.realize(*outputs)
-    for out, ref in zip(outputs, reference):
+    for out, ref in zip(outputs, reference, strict=False):
         np.testing.assert_array_equal(out.numpy(), ref)
     _replay_all(log, outputs, x)
     assert rng.draw_for(session, outputs[0]) is log.draws[0]
@@ -74,7 +74,7 @@ def test_pending_counter_is_never_read_early_and_resolves_after_realize() -> Non
     assert all(d.reason == rng.REASON_COUNTER_PENDING for d in log.draws)
     Tensor.realize(weight, *outputs)
     np.testing.assert_array_equal(weight.numpy(), weight_ref)
-    for out, ref in zip(outputs, draws_ref):
+    for out, ref in zip(outputs, draws_ref, strict=False):
         np.testing.assert_array_equal(out.numpy(), ref)
     rng.finalize_counters(log)
     _replay_all(log, outputs, x)

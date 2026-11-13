@@ -283,7 +283,7 @@ def propagate(walk: ReplayWalk, steps: Sequence[ReplayStep]) -> ReplayWalk:
         if not _needs_replay(walk, step):
             continue
         outputs = _step_outputs(walk, step)
-        for slot, value in zip(step.slots, outputs):
+        for slot, value in zip(step.slots, outputs, strict=False):
             if slot in walk.origins:
                 value = walk.origins[slot]
             value, records = walk.edit(step, slot, value)
@@ -328,7 +328,7 @@ def verify_backend_replay(trace: Trace, labels: Sequence[str] | None = None) -> 
             continue
         passthrough = step.kind == "passthrough"
         outputs = _step_outputs(walk, step) if passthrough else forward_step(walk, step)
-        for slot, value in zip(step.slots, outputs):
+        for slot, value in zip(step.slots, outputs, strict=False):
             if not _is_edit_marked(trace, slot) and not adapter.close(walk.payload(slot), value):
                 failures.append(slot)
     return failures

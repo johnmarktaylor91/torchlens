@@ -66,7 +66,7 @@ def _make_adapter() -> ModuleType:
 
     def forward(trace: Any, op: Any, parent_values: Sequence[Any]) -> tuple[Any, ...]:
         keys = {p: _replay_site_key(trace._layer_dict_all_keys[p]) for p in op.parents}
-        overlay = dict(zip(keys.values(), parent_values))
+        overlay = dict(zip(keys.values(), parent_values, strict=True))
         args, kwargs = _reconstruct_args_from_template(
             _template_for_site(op),
             op,

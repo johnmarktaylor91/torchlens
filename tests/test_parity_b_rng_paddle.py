@@ -51,7 +51,7 @@ def test_draws_replay_and_caller_state_is_unchanged(seed: int) -> None:
     _forward(x)
     assert log.finished and len(log.draws) == 5
     assert [d.kind for d in log.draws][:3] == ["global_state", "global_state", "explicit_seed"]
-    for draw, out, ref in zip(log.draws, outputs, reference):
+    for draw, out, ref in zip(log.draws, outputs, reference, strict=False):
         assert rng.can_replay_draw(draw) is None
         np.testing.assert_array_equal(out.numpy(), ref.numpy())
         assert rng.draw_for(session, out) is draw
