@@ -508,19 +508,22 @@ def _check_bounds(data: Any, limits: RecipeLimits) -> None:
         nodes += 1
         if nodes > limits.max_nodes or depth > limits.max_depth:
             raise ReplayRefusal("bounds", "recipe tree exceeds the size or depth bound")
-        if isinstance(node, str):
-            if len(node) > limits.max_str_len:
-                raise ReplayRefusal("bounds", "recipe string exceeds the length bound")
-        elif type(node) is int:
-            if node.bit_length() > limits.max_int_bits:
-                raise ReplayRefusal("bounds", "recipe integer exceeds the size bound")
-        elif isinstance(node, Mapping):
-            for key, value in node.items():
-                if type(key) is not str:
-                    raise ReplayRefusal("type", "recipe mapping key is not a str")
-                stack.append((key, depth + 1))
-                stack.append((value, depth + 1))
-        elif isinstance(node, (list, tuple)):
-            stack.extend((v, depth + 1) for v in node)
-        elif node is not None and type(node) not in (bool, float):
-            raise ReplayRefusal("type", f"non-data leaf {type(node).__name__} in recipe")
+        stack.extend((child, depth + 1) for child in _children(node, limits))
+
+
+def _children(node: Any, limits: RecipeLimits) -> list[Any]:
+    """Check one raw node against the leaf grammar and return its children."""
+
+    if isinstance(node, Mapping):
+        if any(type(key) is not str for key in node):
+            raise ReplayRefusal("type", "recipe mapping key is not a str")
+        return [*node.keys(), *node.values()]
+    if isinstance(node, (list, tuple)):
+        return list(node)
+    if isinstance(node, str) and len(node) > limits.max_str_len:
+        raise ReplayRefusal("bounds", "recipe string exceeds the length bound")
+    if type(node) is int and node.bit_length() > limits.max_int_bits:
+        raise ReplayRefusal("bounds", "recipe integer exceeds the size bound")
+    if node is not None and type(node) not in (bool, float, int, str):
+        raise ReplayRefusal("type", f"non-data leaf {type(node).__name__} in recipe")
+    return []
