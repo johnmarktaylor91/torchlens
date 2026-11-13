@@ -112,10 +112,16 @@ def test_native_surface_builds_records_from_journaled_events(
     want = [record.class_name for record in donor._grad_fn_logs.values()]
     assert [record.class_name for record in target._grad_fn_logs.values()] == want
     assert sorted(target._backward_pass_logs) == [1]
-    donor_grads = {op.layer_label: op.grad for op in donor._layer_list if op.has_grad}
-    assert donor_grads
-    for label, grad in donor_grads.items():
-        assert torch.equal(target[label].grad, grad)
+    observed = [
+        event
+        for event in events
+        if type(event).__name__ == "OpGradObserved" and isinstance(event.payload_ref, torch.Tensor)
+    ]
+    assert observed
+    for event in observed:
+        op = target._layer_dict_all_keys[event.op_label]
+        grads = [record.grad for record in op._slot("_grad_records") or ()]
+        assert any(grad is event.payload_ref for grad in grads), event.op_label
 
 
 def test_native_sync_runs_on_read_through_the_registry(monkeypatch: pytest.MonkeyPatch) -> None:

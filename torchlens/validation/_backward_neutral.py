@@ -25,13 +25,13 @@ from typing import Any
 
 from ..backends._reverse_engine import EngineNode, ReplayGraph
 
-__all__ = [
+__all__ = (
     "BackwardCheckFinding",
     "BackwardCheckResult",
     "RecordedBackward",
     "check_backward_records",
     "recorded_backward_from_trace",
-]
+)
 
 
 @dataclass(frozen=True)
@@ -97,24 +97,26 @@ def _check_node(
     graph: ReplayGraph,
     node: EngineNode,
     call: tuple[tuple[Any, ...], tuple[Any, ...]],
-    findings: _Findings,
-) -> None:
-    """Check 1 for one node: framework derivative at the recorded incoming gradient."""
+) -> list[str]:
+    """Check 1 for one node: framework derivative at the recorded incoming gradient.
+
+    Returns the detail of every finding for ``node``.
+    """
 
     incoming, outgoing = call
     if len(incoming) != len(node.outputs) or len(outgoing) != len(node.parents):
-        findings.add("node", node.label, "recorded gradients do not match the op's arity")
-        return
+        return ["recorded gradients do not match the op's arity"]
     filled = [
         adapter.zeros_like(graph.value(slot)) if item is None else item
         for slot, item in zip(node.outputs, incoming, strict=True)
     ]
     parent_values = [graph.value(parent) for parent in node.parents]
     expected = tuple(adapter.vjp(trace, node.op, parent_values, filled))
-    for index, (want, got) in enumerate(zip(expected, outgoing, strict=True)):
-        if not _same(adapter, want, got):
-            parent = node.parents[index]
-            findings.add("node", node.label, f"outgoing gradient to {parent!r} differs")
+    return [
+        f"outgoing gradient to {parent!r} differs"
+        for parent, want, got in zip(node.parents, expected, outgoing, strict=True)
+        if not _same(adapter, want, got)
+    ]
 
 
 def _consumer_sums(adapter: Any, graph: ReplayGraph, recorded: RecordedBackward) -> dict[str, Any]:
@@ -212,7 +214,8 @@ def check_backward_records(
         if reason is not None:
             findings.add("node", node.label, f"cannot be replayed to check ({reason})")
             continue
-        _check_node(trace, adapter, graph, node, call, findings)
+        for detail in _check_node(trace, adapter, graph, node, call):
+            findings.add("node", node.label, detail)
     sums_checked = _check_sums(adapter, graph, recorded, findings)
     leaves_checked = _check_leaves(adapter, recorded, leaf_grads, findings)
     return BackwardCheckResult(tuple(findings.items), nodes_checked, sums_checked, leaves_checked)
