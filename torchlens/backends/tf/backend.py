@@ -402,10 +402,6 @@ class TFBackend:
                 intervene=intervene,
                 halt=halt,
             )
-        else:
-            from ._grad_sites import arm_tf_grad_sites
-
-            arm_tf_grad_sites(trace, tf)
         attach_facet_recipes(trace, facet_recipes, backend_name="tf")
         freeze_trace_relation_views(trace)
         stamp_backend_finalized(trace)

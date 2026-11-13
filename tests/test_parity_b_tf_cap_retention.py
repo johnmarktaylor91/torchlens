@@ -164,17 +164,3 @@ def test_op_records_mark_payloads_the_selector_declined() -> None:
     sparse = tl.trace(_chain, x, save=tl.func("Relu"))
     declined = {c.op_type: c.payload_declined for c in sparse._tf_op_captures}
     assert declined == {"Relu": False, "AddV2": True, "Mul": True}
-
-
-def test_capture_without_grad_options_arms_its_grad_site_clause() -> None:
-    """A capture-time ``tl.grad`` clause is armed for a later backward without ``grad_options``."""
-
-    from torchlens.intervention._grad_site_neutral import armed_grad_sites
-
-    x = tf.constant(_X)
-    clause = tl.when(tl.grad(tl.func("relu")), tl.scale(0.25))
-    trace = tl.trace(_chain, x, backend="tf", intervene=clause)
-    relus = [op.label for op in trace._layer_list if op.func_name == "Relu"]
-    assert relus
-    assert sorted(edit.label for edit in armed_grad_sites(trace)) == sorted(relus)
-    assert armed_grad_sites(tl.trace(_chain, x, backend="tf")) == ()
