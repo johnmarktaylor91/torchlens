@@ -20,6 +20,7 @@ import torch  # noqa: E402
 
 import torchlens as tl  # noqa: E402
 from torchlens.backends.jax import (
+    _retention,  # noqa: E402
     _sparse_capture,  # noqa: E402
     backend as jax_backend,  # noqa: E402
 )
@@ -90,10 +91,25 @@ def test_sparse_payloads_equal_full_on_selected_ops(fn: Any) -> None:
             assert op.out is None, raw
 
 
-def test_sparse_capture_never_retains_unselected_values(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The value pass releases exactly the unselected primitive equations."""
+def _spy_releases(monkeypatch: pytest.MonkeyPatch) -> list[Any]:
+    """Record every capture result after its release step."""
 
-    results = _spy_results(monkeypatch)
+    results: list[Any] = []
+    finish = _retention.Release.finish
+
+    def recording_finish(self: Any, result: Any) -> Any:
+        released = finish(self, result)
+        results.append(released)
+        return released
+
+    monkeypatch.setattr(_retention.Release, "finish", recording_finish)
+    return results
+
+
+def test_sparse_capture_never_retains_unselected_values(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The structure pass keeps no value; the value pass keeps only the selected ones."""
+
+    results = _spy_releases(monkeypatch)
     reasons: list[Any] = []
     reason_of = _sparse_capture.ineligible_reason
 
@@ -106,9 +122,9 @@ def test_sparse_capture_never_retains_unselected_values(monkeypatch: pytest.Monk
 
     assert len(results) == 2, f"a structure pass and a value pass; eligibility {reasons}"
     structure, values = results
-    assert {i for i, c in enumerate(structure.captures) if c.kind == "primitive"} <= set(
-        structure.released_capture_indices
-    ) | _frame_output_producers(structure)
+    primitives = {i for i, c in enumerate(structure.captures) if c.kind == "primitive"}
+    frame = _frame_output_producers(structure)
+    assert primitives - frame == set(structure.released_capture_indices)
     raw_by_index = sparse._jax_capture_index_to_raw_op_label
     ops = _ops_by_raw(sparse)
     unselected = {
@@ -121,6 +137,33 @@ def test_sparse_capture_never_retains_unselected_values(monkeypatch: pytest.Monk
     for index in values.released_capture_indices:
         for value in values.captures[index].output_values:
             assert type(value).__name__ == "ShapeDtypeStruct"
+    for index in set(raw_by_index) - unselected:
+        for value in values.captures[index].output_values:
+            assert type(value).__name__ != "ShapeDtypeStruct"
+
+
+def test_sparse_trace_saves_and_loads(tmp_path: Any) -> None:
+    """A sparse trace writes only its selected payloads and loads back with the same flags."""
+
+    trace = tl.trace(_two_tanh, _x(), save=tl.func("tanh"), backend="jax")
+    saved = list(trace.saved_ops)
+    assert {op.func_name for op in saved} == {"tanh"}
+    unsaved = [op for op in trace._layer_list if not op.has_saved_activation]
+    assert unsaved
+    assert all(op.out is None and op._out_ref is None for op in unsaved)
+    assert all(op.shape is not None and op.dtype_ref is not None for op in unsaved)
+    assert int(trace.cost.saved_activation_memory) == sum(
+        int(op.cost.activation_memory or 0) for op in saved
+    )
+
+    path = tmp_path / "jax_sparse.tlspec"
+    trace.save(path, level="portable")
+    loaded = tl.load(path)
+
+    assert len(list(loaded.saved_ops)) == len(saved)
+    assert [op.has_saved_activation for op in loaded._layer_list] == [
+        op.has_saved_activation for op in trace._layer_list
+    ]
 
 
 def _frame_output_producers(result: Any) -> set[int]:
