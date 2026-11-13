@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1853 modules, 730077 lines, 0 modules without a docstring.
+85 packages, 1853 modules, 730087 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -40,7 +40,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 3073 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2141 |
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 23 | 6918 |
-| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 86 | 25710 |
+| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 86 | 25720 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 19 | 6674 |
 | `torchlens._visualization` | Computational graph visualization via Graphviz. | 112 | 50023 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1150 |
@@ -994,7 +994,7 @@ Private per-trace semantic store substrate (trace_core_design.md). (23 modules, 
 
 ### `torchlens._utils`
 
-Shared helpers used by two or more TorchLens packages. (86 modules, 25710 lines)
+Shared helpers used by two or more TorchLens packages. (86 modules, 25720 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1074,7 +1074,7 @@ Shared helpers used by two or more TorchLens packages. (86 modules, 25710 lines)
 | `collections` | Iterable helpers: type checks, list/dict manipulation, nested indexing. | 178 |
 | `container_tokens` | Writer side of the trace's write-time container tokens. | 44 |
 | `display` | Human-readable formatting, print overrides, and environment detection. | 796 |
-| `env_flags` | Closed-vocabulary parsing for torchlens-owned boolean environment knobs. | 258 |
+| `env_flags` | Closed-vocabulary parsing for torchlens-owned boolean environment knobs. | 268 |
 | `facade` | Shared five-step lazy-facade resolution for TorchLens namespaces. | 386 |
 | `fail_open` | The one audited fail-open chokepoint for degrade-not-raise surfaces. | 42 |
 | `hashing` | Barcode generation and graph hash helpers. | 610 |
