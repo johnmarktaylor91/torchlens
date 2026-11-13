@@ -16,13 +16,17 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from ...intervention.errors import AmbiguousAxisError, HookValueError
+from ..._errors import InvalidArgumentError
 from ..registry import BackendUnsupportedError
 
 #: Refusal code of a helper (or helper form) without an MLX application.
 _UNSUPPORTED = "interventions_unsupported"
 #: Refusal code of helper arguments that do not fit the matched output.
 _ARGUMENTS = "intervention_helper_arguments_invalid"
+#: Remedy of a direction that does not fit the matched output.
+_DIRECTION_REMEDY = (
+    "pass a direction whose length matches the out axis it lies along and name that axis with dim="
+)
 
 if TYPE_CHECKING:
     from ...intervention._types import Edit
@@ -48,26 +52,32 @@ def _vector_axis(direction: Any, out: Any, dim: int | None, *, infer: bool) -> i
     shape = tuple(out.shape)
     if dim is None:
         if not infer:
-            raise AmbiguousAxisError(
+            raise InvalidArgumentError(
                 "vector directions require explicit dim to avoid axis ambiguity",
                 code=_ARGUMENTS,
+                remedy=_DIRECTION_REMEDY,
+                argument="dim",
             )
         length = int(direction.shape[0])
         matches = [axis for axis, size in enumerate(shape) if size == length]
         if len(matches) != 1:
             found = f"matches dims {matches} of" if matches else "matches no dim of"
-            raise AmbiguousAxisError(
+            raise InvalidArgumentError(
                 f"cannot infer the axis for a direction of length {length}: it {found} "
-                f"out shape {shape}; pass dim= to name the axis the direction lies along",
+                f"out shape {shape}",
                 code=_ARGUMENTS,
+                remedy=_DIRECTION_REMEDY,
+                argument="dim",
             )
         return matches[0]
     axis = dim % len(shape)
     if direction.shape[0] != shape[axis]:
-        raise HookValueError(
+        raise InvalidArgumentError(
             f"direction length {direction.shape[0]} does not match out axis {axis} "
             f"size {shape[axis]}",
             code=_ARGUMENTS,
+            remedy=_DIRECTION_REMEDY,
+            argument="direction",
         )
     return axis
 
@@ -83,10 +93,12 @@ def _aligned(mx: Any, direction: Any, out: Any, dim: int | None, *, infer: bool 
     try:
         mx.broadcast_shapes(tuple(direction.shape), tuple(out.shape))
     except ValueError as exc:
-        raise HookValueError(
+        raise InvalidArgumentError(
             f"direction shape {tuple(direction.shape)} cannot broadcast to out shape "
             f"{tuple(out.shape)}",
             code=_ARGUMENTS,
+            remedy=_DIRECTION_REMEDY,
+            argument="direction",
         ) from exc
     return direction.astype(out.dtype)
 
@@ -185,7 +197,12 @@ def _projection_parts(spec: Edit, mx: Any, what: str) -> tuple[Any, int | None]:
             code=_UNSUPPORTED,
         )
     if float(mx.sum(direction * direction).item()) == 0.0:
-        raise HookValueError(f"{spec.name} direction has zero norm", code=_ARGUMENTS)
+        raise InvalidArgumentError(
+            f"{spec.name} direction has zero norm",
+            code=_ARGUMENTS,
+            remedy="pass a direction with at least one nonzero entry",
+            argument="direction",
+        )
     return direction, dim
 
 

@@ -36,7 +36,7 @@ from ..._ir.selector_eval import (
 from ..._postprocess._selective_save import _STATIC_INTERVENTION_SELECTOR_KINDS
 from ..._selection import selectors as _selectors
 from ...intervention._types import Edit, InterventionDecision
-from ...intervention.hooks import EDIT_SIGNAL_MISMATCH_REMEDY, make_hook_context, normalize_hook
+from ...intervention.hooks import make_hook_context, normalize_hook
 from ..registry import BackendUnsupportedError
 from ._mlx_helpers import mlx_helper_apply
 from ._tap_observers import _replace_mlx_array_leaves
@@ -366,6 +366,9 @@ def _refuse_forward_signal_edit(spec: Edit) -> None:
 
     if spec.signal != "forward":
         return
+    # Deferred: the remedy text lives with torch's attach-time check, one tier up.
+    from ...intervention.hooks import EDIT_SIGNAL_MISMATCH_REMEDY
+
     raise InvalidArgumentError(
         f"{spec.name} reads recorded forward activations and cannot edit the gradient "
         f"at a tl.grad(...) site. Nothing was attached. Remedy: {EDIT_SIGNAL_MISMATCH_REMEDY}",
@@ -618,6 +621,20 @@ class _LiveSiteMatches:
     appliers: list[tuple[int, Any]] = field(default_factory=list)
     halt_label: str | None = None
 
+    def record(self, backend: Any, plan: Any, index: int, leaf: Any, entry: Any) -> None:
+        """Apply the edit at one matched leaf, or note a ``tl.grad`` site for the replay."""
+
+        if plan.gradient:
+            # A tl.grad site leaves the forward unchanged; the derived-gradient
+            # replay (_edit_replay) edits the gradient arriving at this output.
+            plan.grad_site_labels.append(entry.label_raw)
+            return
+        replacement, fire_result = _apply_edit(backend, plan, leaf, entry)
+        self.replacements[id(leaf)] = replacement
+        self.fire_results_by_site[index] = (fire_result,)
+        self.slots.append((index, plan.applier.identity))
+        self.appliers.append((index, plan.applier.apply))
+
 
 def _reads_values(selector: Any) -> bool:
     """Whether a selector tree holds a value-dependent (predicate) condition."""
@@ -682,7 +699,8 @@ def _match_live_sites(
         if with_values:
             record_ctx = _value_record_context(record_ctx)
         if plan is not None and selector_matches_capture_context(plan.selector, record_ctx):
-            _record_site_match(backend, trace, plan, found, index, leaf, entry)
+            trace._mlx_intervene_fired = True
+            found.record(backend, plan, index, leaf, entry)
         if (
             halt_selector is not None
             and found.halt_label is None
@@ -690,30 +708,6 @@ def _match_live_sites(
         ):
             found.halt_label = entry.label_raw
     return found
-
-
-def _record_site_match(
-    backend: Any,
-    trace: Any,
-    plan: Any,
-    found: _LiveSiteMatches,
-    index: int,
-    leaf: Any,
-    entry: Any,
-) -> None:
-    """Apply the edit at one matched leaf, or note a ``tl.grad`` site for the replay."""
-
-    trace._mlx_intervene_fired = True
-    if plan.gradient:
-        # A tl.grad site leaves the forward unchanged; the derived-gradient
-        # replay (_edit_replay) edits the gradient arriving at this output.
-        plan.grad_site_labels.append(entry.label_raw)
-        return
-    replacement, fire_result = _apply_edit(backend, plan, leaf, entry)
-    found.replacements[id(leaf)] = replacement
-    found.fire_results_by_site[index] = (fire_result,)
-    found.slots.append((index, plan.applier.identity))
-    found.appliers.append((index, plan.applier.apply))
 
 
 def _apply_edit(backend: Any, plan: Any, leaf: Any, entry: Any) -> tuple[Any, FireResult]:

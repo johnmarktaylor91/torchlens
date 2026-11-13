@@ -24,6 +24,7 @@ capture refuses instead of returning gradients of a different program.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from ..registry import BackendUnsupportedError
@@ -291,24 +292,27 @@ def _gradient_edit(mx: Any, apply: Callable[[Any], Any], value: Any) -> Any:
     return grad_site(value)
 
 
+@dataclass(frozen=True)
+class _ReplayEdits:
+    """The captured forward edits, gradient edits and halt the replay re-applies."""
+
+    sites: Mapping[SiteKey, Callable[[Any], Any]]
+    grad_sites: Mapping[SiteKey, Callable[[Any], Any]]
+    halt_key: SiteKey | None
+
+
 class _EditedReplayModel:
     """Model proxy whose call replays the captured edits and halt."""
 
     def __init__(
-        self,
-        backend: MLXBackend,
-        taps: Any,
-        model: Callable[..., Any],
-        sites: Mapping[SiteKey, Callable[[Any], Any]],
-        grad_sites: Mapping[SiteKey, Callable[[Any], Any]],
-        halt_key: SiteKey | None,
+        self, backend: MLXBackend, taps: Any, model: Callable[..., Any], edits: _ReplayEdits
     ) -> None:
         self._backend = backend
         self._taps = taps
         self._model = model
-        self._sites = sites
-        self._grad_sites = grad_sites
-        self._halt_key = halt_key
+        self._sites = edits.sites
+        self._grad_sites = edits.grad_sites
+        self._halt_key = edits.halt_key
 
     def __getattr__(self, name: str) -> Any:
         """Read every other attribute (``update``, ``parameters``) from the model."""
@@ -390,4 +394,4 @@ def edited_replay_model(
     halt_key = site_key(frontier) if isinstance(frontier, str) else None
     if not sites and not grad_sites and halt_key is None:
         return model
-    return _EditedReplayModel(backend, taps, model, sites, grad_sites, halt_key)
+    return _EditedReplayModel(backend, taps, model, _ReplayEdits(sites, grad_sites, halt_key))
