@@ -105,7 +105,7 @@ def _assert_recorded(
         assert adapter.close(leaf_grads[op.label], op.grad), op.label
 
     recorded = recorded_backward_from_trace(trace, 1)
-    inputs = native_jax.validation_inputs(trace, recorded, 1)
+    inputs = native_jax.validation_inputs(trace, recorded, 1, loss)
     result = check_backward_records(
         trace,
         inputs.adapter,

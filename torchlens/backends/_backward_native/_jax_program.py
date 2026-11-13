@@ -38,6 +38,7 @@ __all__ = (
     "program_function",
     "run_backward",
     "scope_groups",
+    "seed_dependent",
 )
 
 TLB_SCOPE = re.compile(r"tlb_(\d+)")
@@ -361,7 +362,7 @@ def _saved(program: Program, sources: Mapping[str, Any], label: str) -> Any:
     return sources[label] if label in sources else program.node(label).op.out
 
 
-def _seed_dependent(closed: Any) -> list[bool]:
+def seed_dependent(closed: Any) -> list[bool]:
     """Per outvar of ``closed``: whether it depends on the jaxpr's inputs."""
 
     jaxpr = closed.jaxpr
@@ -394,7 +395,7 @@ def run_backward(program: Program, loss: Callable[[Any], Any]) -> BackwardRun | 
     flat = jax.block_until_ready(jaxpr_as_fun(closed)(seed))
     duration = time.perf_counter() - started
     leaf_cts, out_cts, edge_cts = jax.tree.unflatten(structure, list(flat))
-    _leaf_dep, out_dep, _edge_dep = jax.tree.unflatten(structure, _seed_dependent(closed))
+    _leaf_dep, out_dep, _edge_dep = jax.tree.unflatten(structure, seed_dependent(closed))
     return BackwardRun(
         loss=value,
         forward=forward,

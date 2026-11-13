@@ -26,7 +26,7 @@ evaluation, so only the pass duration is observed.
 from __future__ import annotations
 
 import time
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from types import MappingProxyType
@@ -52,6 +52,7 @@ from ._jax_program import (
     build_program,
     run_backward,
     scope_groups,
+    seed_dependent,
 )
 
 __all__ = (
@@ -462,10 +463,46 @@ def record_backward(trace: Any, loss: Callable[[Any], Any], **backward_kwargs: A
         )
 
 
-def _graph(program: Program) -> ReplayGraph:
-    """The validator's graph: equation and output nodes in forward order."""
+_LOSS_LABEL = "<loss>"
+
+
+@dataclass(frozen=True)
+class _LossConsumer:
+    """The loss callable as the consumer of the output ops, for the validator.
+
+    The loss's own cotangent to each output op is where a backward pass starts.
+    An output op that other ops also consume receives it beside their
+    contributions, so the validator sums it in like any other consumer.
+    """
+
+    loss: Callable[[Any], Any]
+    treedef: Any
+
+    def cotangents(self, outputs: Sequence[Any]) -> tuple[Any, ...]:
+        """JAX's cotangent of the loss per output (``None`` where the loss ignores it)."""
+
+        import jax
+        import jax.numpy as jnp
+
+        def loss_of(*leaves: Any) -> Any:
+            return self.loss(jax.tree.unflatten(self.treedef, list(leaves)))
+
+        value, pullback = jax.vjp(loss_of, *outputs)
+        seed = jnp.ones_like(value)
+        live = seed_dependent(jax.make_jaxpr(pullback)(seed))
+        return tuple(ct if dep else None for ct, dep in zip(pullback(seed), live, strict=True))
+
+
+def _graph(program: Program, consumer: _LossConsumer) -> tuple[ReplayGraph, Any]:
+    """The validator's graph (equation, output and loss nodes in forward order), and the loss call."""
+
+    import jax
+    import jax.numpy as jnp
 
     values = {node.label: node.op.out for node in program.nodes}
+    outputs = [values[label] for label in program.output_labels]
+    loss_value = consumer.loss(jax.tree.unflatten(program.output_treedef, outputs))
+    values[_LOSS_LABEL] = loss_value
     nodes = tuple(
         EngineNode(
             op=node.op,
@@ -475,27 +512,32 @@ def _graph(program: Program) -> ReplayGraph:
         for node in program.nodes
         if node.kind != "source"
     )
-    return ReplayGraph(nodes=nodes, value=values.__getitem__)
+    loss_node = EngineNode(op=consumer, parents=program.output_labels, outputs=(_LOSS_LABEL,))
+    call = ((jnp.ones_like(loss_value),), consumer.cotangents(outputs))
+    return ReplayGraph(nodes=(*nodes, loss_node), value=values.__getitem__), call
 
 
 @dataclass(frozen=True)
 class _MarkerAdapter:
-    """The JAX replay adapter, plus the derivative of TorchLens's output markers.
+    """The JAX replay adapter, plus the derivatives of the two non-equation consumers.
 
     An output marker is not a JAX equation, so the JAX adapter does not replay
     it; its derivative is the identity by definition (it returns its parent's
-    value). Every other op goes to the JAX adapter unchanged.
+    value). The loss consumer's derivative is JAX's derivative of the loss
+    callable. Every other op goes to the JAX adapter unchanged.
     """
 
     adapter: Any
     markers: frozenset[str]
 
     def can_replay(self, trace: Any, op: Any) -> str | None:
-        if jax_adapter._parent_label(op) in self.markers:
+        if isinstance(op, _LossConsumer) or jax_adapter._parent_label(op) in self.markers:
             return None
         return self.adapter.can_replay(trace, op)
 
     def vjp(self, trace: Any, op: Any, parent_values: Any, cotangents: Any) -> tuple[Any, ...]:
+        if isinstance(op, _LossConsumer):
+            return op.cotangents(parent_values)
         if jax_adapter._parent_label(op) in self.markers:
             return (cotangents[0],)
         return tuple(self.adapter.vjp(trace, op, parent_values, cotangents))
@@ -525,18 +567,22 @@ def _pass_grads(trace: Any, pass_number: int) -> dict[str, Any]:
     return grads
 
 
-def validation_inputs(trace: Any, recorded: Any, pass_number: int) -> ValidationInputs:
+def validation_inputs(
+    trace: Any, recorded: Any, pass_number: int, loss: Callable[[Any], Any]
+) -> ValidationInputs:
     """The graph, calls, gradients and adapter to check one recorded pass with.
 
     ``recorded`` is ``recorded_backward_from_trace(trace, pass_number)``; its
     calls are keyed by the ``GradFn``'s op label. Gradients are read by the
     pass-qualified op label the graph uses, so ops recorded in several forward
-    passes keep one gradient each. An output op is TorchLens's marker for a
-    returned value: its gradient is the loss's cotangent, which it passes to
-    its producer unchanged. Its recorded ``Op.grad`` is entered as that
-    identity call, and the adapter returned checks it with the identity
-    derivative, so the producer's gradient is checked as the sum of the loss's
-    cotangent and its other consumers' contributions.
+    passes keep one gradient each. ``loss`` is the callable the pass
+    differentiated: the graph ends in one loss node that consumes the output
+    ops, and its call carries JAX's cotangent of the loss per output, so an
+    output op that other ops also consume is checked against the sum of the
+    loss's cotangent and theirs. An output marker (TorchLens's node for a
+    returned value) passes its gradient to its producer unchanged: its
+    recorded ``Op.grad`` is entered as that identity call. The adapter
+    returned checks both with their own derivatives.
     """
 
     program = build_program(trace)
@@ -549,4 +595,5 @@ def validation_inputs(trace: Any, recorded: Any, pass_number: int) -> Validation
     for label in markers:
         if grads.get(label) is not None:
             calls[label] = ((grads[label],), (grads[label],))
-    return ValidationInputs(_graph(program), calls, grads, _MarkerAdapter(jax_adapter, markers))
+    graph, calls[_LOSS_LABEL] = _graph(program, _LossConsumer(loss, program.output_treedef))
+    return ValidationInputs(graph, calls, grads, _MarkerAdapter(jax_adapter, markers))
