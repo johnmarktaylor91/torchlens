@@ -1096,6 +1096,12 @@ _BUILTIN_EXCEPTION_ROOTS = frozenset(
 # current: a stale entry (class deleted or later registered) fails the gate
 # just like a missing one.
 _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
+    # Descriptive-resolver recorder: record_call_values raises it when a tensor sits in a
+    # container it cannot rebuild; its only callers are the resolver equivalence tests.
+    "torchlens._capture._recorded_tensor.UnrecordableArgument": (
+        "private signal of the test-side recorder record_call_values; no production "
+        "caller, never reaches a user"
+    ),
     # Metadata unpickler pre-scan control flow: private signals between the dry run and
     # the load path, never raised to a caller (the load path catches both and either runs
     # the pure-Python machine or refuses with the boundary's UnpicklingError).
