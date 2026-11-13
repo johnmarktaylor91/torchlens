@@ -9,9 +9,11 @@ capture.
 
 A condition is a static selector (``tl.func``, ``tl.label``,
 ``tl.label_contains``, ``tl.in_module`` and their combinations), or a
-condition that reads values (a plain callable or a ``tl.where`` leaf), which
-``_value_edits`` evaluates on each call's live value. ``stop_after=``,
-module-output sites, gradient sites and helpers without a tinygrad application
+condition that reads predicate contexts (a plain callable or a ``tl.where``
+leaf), which ``_value_edits`` matches on the planning capture's contexts. A
+``tl.grad(...)`` site edits that gradient in derived gradients
+(``_grad_site_grads``). ``stop_after=``, module-output sites, sites that mix
+activation and gradient branches and helpers without a tinygrad application
 refuse typed.
 """
 
@@ -27,7 +29,9 @@ from ...intervention._types import Edit, InterventionDecision
 from ...intervention.hooks import make_hook_context, normalize_hook, split_site_branches
 from .._backend_protocol import refusal_code_for_capability
 from ._edits import EDIT_REFUSAL, TinygradEdit, TinygradEditPlan, refuse_edit
+from ._grad_site_grads import attach_grad_site_derived_grads
 from ._helper_edits import helper_application
+from ._value_edits import condition_matched_labels
 
 __tl_layer__ = "L4"
 
@@ -48,7 +52,7 @@ def resolve_tinygrad_edit_plan(intervene: Any, halt: Any) -> TinygradEditPlan:
     Returns
     -------
     TinygradEditPlan
-        The static selector and its resolved edit.
+        The condition and its resolved edit.
 
     Raises
     ------
@@ -70,12 +74,27 @@ def resolve_tinygrad_edit_plan(intervene: Any, halt: Any) -> TinygradEditPlan:
             "callable condition.",
             code=EDIT_REFUSAL,
         )
+    if isinstance(selector, BaseSelector) and _is_gradient_site(selector):
+        edit = _resolve_decision(decision)
+        return TinygradEditPlan(selector, edit, grad_site=attach_grad_site_derived_grads)
     reads_values = not isinstance(selector, BaseSelector) or _selector_reads_values(selector)
     return TinygradEditPlan(
         selector=selector,
         edit=_resolve_decision(decision),
-        build_context=_build_record_context if reads_values else None,
+        matcher=_match_on_contexts if reads_values else None,
     )
+
+
+def _match_on_contexts(trace: Any, condition: Any) -> frozenset[str]:
+    """Raw labels whose rebuilt predicate context satisfies ``condition`` (``_value_edits``)."""
+
+    return condition_matched_labels(trace, condition, _build_record_context)
+
+
+def _is_gradient_site(selector: BaseSelector) -> bool:
+    """Whether every branch of ``selector`` addresses a gradient (a ``tl.grad`` site)."""
+
+    return all(universe != "activation" for universe, _branch in split_site_branches(selector))
 
 
 def _selector_reads_values(selector: BaseSelector) -> bool:
@@ -83,7 +102,8 @@ def _selector_reads_values(selector: BaseSelector) -> bool:
 
     if any(universe != "activation" for universe, _branch in split_site_branches(selector)):
         raise refuse_edit(
-            f"the site {selector!r} addresses a gradient; tinygrad captures no backward pass.",
+            f"the site {selector!r} mixes activation and gradient branches; give each its "
+            "own capture.",
             code=refusal_code_for_capability("backward_capture"),
         )
     unsupported = first_selector_kind_outside(selector, allowed=_CONDITION_KINDS)

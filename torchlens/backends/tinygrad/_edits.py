@@ -29,7 +29,6 @@ from .._options import is_missing
 from ..registry import BackendUnsupportedError, get_backend_spec, require_capability_implementation
 from ._edited_grads import attach_edited_derived_grads
 from ._rules import RNG_STATE_IN_GRAPH_CODE
-from ._value_edits import condition_matched_labels
 
 if TYPE_CHECKING:
     from ..._selection.selectors import BaseSelector
@@ -58,14 +57,18 @@ class TinygradEdit:
 class TinygradEditPlan:
     """The condition and edit of one ``trace(intervene=tl.when(condition, edit))``.
 
-    ``build_context`` is torch's ``RecordContext`` builder when the condition
-    reads predicate contexts (a plain callable or a ``tl.where`` leaf), else
-    ``None``.
+    ``matcher(trace, condition)`` gives the raw labels a condition that reads
+    predicate contexts (a plain callable or a ``tl.where`` leaf) matches, else
+    it is ``None`` and the condition is called on each op. ``grad_site`` is
+    set when the condition is a ``tl.grad(...)`` site: it arms the edit on a
+    plain capture and attaches the derived gradients it edits
+    (``_grad_site_grads.attach_grad_site_derived_grads``).
     """
 
     selector: BaseSelector | Callable[[Any], bool]
     edit: TinygradEdit
-    build_context: Callable[..., Any] | None = None
+    matcher: Callable[[Any, Any], frozenset[str]] | None = None
+    grad_site: Callable[..., Any] | None = None
 
 
 def refuse_edit(message: str, *, code: str) -> BackendUnsupportedError:
@@ -233,8 +236,8 @@ def fire_amendment(event: Any, edit: TinygradEdit, selector: object) -> OpAmendm
 def _matched_labels(trace: Any, plan: TinygradEditPlan) -> frozenset[str]:
     """Raw labels of the finished ops the plan's condition matches (the ``save=`` matcher)."""
 
-    if plan.build_context is not None:
-        return condition_matched_labels(trace, plan.selector, plan.build_context)
+    if plan.matcher is not None:
+        return plan.matcher(trace, plan.selector)
     selector = plan.selector
     return frozenset(str(op._label_raw) for op in trace._layer_list if bool(selector(op)))
 
@@ -293,8 +296,9 @@ def capture_with_edits(backend: Any, call: dict[str, Any], intervene: Any, halt:
         raise refuse_edit("the capability table declares can_intervene=False.", code=EDIT_REFUSAL)
     resolve = require_capability_implementation(spec, "can_intervene")
     plan = cast(TinygradEditPlan, cast(Any, resolve)(intervene, halt))
-    grad_options = call.get("grad_options")
-    grad_options = None if grad_options is None or is_missing(grad_options) else grad_options
+    grad_options = _given_grad_options(call)
+    if plan.grad_site is not None:
+        return _capture_with_grad_site(backend, call, plan, grad_options)
     original, call = call, {**call, "grad_options": None}
     planning = TinygradEditSession({}, None)
     planned = _run_session(backend, call, planning)
@@ -322,6 +326,36 @@ def capture_with_edits(backend: Any, call: dict[str, Any], intervene: Any, halt:
         replay = TinygradEditSession(fired_sites(session), plan.edit)
         attach_edited_derived_grads(backend, edited, call, session, replay, grad_options)
     return edited
+
+
+def _given_grad_options(call: Mapping[str, Any]) -> Any:
+    """The call's ``grad_options``, or ``None`` when absent."""
+
+    grad_options = call.get("grad_options")
+    return None if grad_options is None or is_missing(grad_options) else grad_options
+
+
+def _site_labels(trace: Any, selector: Any) -> list[str]:
+    """Raw labels of the finished ops a forward selector matches, in trace order."""
+
+    return [str(op._label_raw) for op in trace._layer_list if bool(selector(op))]
+
+
+def _capture_with_grad_site(
+    backend: Any, call: dict[str, Any], plan: TinygradEditPlan, grad_options: Any
+) -> Any:
+    """Capture the plain forward and attach derived gradients with the ``tl.grad`` edit armed."""
+
+    if grad_options is None:
+        raise refuse_edit(
+            f"the site {plan.selector!r} edits a gradient. tinygrad records no backward pass, "
+            "so a tl.grad(...) edit applies in derived gradients: pass grad_options=GradOptions(...).",
+            code="backward_capture_unsupported",
+        )
+    trace = backend.capture_trace(**{**call, "grad_options": None})
+    attach = cast(Any, plan.grad_site)
+    attach(backend, trace, call, plan.selector, plan.edit.apply, _site_labels, grad_options)
+    return trace
 
 
 def fired_sites(session: TinygradEditSession) -> dict[int, str]:
