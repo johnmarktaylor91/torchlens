@@ -77,5 +77,5 @@ def test_jax_stop_after_halts_in_backend() -> None:
     trace = tl.trace(cast(Any, _model), jnp.asarray(_X), backend="jax", stop_after=tl.func("tanh"))
     assert trace.is_stopped is True
     frontier = trace[trace.stop_reason]
-    assert frontier.layer_type == "tanh"
+    assert frontier.type == "tanh"
     np.testing.assert_allclose(np.asarray(frontier.out), np.tanh(_X @ _W), rtol=1e-6, atol=1e-6)

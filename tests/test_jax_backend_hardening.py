@@ -1080,9 +1080,9 @@ def test_jax_rejects_callback_effects() -> None:
     ("kwargs", "pattern"),
     (
         ({"save": ["tanh"]}, "full-save only"),
-        # backward_capture is True, but the JAX capture path does not consume
-        # save_grads, so the gate refuses it as an undispatched option.
-        ({"save_grads": True}, r"rejects option 'save_grads' and never\s+dispatches"),
+        # Gated options refuse through the central capability gate, whose
+        # canonical message names the owning flag and the refused option.
+        ({"save_grads": True}, "backward_capture=False.*save_grads"),
     ),
 )
 def test_jax_rejects_save_shaping_kwargs(kwargs: dict[str, Any], pattern: str) -> None:
@@ -1112,17 +1112,6 @@ def test_jax_rejects_declared_future_public_options(
 
     with pytest.raises(BackendUnsupportedError, match=pattern):
         _trace(**kwargs)
-
-
-def test_jax_record_backend_jax_rejected() -> None:
-    """Sparse ``tl.record`` should stay torch-only for backend v1."""
-
-    with pytest.raises(BackendUnsupportedError, match="torch-only.*tl\\.trace"):
-        tl.record(
-            cast(Any, _model),
-            (_params(), jnp.ones((2, 3), dtype=jnp.float32)),
-            backend="jax",
-        )
 
 
 def test_jax_module_predicate_selects_function_root() -> None:
@@ -1217,7 +1206,7 @@ def test_jax_capability_flags_match_preview_contract() -> None:
 
     spec = tl.backends.spec("jax")
 
-    assert spec.capabilities.backward_capture is True
+    assert spec.capabilities.backward_capture is False
     assert spec.capabilities.has_validation_replay is True
     assert spec.capabilities.fastlog is True
     assert spec.capabilities.can_intervene is True
@@ -1227,7 +1216,7 @@ def test_jax_capability_flags_match_preview_contract() -> None:
     assert spec.capabilities.module_identity_modes == ("function_root", "pytree_module")
     assert spec.serialization_policy.payload_policy == "array_payloads"
     assert spec.serialization_policy.body_format == "safetensors"
-    assert capabilities.supports_backward_capture is True
+    assert capabilities.supports_backward_capture is False
     assert capabilities.supports_validation_replay is True
     assert capabilities.supports_fastlog is True
     assert capabilities.supports_intervention is True

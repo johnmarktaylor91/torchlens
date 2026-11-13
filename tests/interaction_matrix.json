@@ -315,7 +315,7 @@
    "evidence": "docs/guides/fast_paths.md",
    "code": "backend_unsupported",
    "confidence": "high",
-   "note": "tl.record is torch only; tests/test_jax_backend_hardening.py::test_jax_record_backend_jax_rejected pins the refusal."
+   "note": "tl.record works on torch, JAX, TensorFlow, MLX and Paddle; tinygrad refuses, pinned by tests/test_tinygrad_backend_capture.py::test_tinygrad_record_backend_rejected."
   },
   {
    "a": "backend",
