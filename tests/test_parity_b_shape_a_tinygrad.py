@@ -93,7 +93,7 @@ def test_cnn_side_is_searched_and_called_a_working_candidate() -> None:
     assert report.found and report.shape is not None
     # Sides 6 and 7 both pool to the 3x3 map the head expects; either is a valid answer.
     assert report.shape[:2] == tuple(example.shape)[:2] and report.shape[2] in (6, 7)
-    assert "uniquely determined" not in report.message
+    assert "working candidate" in report.message or "ambiguous" in report.message
 
 
 def test_embedding_gets_integer_indices_within_the_vocabulary() -> None:
