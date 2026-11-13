@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1771 modules, 708833 lines, 0 modules without a docstring.
+85 packages, 1771 modules, 708835 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -58,7 +58,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends._protocols` | Per-backend ''BackendProtocol'' objects, kept import-light. | 8 | 928 |
 | `torchlens.backends.jax` | JAX backend preview exports. | 17 | 9645 |
 | `torchlens.backends.mlx` | Technical-preview MLX backend for TorchLens. | 17 | 6951 |
-| `torchlens.backends.paddle` | Paddle backend preview. | 16 | 6911 |
+| `torchlens.backends.paddle` | Paddle backend preview. | 16 | 6913 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8577 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 11 | 4583 |
 | `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 138 | 59358 |
@@ -1426,7 +1426,7 @@ Technical-preview MLX backend for TorchLens. (17 modules, 6951 lines)
 
 ### `torchlens.backends.paddle`
 
-Paddle backend preview. (16 modules, 6911 lines)
+Paddle backend preview. (16 modules, 6913 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1440,8 +1440,8 @@ Paddle backend preview. (16 modules, 6911 lines)
 | `derived_grads` | Derived-gradient leaf helpers for the technical-preview Paddle backend. | 302 |
 | `interventions` | Live intervention runtime for the technical-preview Paddle backend. | 569 |
 | `model_prep` | Paddle model preparation helpers for technical-preview capture. | 412 |
-| `source_frames` | The user source lines of one Paddle op (''Op.source.frames''), recorded like torch. | 164 |
-| `source_leaves` | Pre-forward source leaves of a Paddle capture: registered buffers and closure constants. | 221 |
+| `source_frames` | The user source lines of one Paddle op (''Op.source.frames''), recorded like torch. | 160 |
+| `source_leaves` | Pre-forward source leaves of a Paddle capture: registered buffers and closure constants. | 227 |
 | `tensor_store` | External metadata store for Paddle tensors. | 114 |
 | `validation` | Replay-validation helpers for the technical-preview Paddle backend. | 698 |
 | `validation_decisions` | Per-op validation decisions for the Paddle preview backend. | 280 |
