@@ -40,7 +40,7 @@ over the built-in styles (`classification`, `imagenet`, `imagenet1k`,
 with the available heads, and several qualifying heads with none named
 refuse `decode_head_ambiguous`. A trace captured without a tokenizer (any
 capture outside the bridge) still decodes with `style="hf_text"`: the rows carry
-the argmax `token_ids` and `text` is `None` until a `tokenizer=` is passed.
+each next token's `token_id` and `text` is `None` until a `tokenizer=` is passed.
 Passing the removed `output_style=` or `output_head=` to `CaptureOptions` or
 `tl.trace` refuses naming `trace.decode_output(...)`.
 
@@ -56,9 +56,17 @@ text decode.
 
 `trace.provenance.output_postprocessor` records the resolver source, selected style,
 selected head, label source, confidence, ambiguity flag, and captured top-N
-bound. `trace.output_table(top_n, batch_items)` returns a dataframe with
-`batch_item`, `rank`, `label`, and `prob` for a classification decode, and
-with `batch_item`, `rank`, `text`, and `token_ids` for a text decode.
+bound. `trace.output_table(k, batch_items)` returns a dataframe with
+`batch_item`, `rank`, `label`, and `prob` for a classification decode: the top
+`k` classes per batch item. For a text decode it returns the top `k` next
+tokens at the last position per batch item, with `batch_item`, `rank`,
+`token_id`, `text`, and `prob`, where `prob` is the token's probability under
+the softmax over the vocabulary at that position:
+
+```python
+trace = tl.trace(gpt2, "The capital of France is")
+trace.output_table(k=3)  # three rows: rank 1-3, token_id, text, prob
+```
 `batch_items=None` returns all captured items, an integer returns the first
 `N` batch items, and a sequence selects explicit batch indices.
 

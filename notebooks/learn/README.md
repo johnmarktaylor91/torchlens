@@ -1,6 +1,6 @@
 # Learn TorchLens
 
-Eleven notebooks, in order. Start with `00_quickstart.ipynb` (five minutes). Each later notebook
+Twelve notebooks, in order. Start with `00_quickstart.ipynb` (five minutes). Each later notebook
 adds one idea and names the earlier ones it uses. After setup, each runs on a laptop CPU in about
 a minute on tiny local models from `learn_models.py` beside the notebooks; no model weights are
 downloaded.
@@ -21,10 +21,10 @@ Each notebook imports `learn_models.py` from its own folder, so open the noteboo
 `notebooks/learn/` (JupyterLab does this when launched as above). Rendered pictures go to a
 temporary directory, nothing is written beside the notebooks.
 
-Rungs: 0 one call; 1 read like a dict; 2 one more keyword on the same call; 3 compose pieces;
+Levels: 0 one call; 1 read like a dict; 2 one more keyword on the same call; 3 compose pieces;
 4 objects for scale and record; 5 extend.
 
-| # | Notebook | Rung | Trigger |
+| # | Notebook | Level | Starting point |
 |---|---|---|---|
 | 00 | `00_quickstart.ipynb` | 0 to 2 | You have a model and want to see inside it |
 | 01 | `01_capture_and_look.ipynb` | 0 | A model in hand |
@@ -37,6 +37,7 @@ Rungs: 0 one call; 1 read like a dict; 2 one more keyword on the same call; 3 co
 | 08 | `08_semantic_shortcuts.ipynb` | 3 to 5 | You keep typing "head 3's query" |
 | 09 | `09_scale.ipynb` | 4 | Thousands of batches |
 | 10 | `10_beyond_one_forward.ipynb` | 4 to 5 | Your field's experiment |
+| 11 | `11_dynamic_graphs.ipynb` | 4 | The graph changes between forwards |
 
 ## Run in Colab
 

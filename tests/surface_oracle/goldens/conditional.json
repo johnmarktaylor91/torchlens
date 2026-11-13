@@ -6813,7 +6813,7 @@
    "_options_grad_transform": null,
    "_options_grouping": "structural",
    "_options_grouping_policy": {
-    "\"detector\"": "callsite_v1",
+    "\"detector\"": "callsite_v2",
     "\"effective\"": true,
     "\"folded_sites\"": "none",
     "\"policy\"": "structural",
@@ -14042,7 +14042,7 @@
    "_options_grad_transform": null,
    "_options_grouping": "structural",
    "_options_grouping_policy": {
-    "\"detector\"": "callsite_v1",
+    "\"detector\"": "callsite_v2",
     "\"effective\"": true,
     "\"folded_sites\"": "none",
     "\"policy\"": "structural",
@@ -21272,7 +21272,7 @@
    "_options_grad_transform": null,
    "_options_grouping": "structural",
    "_options_grouping_policy": {
-    "\"detector\"": "callsite_v1",
+    "\"detector\"": "callsite_v2",
     "\"effective\"": true,
     "\"folded_sites\"": "none",
     "\"policy\"": "structural",
@@ -28495,7 +28495,7 @@
    "_options_grad_transform": null,
    "_options_grouping": "structural",
    "_options_grouping_policy": {
-    "\"detector\"": "callsite_v1",
+    "\"detector\"": "callsite_v2",
     "\"effective\"": true,
     "\"folded_sites\"": "none",
     "\"policy\"": "structural",
@@ -35606,7 +35606,7 @@
    "_options_grad_transform": null,
    "_options_grouping": "structural",
    "_options_grouping_policy": {
-    "\"detector\"": "callsite_v1",
+    "\"detector\"": "callsite_v2",
     "\"effective\"": true,
     "\"folded_sites\"": "none",
     "\"policy\"": "structural",

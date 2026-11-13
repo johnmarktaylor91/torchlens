@@ -1,4 +1,4 @@
-# Door: mechanistic interpretability
+# Where to start: mechanistic interpretability
 
 ## Start here
 

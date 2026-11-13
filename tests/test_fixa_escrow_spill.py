@@ -226,11 +226,11 @@ def test_resnet18_batch8_deferred_spellings_complete_and_materialize_bit_exact()
 
     # Detached saves keep this test on the spill path it was written for; the
     # attached default's spill disclosure is pinned in test_module_save_live_retention.
-    # grouping rule row 28: each BasicBlock's one ReLU module called twice is one
-    # Layer with 2 passes, so layer1.1.conv2 is the 14th Layer, not the 15th.
+    # Each BasicBlock calls its one ReLU module from two lines: two layers
+    # (docs/guides/grouping.md), so layer1.1.conv2 is the 15th Layer.
     capture = _detached()
-    log = tl.trace(model, x, capture=capture, save=["conv2d_5_14"])
-    op = log["conv2d_5_14"]
+    log = tl.trace(model, x, capture=capture, save=["conv2d_5_15"])
+    op = log["conv2d_5_15"]
     assert op.module_context.output_of_modules == ("layer1.1.conv2",)
     assert torch.equal(op.out, _eager_module_output(model, "layer1.1.conv2", x))
 

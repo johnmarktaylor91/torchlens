@@ -41,7 +41,7 @@ trace.draw(module="transformer.h.5.mlp.act")  # draw the graph of the MLP's GELU
 
 ![TorchLens drawing of every operation inside the GELU module of GPT-2 block 5's MLP](images/home/readme_gelu_v3.svg){ width="400" }
 
-This figure zooms in on the MLP's GELU module; here is [the whole GPT-2 graph](https://modelmenagerie.ai/models/gpt2-huggingface/). Each node is one tensor operation. For instance, `tanh_6_266` is the 6th `tanh` operation and the 266th operation overall. The function name and call number are enough on their own, so `trace["tanh_6"]` and `trace["tanh_6_266"]` return the same operation. A trace can also be indexed by a module's address (`trace["transformer.h.5.mlp"]`) or by a selector (below).
+This figure zooms in on the MLP's GELU module; here is [the whole GPT-2 graph](https://modelmenagerie.ai/models/gpt2-huggingface/). Each node is one tensor operation. For instance, `tanh_6_270` is the 6th `tanh` operation and the 270th operation overall. The function name and call number are enough on their own, so `trace["tanh_6"]` and `trace["tanh_6_270"]` return the same operation. A trace can also be indexed by a module's address (`trace["transformer.h.5.mlp"]`) or by a selector (below).
 
 Since the trace holds everything, TorchLens doesn't need a separate tool for every question. A small "basis set" of composable tools covers just about anything you'd want to do when inspecting or intervening on a network:
 
@@ -57,7 +57,6 @@ Since the trace holds everything, TorchLens doesn't need a separate tool for eve
 
 ```bash
 pip install torchlens                       # with pip
-conda install -c conda-forge torchlens      # or with conda
 
 # Install Graphviz to draw a model's computational graph (https://graphviz.org/download/):
 sudo apt install graphviz    # Debian/Ubuntu
@@ -68,7 +67,7 @@ TorchLens runs on Python 3.10 to 3.13 with PyTorch 2.1 or later. Features that r
 
 ## Learning TorchLens
 
-- **[Tutorial notebooks](https://github.com/johnmarktaylor91/torchlens/tree/main/notebooks/learn):** eleven short notebooks that build up TorchLens step by step, from a first trace to running full experiments at scale. Each runs on a laptop CPU in about a minute, or in your browser on Colab.
+- **[Tutorial notebooks](https://github.com/johnmarktaylor91/torchlens/tree/main/notebooks/learn):** twelve short notebooks that build up TorchLens step by step, from a first trace to running full experiments at scale. Each runs on a laptop CPU in about a minute, or in your browser on Colab.
 - **Guides by field:** where to start, depending on your work:
   - **[Mechanistic interpretability](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/fields/mechanistic_interpretability.md)**
   - **[NeuroAI and computational neuroscience](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/neuroai/journey.md)**
@@ -80,11 +79,12 @@ TorchLens runs on Python 3.10 to 3.13 with PyTorch 2.1 or later. Features that r
   - **[Replications](https://github.com/johnmarktaylor91/torchlens/tree/main/examples/replications)**, scripts that re-test published interpretability findings on GPT-2: induction heads, the IOI name movers, causal tracing.
   - **[Recent methods](https://github.com/johnmarktaylor91/torchlens/tree/main/examples/methods)**, run end to end: the [Jacobian lens](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/methods/jacobian_lens_recipe.ipynb), EAP-IG circuit discovery on GPT-2's IOI task, attribution graphs with transcoders, the logit lens on ViT and CLIP, LEACE concept erasure, DAS causal bases.
 - **[Glossary](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/reference/glossary.md):** definitions for every public function and argument.
+- **[Stable API](reference/stable_api.md):** the names that keep their spelling and meaning across 3.x releases, and what is preview.
 - **[API map](https://johnmarktaylor91.github.io/torchlens/api-map/):** an interactive, searchable map of every public module, class, function, method and argument, rebuilt from the code at each release.
 - **[FAQ](faq.md):** common questions, including what TorchLens deliberately leaves to other tools.
 - **[Also in TorchLens](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/also_in_torchlens.md)**
 
-## Doors
+## Where to start, by community
 
 - [Mechanistic interpretability](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/doors/mechinterp.md)
 - [NeuroAI](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/doors/neuroai.md)

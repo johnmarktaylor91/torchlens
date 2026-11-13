@@ -14,6 +14,7 @@ For the general speed knobs and benchmark tables, see the [performance guide](..
 | Steer or patch the model over many forwards, including generation | `tl.when(site, action).bind(model)`, and `.bind(model).generate(...)` for HF `generate()` | 1.0 to 1.2x a plain forward hook, exact |
 | Steer and also keep a few activations as evidence, every step | `tl.record(model, x, save=..., intervene=spec)`, output in `recording.output` | about 1 ms per op (CPU decoders); 9 s per step on Qwen3.5-9B |
 | Steer and refresh a trace's saved activations on each new input, including generation | trace once with `intervene=`, then `trace = trace.run(model, x)` per input (each run returns a new Trace) | about 1.5 to 2x a plain forward hook per step, exact; see [Fast steered rerun](#fast-steered-rerun) |
+| Read one module's output, or a few | `tl.pluck(model, x, "block.3")` for one, `tl.extract(model, x, [...])` for several; `stop_after="block.3"` on `pluck` also skips the rest of the model | 0.98x a plain forward, and 0.18x with `stop_after=` at the third of GPT-2's twelve blocks, when every name is an exact module address, the model is in eval mode and the input is one tensor or text on the model's device; otherwise a full trace (11.5x). See [One module's output](#one-modules-output-tlpluck) |
 | Inspect the full graph, metadata and activations of one forward | `tl.trace(model, x, save=...)` | about 3 ms per op; 47 s for one Qwen3.5-9B trace |
 | Make one trace cheaper | a `tl.func(...)` save selector, `CaptureOptions(inference_only=True)`, and for Qwen3.5-class models flash-linear-attention | see [Cut the cost of a trace](#cut-the-cost-of-a-trace) |
 | Final outputs only | the plain model call | no TorchLens cost |
@@ -187,6 +188,49 @@ Cost and caveats:
 - It attaches backward hooks to output tensors even when nothing asked for gradients. Running
   the call under `torch.no_grad()` made it cheaper in one indicative measurement (1.1 s against
   1.7 s) and stayed exact.
+
+## One module's output: `tl.pluck`
+
+`tl.pluck(model, x, name)` returns one module's output. When `name` is an exact module address
+(`"transformer.h.2"`, `"layer1.0"`), the model is in eval mode and the input is one tensor or
+text on the model's device, it runs no capture: one plain forward with a forward hook on that
+module returns the same tensor a trace would. With `stop_after=` set to an exact module address
+as well, a hook ends the forward right after that module's first call, so the layers after it
+never run and the call can cost less than a plain forward. `tl.extract` takes the same hooked
+path for several module addresses at once.
+
+| `tl.pluck(model, ids, "transformer.h.2")` on GPT-2 small | Median, CPU | vs plain forward |
+| --- | ---: | ---: |
+| plain forward | 151.5 ms | 1.00x |
+| `pluck` | 148.2 ms | 0.98x |
+| `pluck` with `stop_after="transformer.h.2"` | 27.6 ms | 0.18x |
+| the same request through a full capture | 1,739.9 ms | 11.5x |
+| the same request through a full capture, with `stop_after=` | 515.0 ms | 3.4x |
+
+Measured 8 Nov 2026 on pretrained GPT-2 small, 4 sequences of 32 tokens, CPU with 4 threads,
+grad mode on, median of 7 calls (3 for the capture rows); the fast results equal the captured
+ones bit for bit. Under `torch.no_grad()` the ratios were 0.98x, 0.20x, 12.7x and 3.8x.
+
+```python
+import torch
+from torch import nn
+import torchlens as tl
+
+model = nn.Sequential(nn.Linear(8, 8), nn.ReLU(), nn.Linear(8, 8), nn.ReLU(), nn.Linear(8, 2))
+model = model.eval()
+x = torch.randn(4, 8)
+
+hidden = tl.pluck(model, x, "1")  # one forward with a hook on module "1"
+early = tl.pluck(model, x, "1", stop_after="1")  # modules "2" to "4" never run
+assert torch.equal(hidden, early)
+```
+
+Anything else runs the full capture and returns what it always did: an op label such as
+`"relu_1_2"`, a pass-qualified or partial name, a model in training mode, a list or dict of
+inputs, a module that runs twice or returns a tuple, a `stop_after=` that is a selector, a
+callable, or a bare name that could also be a function name (`"relu"`), and an active
+`tl.experimental.stop_after` block. The returned tensor keeps its autograd graph when grad mode
+is on, as the traced result does.
 
 ## Cut the cost of a trace
 

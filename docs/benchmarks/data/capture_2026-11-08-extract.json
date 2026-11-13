@@ -1,0 +1,153 @@
+{
+ "measured_on": "2026-11-08",
+ "host": {
+  "name": "a shared 32-core Intel Xeon 2.80 GHz Linux CPU worker, one torch thread per process, load average 6 to 7",
+  "cpus": 32,
+  "torch_threads": 1,
+  "loadavg_1min_range": [
+   6.04,
+   6.49
+  ]
+ },
+ "versions": {
+  "python": "3.10",
+  "torch": "2.13.0 (CPU build)",
+  "torchvision": "0.28.0",
+  "torchlens": "3.0.2 (development branch, 2026-11-08, with the hooked tl.extract fast path)"
+ },
+ "harness": "benchmarks/capture/cell.py through driver._spawn: suite A, contract single_module_output, arms raw, hooks and tl_extract; 3 warmups, up to 20 samples within 20 s, 3 memory runs, one torch thread, 3 processes outermost",
+ "cells": {
+  "A/single_module_output/raw/lstm-tagger": {
+   "process_medians_ms": [
+    1.0645,
+    1.0577,
+    1.0584
+   ],
+   "samples": [
+    20,
+    20,
+    20
+   ],
+   "exact": {
+    "matched": null,
+    "note": "floor: no contract output"
+   },
+   "torchlens_imported": true,
+   "median_ms": 1.0584
+  },
+  "A/single_module_output/hooks/lstm-tagger": {
+   "process_medians_ms": [
+    1.0669,
+    1.0552,
+    1.0728
+   ],
+   "samples": [
+    20,
+    20,
+    20
+   ],
+   "exact": null,
+   "torchlens_imported": true,
+   "median_ms": 1.0669
+  },
+  "A/single_module_output/tl_extract/lstm-tagger": {
+   "process_medians_ms": [
+    38.9641,
+    37.159,
+    37.5726
+   ],
+   "samples": [
+    20,
+    20,
+    20
+   ],
+   "exact": {
+    "matched": true,
+    "max_abs_diff": 0.0,
+    "bit_identical": true,
+    "nonfinite": 0
+   },
+   "torchlens_imported": true,
+   "median_ms": 37.5726
+  },
+  "A/single_module_output/raw/resnet18": {
+   "process_medians_ms": [
+    12.9034,
+    13.7418,
+    12.7804
+   ],
+   "samples": [
+    20,
+    20,
+    20
+   ],
+   "exact": {
+    "matched": null,
+    "note": "floor: no contract output"
+   },
+   "torchlens_imported": true,
+   "median_ms": 12.9034
+  },
+  "A/single_module_output/hooks/resnet18": {
+   "process_medians_ms": [
+    12.958,
+    13.0162,
+    12.7881
+   ],
+   "samples": [
+    20,
+    20,
+    20
+   ],
+   "exact": null,
+   "torchlens_imported": true,
+   "median_ms": 12.958
+  },
+  "A/single_module_output/tl_extract/resnet18": {
+   "process_medians_ms": [
+    13.9454,
+    14.1771,
+    14.1754
+   ],
+   "samples": [
+    20,
+    20,
+    20
+   ],
+   "exact": {
+    "matched": true,
+    "max_abs_diff": 0.0,
+    "bit_identical": true,
+    "nonfinite": 0
+   },
+   "torchlens_imported": true,
+   "median_ms": 14.1754
+  }
+ },
+ "page_rows": [
+  {
+   "section": "extract",
+   "text": "| ResNet-18, CPU, one module's output (`layer2`), 8 Nov, n=3 processes | plain forward, nothing attached | 12.90 ms (12.78 ms to 13.74 ms) |"
+  },
+  {
+   "section": "extract",
+   "text": "| ResNet-18, CPU, one module's output (`layer2`), 8 Nov, n=3 processes | forward hook | 12.96 ms (12.79 ms to 13.02 ms) |"
+  },
+  {
+   "section": "extract",
+   "text": "| ResNet-18, CPU, one module's output (`layer2`), 8 Nov, n=3 processes | `tl.extract` | 14.18 ms (13.95 ms to 14.18 ms) |"
+  },
+  {
+   "section": "extract",
+   "text": "| LSTM tagger, CPU, one module's output (`lstm`), 8 Nov, n=3 processes | plain forward, nothing attached | 1.06 ms (1.06 ms to 1.06 ms) |"
+  },
+  {
+   "section": "extract",
+   "text": "| LSTM tagger, CPU, one module's output (`lstm`), 8 Nov, n=3 processes | forward hook | 1.07 ms (1.06 ms to 1.07 ms) |"
+  },
+  {
+   "section": "extract",
+   "text": "| LSTM tagger, CPU, one module's output (`lstm`), 8 Nov, n=3 processes | `tl.extract` (a full capture: the module returns a tuple) | 37.57 ms (37.16 ms to 38.96 ms) |"
+  }
+ ]
+}

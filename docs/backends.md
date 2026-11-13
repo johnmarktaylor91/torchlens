@@ -96,7 +96,7 @@ Rules every backend follows:
 - **Typed refusals.** An unsupported capability, option or input refuses with
   `BackendUnsupportedError` before any framework call with side effects; `exc.code` is a member of
   `tl.backends.REFUSAL_CODES`. A backend never returns a silent wrong result: where it cannot
-  capture correctly it refuses, or marks the trace `capture_verified=False` with the reason code
+  capture correctly it refuses, or marks the trace `provenance.verified=False` with the reason code
   and a warning.
 - **Constants.** A tensor the forward reads from outside the traced call is recorded as a
   parentless `constant` op with a saved payload, listed as a parent by the op that read it. A
@@ -310,7 +310,7 @@ What it does:
 - Array operators (`a + b` logs `add`, `v[0]` logs `getitem`), array methods and `v.T` are
   captured. An output no wrapped operation produced (an `mx.*` function outside the wrapped
   surface, an `mx.array(...)` built inside the forward) warns and ceilings the capture with
-  `capture_verified=False` (`unwrapped_op_in_capture`), or refuses with that code when the caller
+  `provenance.verified=False` (`unwrapped_op_in_capture`), or refuses with that code when the caller
   asks for a refusal. `mx.compile`, `mx.grad` and `mx.vmap` wrappers refuse at capture entry; a
   compiled attribute on the model ceilings the capture (`mlx_compiled_attribute_not_logged`).
 - Static-label `save=`: `tl.func`, `tl.label`, `tl.module`, `tl.in_module`, `tl.label_contains`

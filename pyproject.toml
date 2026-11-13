@@ -10,8 +10,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "torchlens"
-version = "3.0.2"
-description = "A package for extracting activations from PyTorch models and saving portable bundles"
+version = "3.0.3"
+description = "Inspect, visualize and intervene on any operation in any neural network"
 readme = "README.md"
 license = "Apache-2.0"
 # 3.10 is the real floor: the package uses @dataclass(slots=True) in 143 places

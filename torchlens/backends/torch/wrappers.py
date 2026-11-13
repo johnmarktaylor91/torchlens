@@ -1073,8 +1073,9 @@ def torch_func_decorator(
 ) -> Callable[..., Any]:
     """Wrap a single torch function with toggle-gated logging.
 
-    When ``_state._logging_enabled`` is ``False``, the wrapper is a near-noop
-    (one bool check, then call original).  When ``True``, it:
+    When ``_state._logging_enabled`` is ``False``, the wrapper logs nothing but still counts the
+    call fingerprint and runs the armed checks (compile depth, copy-on-write gate, device
+    injection, fast-run collector, subclass constructors) around the original.  When ``True``, it:
 
     1. Registers any buffer tensors seen for the first time.
     2. Snapshots args (if ``save_arg_values``), timing, RNG, and autocast state.
@@ -1094,10 +1095,9 @@ def torch_func_decorator(
     first argument (``id(out) == id(args[0])``), the output is ``safe_copy``-ed
     to create a distinct tensor for logging.  For true in-place ops (trailing
     ``_`` or ``__i*`` dunder), the new label is propagated back to the original
-    tensor so subsequent operations see it.  Non-mutating self-returns (e.g.
-    ``contiguous()`` on an already-contiguous tensor) are copied but NOT
-    propagated back — they are silently dropped by barcode identity detection
-    downstream.
+    tensor so subsequent operations see it.  Non-mutating self-returns (e.g. ``contiguous()``
+    on an already-contiguous tensor) are copied but NOT propagated back; barcode identity
+    detection drops them downstream.
 
     Args:
         func: The original (unwrapped) torch function.

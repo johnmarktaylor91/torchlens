@@ -250,7 +250,9 @@ def test_join_scale_is_subquadratic() -> None:
 
     The deleted implementation rescanned every marker span per runtime
     event (200 spans 0.006 s -> 10,000 spans 4.5 s, TN-D1). The sweep is
-    O(N log N); wall-clock is asserted with slack for a loaded CI box.
+    O(N log N); wall-clock is asserted with slack for a loaded CI box, on the
+    fastest of three joins so one runner stall cannot fail it (a quadratic join
+    is slow on every repeat).
     """
 
     n = 10_000
@@ -260,9 +262,15 @@ def test_join_scale_is_subquadratic() -> None:
         events.append(_marker(f"torchlens::op::{i}", base, base + 50 * _US))
         events.append(_runtime(base + 10 * _US, correlation=i))
         events.append(_device(f"k{i}", base + 60 * _US, base + 90 * _US, correlation=i))
-    start = time.perf_counter()
-    result = join_events(tuple(events), extraction_path="in_memory")
-    elapsed = time.perf_counter() - start
+    timings: list[float] = []
+    for _ in range(3):
+        start = time.perf_counter()
+        result = join_events(tuple(events), extraction_path="in_memory")
+        timings.append(time.perf_counter() - start)
+    elapsed = min(timings)
     assert result.availability == "joined"
     assert len(result.op_device_ns) == n
-    assert elapsed < 1.0, f"join took {elapsed:.2f}s on the 10k cell (sub-quadratic gate)"
+    assert elapsed < 1.0, (
+        f"join took {elapsed:.2f}s at best of {len(timings)} on the 10k cell "
+        f"(sub-quadratic gate; all: {[round(t, 2) for t in timings]})"
+    )

@@ -53,7 +53,7 @@ from ..._ir.predicate import RecordContext, RetroactiveCaptureDecision
 from ..._ir.refs import ParamRef
 from ..._ir.selector_eval import module_union_matches
 from ..._training_validation import TrainingModeConfigError
-from ..._utils._call_site import call_site_class
+from ..._utils._call_site import call_site_class, call_site_scope
 from ..._utils._tensor_label import (
     get_label_list,
     get_live_tensor_label,
@@ -146,7 +146,7 @@ def _emit_predicate_operation_events(
         _label_raw = f"{layer_type}_{type_index}_{raw_index}_raw"
         set_tensor_label(out, _label_raw)
         module_frame = state.module_stack[-1] if state.module_stack else None
-        identity.register_call_site(_label_raw, module_frame, output_index)
+        identity.register_call_site(_label_raw, output_index)
         ctx = _predicate_output_context(
             self,
             state,
@@ -535,6 +535,8 @@ class PredicateOpIdentity:
     param_refs: tuple[ParamRef, ...]
     call_site_chain: tuple[Any, ...]
     is_inplace_dunder: Callable[[str], bool]
+    #: The innermost stateful module on the stack (``call_site_scope``), as exhaustive capture keys it.
+    scope: str
 
     @classmethod
     def for_call(
@@ -561,20 +563,19 @@ class PredicateOpIdentity:
             _prepared_param_refs(state, arg_parameters),
             _predicate_call_site_chain(trace),
             is_inplace_dunder,
+            call_site_scope(
+                (frame.address for frame in state.module_stack),
+                trace._module_capture_ws.stateful_module_addresses,
+            ),
         )
 
-    def register_call_site(self, label_raw: str, module_frame: Any, output_index: int) -> None:
+    def register_call_site(self, label_raw: str, output_index: int) -> None:
         """Record one output's call-site class when the walk saw the call site."""
 
         if not self.call_site_chain:
             return
         slot = output_index if self.output_count > 1 else None
-        key = (
-            module_frame.address if module_frame else "",
-            self.call_site_chain,
-            self.func_name,
-            slot,
-        )
+        key = (self.scope, self.call_site_chain, self.func_name, slot)
         self.state.call_site_classes[label_raw] = call_site_class(
             self.state.call_site_index, key, self.layer_type, slot
         )

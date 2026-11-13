@@ -1,0 +1,90 @@
+{
+ "measured_on": "2026-11-08",
+ "host": {
+  "name": "a 48-core Intel Xeon Gold 6126 2.60 GHz Linux GPU node with an NVIDIA GeForce RTX 2080 Ti (11 GiB), the third run's `tl.extract_dataset` machine, one torch thread per process, load average about 4",
+  "cpu": "Intel(R) Xeon(R) Gold 6126 CPU @ 2.60GHz",
+  "cpus": 48,
+  "gpu": "NVIDIA GeForce RTX 2080 Ti",
+  "torch_threads": 1,
+  "loadavg_1min_range": [
+   3.84,
+   4.35
+  ]
+ },
+ "versions": {
+  "python": "3.11",
+  "torch": "2.14.1 (CUDA 12.6 build)",
+  "torchvision": "0.29.1 (CUDA 12.6 build)",
+  "torchlens": "3.0.3 (main, 2026-11-08, with the hooked tl.extract fast path)"
+ },
+ "harness": "benchmarks/capture/cell.py through driver._spawn: suite A, contract single_module_output, arms raw, hooks and tl_extract; 3 warmups, up to 20 samples within 20 s, 3 memory runs, one torch thread, 3 processes outermost, device cuda",
+ "cells": {
+  "A/single_module_output/raw/resnet18": {
+   "process_medians_ms": [
+    2.2411,
+    2.8306,
+    2.2385
+   ],
+   "samples": [
+    20,
+    20,
+    20
+   ],
+   "exact": {
+    "matched": null,
+    "note": "floor: no contract output"
+   },
+   "torchlens_imported": true,
+   "median_ms": 2.2411
+  },
+  "A/single_module_output/hooks/resnet18": {
+   "process_medians_ms": [
+    2.3049,
+    2.2875,
+    2.3327
+   ],
+   "samples": [
+    20,
+    20,
+    20
+   ],
+   "exact": null,
+   "torchlens_imported": true,
+   "median_ms": 2.3049
+  },
+  "A/single_module_output/tl_extract/resnet18": {
+   "process_medians_ms": [
+    2.7124,
+    2.702,
+    2.7005
+   ],
+   "samples": [
+    20,
+    20,
+    20
+   ],
+   "exact": {
+    "matched": true,
+    "max_abs_diff": 0.0,
+    "bit_identical": true,
+    "nonfinite": 0
+   },
+   "torchlens_imported": true,
+   "median_ms": 2.702
+  }
+ },
+ "page_rows": [
+  {
+   "section": "extract",
+   "text": "| ResNet-18, GPU (second RTX 2080 Ti machine), one module's output (`layer2`), 8 Nov, n=3 processes | plain forward, nothing attached | 2.24 ms (2.24 ms to 2.83 ms) |"
+  },
+  {
+   "section": "extract",
+   "text": "| ResNet-18, GPU (second RTX 2080 Ti machine), one module's output (`layer2`), 8 Nov, n=3 processes | forward hook | 2.30 ms (2.29 ms to 2.33 ms) |"
+  },
+  {
+   "section": "extract",
+   "text": "| ResNet-18, GPU (second RTX 2080 Ti machine), one module's output (`layer2`), 8 Nov, n=3 processes | `tl.extract` | 2.70 ms (2.70 ms to 2.71 ms) |"
+  }
+ ]
+}

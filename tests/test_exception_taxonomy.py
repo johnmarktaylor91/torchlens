@@ -1240,6 +1240,10 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
     "torchlens.recording._halt.StopSignal": (
         "internal control-flow stop signal (BaseException); converted to recording status"
     ),
+    "torchlens._extract_fast._StopForward": (
+        "internal control-flow stop signal (BaseException) a stop_after hook raises to end "
+        "the plain forward of tl.pluck's hooked fast path; caught by _hooked_forward, never escapes"
+    ),
     "torchlens._fast_live_until.FastUntilReached": (
         "internal control-flow cut signal (BaseException) for trace.run_transaction(inputs=..., fast=True, until=); "
         "raised and caught inside the fast live session, never escapes _fast_run"

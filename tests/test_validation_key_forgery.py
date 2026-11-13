@@ -1,7 +1,7 @@
 """Key-forgery plants for the loop-detection invariants, one per grouper.
 
 Moved out of ``tests/test_validation.py`` (its size ceiling). The grouper_v1
-plant forges param barcodes so rule 1 must fire; the callsite_v1 plant forges a
+plant forges param barcodes so rule 1 must fire; the call-site plant forges a
 shared call-site key so contract (ii) must fire.
 """
 
@@ -36,7 +36,7 @@ def test_corruption_arm_param_sharing_key_forgery() -> None:
 
     Rule 1 (layers sharing func_name, param barcodes and equivalence_class are
     one layer) is the grouper_v1 contract, so the plant runs under the legacy
-    structural grouper. Under callsite_v1, contract (ii) replaces it; the
+    structural grouper. Under call-site grouping, contract (ii) replaces it; the
     equivalent forgery there is
     ``test_corruption_arm_call_site_key_forgery_fails_contract_ii``.
     """
@@ -61,7 +61,7 @@ def test_corruption_arm_param_sharing_key_forgery() -> None:
 
 
 def test_corruption_arm_call_site_key_forgery_fails_contract_ii() -> None:
-    """callsite_v1 analogue of the param-sharing forgery: two layers, one key.
+    """Call-site analogue of the param-sharing forgery: two layers, one key.
 
     Under call-site grouping the evidence that two ops are one layer is the
     call-site key, not param barcodes (RULE.md section 3, row 51). Forging
@@ -77,7 +77,7 @@ def test_corruption_arm_call_site_key_forgery_fails_contract_ii() -> None:
         capture=tl.options.CaptureOptions(seed=42),
     )
     try:
-        assert log.options.grouping_policy["detector"] == "callsite_v1"
+        assert log.options.grouping_policy["detector"] == "callsite_v2"
         classes = dict(contract.call_site_classes_for(log) or {})
         first, second = [op for op in log._layer_list if op.func_name == "linear"][:2]
         assert classes[first._label_raw] != classes[second._label_raw]

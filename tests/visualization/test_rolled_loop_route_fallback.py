@@ -128,6 +128,45 @@ def test_router_failure_relays_out_the_image_without_compass_ports(
     assert _layout_warnings(caught) == []
 
 
+ROUTER_ABORT = (
+    b"Error: in routesplines, Pshortestpath failed\nError: lost linear_2_6 linear_1_4 edge\n"
+)
+
+
+def _graphviz_aborting_on(monkeypatch: pytest.MonkeyPatch, fails: Any) -> list[str]:
+    """Make every Graphviz child exit 1 on the 2.43 router failure when ``fails(source)``.
+
+    2.43 does not always route on after ``Pshortestpath failed``: on some layouts (two
+    return arcs into one node) it exits 1 with ``lost ... edge`` and writes nothing.
+    """
+
+    real = _render_utils.run_bounded_subprocess
+    sources: list[str] = []
+
+    def run(cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess[Any]:
+        source = _source_of(cmd, kwargs)
+        sources.append(source)
+        if fails(source):
+            raise subprocess.CalledProcessError(1, cmd, output=b"", stderr=ROUTER_ABORT)
+        return real(cmd, **kwargs)
+
+    monkeypatch.setattr(_render_utils, "run_bounded_subprocess", run)
+    return sources
+
+
+def test_router_abort_relays_out_the_image_without_compass_ports(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A build that aborts on the loop's ports still draws, from the portless layout."""
+
+    sources = _graphviz_aborting_on(monkeypatch, lambda source: "tailport=" in source)
+    drawing, _layout_warnings = _draw(tmp_path, -1.0)
+    rendered = [source for source in sources if "linear_2_6 -> linear_1_4" in source]
+    assert rendered and "tailport=" not in rendered[-1], rendered[-1:]
+    assert "tailport=sw" in drawing.dot and "headport=se" in drawing.dot
+    assert (tmp_path / "loop_-1.0.svg").exists()
+
+
 def test_router_failure_without_ports_keeps_the_original_render_and_warning(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

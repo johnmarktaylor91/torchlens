@@ -48,6 +48,7 @@ from ._endpoint_rings import endpoint_ring_swatch
 from ._focus_scope import focus_address, scope_caption_head
 from ._frame_penwidth import MODULE_PENWIDTH
 from ._label_format import format_memory, header_count, param_count, params_noun
+from ._module_reuse import module_reuse_note
 from ._render_common import (
     BOOL_NODE_COLOR,
     BUFFER_NODE_COLOR,
@@ -351,46 +352,6 @@ def _header_edit_line(trace: Trace, request: ResolvedRenderRequest) -> str | Non
     theme = resolve_theme(request.theme)
     color = str((request.graph_overrides or {}).get("intervention_site_color", edit_ink(theme)))
     return header_edit_line(trace, sites, color, vis_mode=request.vis_mode)
-
-
-def module_reuse_note(trace: Trace, request: ResolvedRenderRequest) -> str | None:
-    """Disclose module reuse on an unrolled overview, never switching modes (collapse 5).
-
-    The collapse panel ratified "disclose, don't switch" for weight-shared
-    models: the default ``vis_mode`` stays, and an overview render (a smart
-    collapse mode) says how many modules ran more than once and that
-    ``rolled=True`` draws the loop, short enough not to clip. Nested modules
-    of a reused module are not counted again.
-
-    Returns
-    -------
-    str | None
-        The note, or ``None`` when the render is rolled, not an overview, or
-        no module ran more than once.
-    """
-
-    overview = request.collapse in ("auto", "max") or (
-        isinstance(request.collapse, float) and request.collapse > 0.0
-    )
-    if request.vis_mode != "unrolled" or not overview:
-        return None
-    reused = {
-        str(module.address): int(module.num_calls)
-        for module in trace.modules
-        if str(getattr(module, "address", "")) not in ("", "self")
-        and int(getattr(module, "num_calls", 1) or 1) > 1
-    }
-    outermost = {
-        address: calls
-        for address, calls in reused.items()
-        if not any(address.startswith(f"{other}.") for other in reused)
-    }
-    if not outermost:
-        return None
-    count = len(outermost)
-    calls = sum(outermost.values())
-    noun = "module" if count == 1 else "modules"
-    return f"{count:,} reused {noun} ({calls:,} calls); rolled=True draws the loop"
 
 
 def drawn_module_marks(

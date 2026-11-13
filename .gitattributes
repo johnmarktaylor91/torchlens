@@ -18,9 +18,11 @@ notebooks/learn/07_compare_runs.ipynb -filter
 notebooks/learn/08_semantic_shortcuts.ipynb -filter
 notebooks/learn/09_scale.ipynb -filter
 notebooks/learn/10_beyond_one_forward.ipynb -filter
+notebooks/learn/11_dynamic_graphs.ipynb -filter
 examples/workflows/multi_call_bundle.ipynb -filter
 examples/workflows/paired_prompt_patching.ipynb -filter
 examples/methods/jacobian_lens_recipe.ipynb -filter
+examples/methods/jacobian_lens_mamba_colab.ipynb -filter
 examples/methods/logit_lens_recipe.ipynb -filter
 
 # Append-only multi-writer ledgers: union merge keeps both branches' appended rows.

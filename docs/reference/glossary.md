@@ -131,6 +131,19 @@ output object, distribution); for a multi-pass `Recorder`, the last pass's.
   - `output_forward_failed`: a failed partial recording (`on_forward_error="return_partial"`).
   - `output_capture_stopped`: a capture that `stop_after=` ended before the model returned.
 
+**Trace.decode_output / Trace.output_table**: The model's output read as predictions. `trace.decode_output(k)` returns
+decoded rows, up to `k` per batch item; `trace.output_table(k=5)` returns them as a pandas
+dataframe, `k` rows per batch item.
+
+- Classifier (a classification decode): the top `k` classes, with columns `batch_item`, `rank`,
+  `label` and `prob`; `decode_output` rows also carry `class_index`.
+- Language model (an `hf_text` decode): the top `k` next tokens at the last position, with columns
+  `batch_item`, `rank`, `token_id`, `text` and `prob`. `token_id` is the vocabulary index of the
+  token, `text` its decoded string (`None` when no tokenizer was available) and `prob` its
+  probability under the softmax over the vocabulary at the last position.
+- `style=`, `head=` and `tokenizer=` decode again at read time from the retained output tensors
+  (see [Semantic I/O](../semantic_io.md)).
+
 **Recording.options / RecordingSettings**: `Recording.options` returns a `tl.types.RecordingSettings`, the read-only record of the settings
 the recording was made with, from every argument that configured it. Values are the live objects
 the recorder used, never repr strings; there is no public constructor.
@@ -360,14 +373,19 @@ of tens of steps (cost grows faster than the step count). All episode names may 
 **Op**: One executed callable invocation. Ops are the dataflow graph's nodes and have unique full labels
 such as `relu_1_2`.
 
-**Layer**: The user-facing grouping of Ops that run one place in a module's code. Running that place
+**Layer**: The user-facing grouping of Ops that run one place in the code. Running that place
 again (a loop, a recursion, a comprehension) is another pass, addressed with a one-based
 suffix such as `linear_1:2`.
 
-- Passes: `op.pass_number` is the pass and `num_passes` the count.
+- Passes: `op.pass_number` is the pass and `num_passes` the count. `graph.is_recurrent` is
+  true when some layer runs more than one pass.
 - Module calls: a module object called again is another module call (`m:1`, `m:2`), a
-  separate concept. Each op inside it runs once per module call, so its passes match the
-  module's calls.
+  separate concept, recorded for every module. For a module that owns state (a parameter or
+  buffer, its own or a descendant's) each op inside it runs once per module call, so its
+  passes match the module's calls. A module with no state (`nn.ReLU`, `nn.Dropout`) is read
+  as the function it is: its ops group by where the stateful code around it called it, so
+  one `nn.ReLU` called on two lines is two layers and one called from a loop line is one
+  layer with a pass per iteration.
 - Two different places are two layers even with the same weights, so a loop written out by
   hand is N layers.
 - Related: the exact rule (scope, call site, operation, output slot) and the case table are in
@@ -1898,6 +1916,11 @@ former `peek` and `batched_extract` aliases are removed.)
 
 - `tl.pluck` returns the saved out for one layer, `tl.extract` for many layers (detached by
   default; `detach_saved_activations=False` returns graph-connected outs).
+- Both skip the capture when every requested name is an exact module address, the model is in
+  eval mode and the input is one tensor or text on the model's device: one plain forward with a
+  hook on each module returns the same tensors. A `tl.pluck` `stop_after=` that is also an exact
+  module address ends that forward right after the module's first call. Any other request
+  runs the full capture (see [Fast paths](../guides/fast_paths.md)).
 - `tl.extract_dataset` extracts outs from an iterable dataset in batches.
 - Disk-mode `extract_dataset`
   (``path=``) writes a SELF-DESCRIBING artifact: atomic ``batch_XXXXX.pt`` shards plus a
@@ -1907,6 +1930,19 @@ former `peek` and `batched_extract` aliases are removed.)
 - ``resume=True`` (experimental, like ``stimulus_ids=`` and the loader) continues an
   interrupted disk run from its last completed shard after a signature check.
   `torchlens.load(path)` reads the artifact back with its metadata as a `LoadedExtraction`.
+
+**unwrap_when_done (CaptureOptions)**: `CaptureOptions(unwrap_when_done=True)` (default `False`) removes TorchLens's torch
+function wrappers when the `tl.trace` call returns, so `torch.cos`, `torch.Tensor.__add__` and the
+rest are PyTorch's originals again. By default the wrappers that the first capture installs stay
+in place until `torchlens.backends.torch.wrappers.unwrap_torch()` is called; the next capture
+installs them again.
+
+**torchlens.backends.torch.wrappers.wrapped()**: A context manager that installs TorchLens's torch function wrappers on entry and
+removes them on exit, so torch is clean again after the block: `with wrapped(): trace =
+tl.trace(model, x)` leaves `torch.cos` and the rest as PyTorch's originals once the block ends.
+
+- `escape_detector=` (`"off"` or the diagnostic `"shadow"`) and `completeness_witness=` (a
+  bool, `"off"` or `"shadow"`) are passed to `wrap_torch()`.
 
 **Module and stage names** (experimental): A module name resolves to that module's output at every selector entry point: `tl.extract`,
 `tl.pluck`, `tl.trace(save=[...])`, `trace.run_transaction(inputs=..., until=...)` and the
@@ -2429,7 +2465,7 @@ code outside the registry fails the backend's `c0_refusal_codes_registered` cell
 | `foreign_tensor_input` | an input leaf belongs to another framework |
 | `constant_unrealizable` | a closure or literal constant has no readable buffer; the message names the constant op |
 | `rng_state_in_graph` | the traced forward draws random numbers itself (`Tensor.rand`, dropout) on a lazy backend, so replay would draw different values; random state created before the forward is captured |
-| `unwrapped_op_in_capture` | a wrapper backend met an output or intermediate with no captured producer and the caller asked for a refusal; without that request the trace is marked `capture_verified=False` with this code as `provenance.verification_reason` and a warning |
+| `unwrapped_op_in_capture` | a wrapper backend met an output or intermediate with no captured producer and the caller asked for a refusal; without that request the trace is marked `provenance.verified=False` with this code as `provenance.verification_reason` and a warning |
 | `runtime_mode_unsupported` | Paddle runs outside dygraph mode, or in PIR mode |
 | `inplace_op_unsupported` | an in-place or global-state Paddle op runs inside the forward |
 | `input_mutation_unsupported` | the traced tinygrad callable mutates an input (`Tensor.assign`, `Tensor.replace`, setitem) |
@@ -2537,7 +2573,7 @@ table equals this summary and renders `untested` as "not yet proven"; the check 
 
 **Conformance case ids added by the protocol**: The conformance cells the backend protocol adds, by tier. A typed refusal inside any other cell
 makes it `unsupported`; an untyped exception, a wrong value or a trace marked
-`capture_verified=False` makes it `failed`.
+`provenance.verified=False` makes it `failed`.
 
 - Tier 0, the provider API (no model execution): `c0_protocol_complete`,
   `c0_framework_requirement_consistent`, `c0_refusal_codes_registered`,

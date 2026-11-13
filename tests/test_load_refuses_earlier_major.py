@@ -164,7 +164,7 @@ def test_a_root_manifest_stamped_2_38_0_loads(tmp_path: Path, kind: str) -> None
     """The same directories saved by this release carry its stamp and load."""
 
     path = _SAVERS[kind](tmp_path)
-    assert _stamp(path) == tl.__version__ == "3.0.2"
+    assert _stamp(path) == tl.__version__ == "3.0.3"
 
     assert tl.load(path) is not None
 

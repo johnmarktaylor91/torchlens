@@ -60,7 +60,7 @@ trace.draw(module="transformer.h.5.mlp.act")  # draw the graph of the MLP's GELU
   <img alt="TorchLens drawing of every operation inside the GELU module of GPT-2 block 5's MLP" src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/readme_gelu_v3.svg" width="400">
 </picture>
 
-This figure zooms in on the MLP's GELU module; here is [the whole GPT-2 graph](https://modelmenagerie.ai/models/gpt2-huggingface/). Each node is one tensor operation. For instance, `tanh_6_266` is the 6th `tanh` operation and the 266th operation overall. The function name and call number are enough on their own, so `trace["tanh_6"]` and `trace["tanh_6_266"]` return the same operation. A trace can also be indexed by a module's address (`trace["transformer.h.5.mlp"]`) or by a selector (below).
+This figure zooms in on the MLP's GELU module; here is [the whole GPT-2 graph](https://modelmenagerie.ai/models/gpt2-huggingface/). Each node is one tensor operation. For instance, `tanh_6_270` is the 6th `tanh` operation and the 270th operation overall. The function name and call number are enough on their own, so `trace["tanh_6"]` and `trace["tanh_6_270"]` return the same operation. A trace can also be indexed by a module's address (`trace["transformer.h.5.mlp"]`) or by a selector (below).
 
 That one `tl.trace` call runs your model as usual and logs the result of every operation it executes, not just module outputs. Because the `Trace` object returned by this function holds every step of the forward pass, it can answer questions that require the whole computational graph: which units influence which other units (receptive and projective fields), whether replaying each step reproduces its saved result (`tl.validate`), or how results change downstream when you edit one activation. A trace with gaps (e.g., module outputs only) cannot fully answer such questions.
 
@@ -73,7 +73,23 @@ trace[tl.func("layer_norm") & tl.in_module("transformer.h.5")]          # by fun
 trace["conv1"].projective_field.of(units, within=["layer1", "layer2"])  # by downstream influence (ResNet-18)
 ```
 
-**Extract** activations at whatever speed or level of detail you need: save them all, stop the forward pass once you have the ones you want, or quickly run a dynamic model many times while saving only those matching your criteria (e.g., every ReLU after a convolution). The first trace, which records the whole graph, is the slow part: from about twice a plain forward pass on GPT-2 to tens of times on small models. After that, `trace.run` captures new inputs at a few times the cost of a forward pass, and stopping early can beat a plain forward ([capture speed](docs/benchmarks/capture.md)). Saved activations can stay connected to the network if you want, so you can train it on any loss computed from them. You can also apply a function to each activation as it is saved (e.g., averaging across token positions or moving it to the CPU), and even go below Python function calls to the results of PyTorch's low-level ATen operations.
+**Extract** activations at whatever speed or level of detail you need: save them all, stop the forward pass once you have the ones you want, or quickly run a dynamic model many times while saving only those matching your criteria (e.g., every ReLU after a convolution). The first trace, which records the whole graph, is the slow part: from about twice a plain forward pass on GPT-2 to tens of times on small models. Faster options reuse that graph or skip it ([capture speed](docs/benchmarks/capture.md)):
+
+- `trace.run` captures new inputs at a few times the cost of a forward pass, reusing the graph recorded by the initial call to `tl.trace`.
+- Use `tl.record` when the graph can change from one forward to the next (such as an `if` on the input, a mixture of experts sending each token to different experts, or an early exit; [worked example](notebooks/learn/11_dynamic_graphs.ipynb)): it decides what to keep op by op as the model runs, with no graph to build, so it follows whatever path the model takes at a fraction of a trace's cost.
+- `tl.extract` returns the output of a few modules by name at about the cost of a plain forward pass, like PyTorch's forward hooks but without writing them.
+- Stopping early can beat a plain forward.
+
+```python
+trace = trace.run(gpt2, new_text)                            # new input, same graph as the first trace
+recording = tl.record(moe, tokens,                           # different inputs reach different experts: no fixed graph
+    save=lambda op: op.func_name == "silu" and "experts" in op.address)  # give a rule that runs on every op, keeps the experts that fired
+fired = {r.ctx.address for r in recording}                   # which experts ran for this input
+# e.g. {'layers.3.experts.1', 'layers.3.experts.6'}; another input gives another set
+outs = tl.extract(gpt2, text, ["transformer.h.5"])           # named module outputs, one plain forward with a hook
+```
+
+Saved activations can stay connected to the network if you want, so you can train it on any loss computed from them. You can also apply a function to each activation as it is saved (e.g., averaging across token positions or moving it to the CPU), and even go below Python function calls to the results of PyTorch's low-level ATen operations.
 
 ```python
 trace = tl.trace(
@@ -108,7 +124,7 @@ trace["tanh_6"].autograd.grad_fn.calls[0].grad_inputs[0].shape  # torch.Size([1,
 ```python
 print(trace["tanh_6"])  # everything TorchLens knows about one operation
 # Layer tanh_6: float32 [1, 5, 3072] on cpu, min -1.000 max 0.9937 mean -0.4892 sd 0.4728
-#   position  operation 266 of 541
+#   position  operation 270 of 545
 #   module    transformer.h.5.mlp.act
 #   output    15,360 values, 60.0 KiB
 #   values    min -1.000  max 0.9937  mean -0.4892  sd 0.4728
@@ -572,7 +588,6 @@ The [visualization guide](docs/guides/visualization.md) covers the rest of the d
 
 ```bash
 pip install torchlens                       # with pip
-conda install -c conda-forge torchlens      # or with conda
 pip install "torchlens[hf,tabular]"         # what the examples in this README use
 
 # Install Graphviz to draw a model's computational graph (https://graphviz.org/download/):
@@ -584,7 +599,7 @@ TorchLens runs on Python 3.10 to 3.13 with PyTorch 2.1 or later. Features that r
 
 ## Learning TorchLens
 
-- **[Tutorial notebooks](notebooks/learn/):** eleven short notebooks that build up TorchLens step by step, from a first trace to running full experiments at scale. Each runs on a laptop CPU in about a minute, or in your browser on Colab.
+- **[Tutorial notebooks](notebooks/learn/):** twelve short notebooks that build up TorchLens step by step, from a first trace to running full experiments at scale. Each runs on a laptop CPU in about a minute, or in your browser on Colab.
 - **Guides by field:** where to start, depending on your work:
   - **[Mechanistic interpretability](docs/fields/mechanistic_interpretability.md)**
   - **[NeuroAI and computational neuroscience](docs/neuroai/journey.md)**

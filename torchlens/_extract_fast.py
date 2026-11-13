@@ -1,4 +1,4 @@
-"""Fast path for :func:`torchlens.extract` when every request is a module's output.
+"""Fast path for :func:`torchlens.extract` and :func:`torchlens.pluck` on module outputs.
 
 A full capture records every operation of the forward pass, which costs many
 times a plain forward on a small transformer. When each requested name is
@@ -10,7 +10,9 @@ the one a full capture gives: every requested module ran exactly once and
 returned a single tensor. Anything else (a module called twice or never, a
 tuple or dict output, an exception) restores the random-number state and
 returns ``None`` so :func:`torchlens.extract` runs the full capture, which also
-owns every refusal and error message.
+owns every refusal and error message. :func:`torchlens.pluck` takes the same
+path for its one module, and a ``stop_after=`` module address ends the forward
+from a hook after that module's first call, as the capture halts.
 """
 
 from __future__ import annotations
@@ -24,6 +26,7 @@ from torch import nn
 
 from ._input_coerce import _coerce_inputs
 from ._state import active_capture
+from .experimental import _active_stop_after_site
 
 #: A finalized op label (``linear_1_1``, ``relu_3_7:2``); such a name may resolve to an op.
 _OP_LABEL = re.compile(r"^[A-Za-z_]+_\d+_\d+(:\d+)?$")
@@ -110,6 +113,88 @@ def _restore_rng(state: tuple[torch.Tensor, list[torch.Tensor] | None]) -> None:
         torch.cuda.set_rng_state_all(cuda)
 
 
+class _StopForward(BaseException):
+    """Private sentinel a stop-after hook raises to end the plain forward early.
+
+    A ``BaseException`` like the capture's own halt signal, so a model's broad
+    ``except Exception`` cannot swallow it; :func:`_hooked_forward` catches it.
+    """
+
+
+def _hooked_forward(
+    model: nn.Module,
+    call: tuple[tuple[Any, ...], dict[str, Any]],
+    names: Iterable[str],
+    *,
+    keep_graph: bool,
+    stop_at: str | None = None,
+) -> tuple[dict[str, list[Any]], bool] | None:
+    """Run one plain forward with output hooks on ``names``; ``None`` when it raised.
+
+    Each hook records a copy of every call's output (``None`` for an output that
+    is not one plain tensor): detached unless ``keep_graph``. With ``stop_at``
+    a hook on that module ends the forward after its first call returns. Every
+    hook is removed before this returns, however the forward ended; a forward
+    that raised (other than the stop) restores the random-number state.
+
+    Returns
+    -------
+    tuple[dict[str, list[Any]], bool] | None
+        Each name's recorded outputs and whether the stop hook ended the forward.
+    """
+
+    modules = dict(model.named_modules())
+    calls: dict[str, list[Any]] = {name: [] for name in names}
+
+    def recorder(name: str) -> Any:
+        """Return a forward hook that appends module ``name``'s output copy."""
+
+        def hook(_module: nn.Module, _inputs: Any, output: Any) -> None:
+            """Record one call's output, or ``None`` when it is not a plain tensor."""
+            if type(output) is not torch.Tensor:
+                calls[name].append(None)
+            else:
+                calls[name].append(output.clone() if keep_graph else output.detach().clone())
+
+        return hook
+
+    def stopper(_module: nn.Module, _inputs: Any, _output: Any) -> None:
+        """End the forward after the stop module's call (registered after the recorders)."""
+        raise _StopForward
+
+    handles = [modules[name].register_forward_hook(recorder(name)) for name in calls]
+    if stop_at is not None:
+        handles.append(modules[stop_at].register_forward_hook(stopper))
+    rng = _rng_state()
+    stopped = False
+    try:
+        model(*call[0], **call[1])
+    except _StopForward:
+        stopped = True
+    except Exception:  # the full capture re-runs the forward and owns the error
+        _restore_rng(rng)
+        return None
+    finally:
+        for handle in handles:
+            handle.remove()
+    return calls, stopped
+
+
+def _eligible_call(model: nn.Module, x: Any) -> tuple[tuple[Any, ...], dict[str, Any]] | None:
+    """Return the plain forward's ``(args, kwargs)`` when a hooked forward may run, else ``None``.
+
+    The model must be in eval mode, no capture may be active, and the input
+    must be one tensor (or text) on the model's device.
+    """
+
+    if model.training or active_capture()[1]:
+        return None
+    call = _forward_call(model, x)
+    if call is None or not _inputs_on_model_device(model, call):
+        return None
+    return call
+
+
 def try_module_output_extract(
     model: nn.Module,
     x: Any,
@@ -136,40 +221,99 @@ def try_module_output_extract(
         Detached copies keyed as :func:`torchlens.extract` keys them, or ``None``.
     """
 
-    if not detach or model.training or active_capture()[1]:
+    if not detach:
         return None
     plan = _plan(model, layers)
     if plan is None:
         return None
-    call = _forward_call(model, x)
-    if call is None or not _inputs_on_model_device(model, call):
+    call = _eligible_call(model, x)
+    if call is None:
         return None
-    modules = dict(model.named_modules())
-    calls: dict[str, list[Any]] = {name: [] for name in set(plan.values())}
-
-    def recorder(name: str) -> Any:
-        """Return a forward hook that appends module ``name``'s detached output."""
-
-        def hook(_module: nn.Module, _inputs: Any, output: Any) -> None:
-            """Record one call's output, or ``None`` when it is not a plain tensor."""
-            calls[name].append(output.detach().clone() if type(output) is torch.Tensor else None)
-
-        return hook
-
-    handles = [modules[name].register_forward_hook(recorder(name)) for name in calls]
     rng = _rng_state()
-    try:
-        model(*call[0], **call[1])
-    except Exception:  # the full capture re-runs the forward and owns the error
-        _restore_rng(rng)
+    ran = _hooked_forward(model, call, set(plan.values()), keep_graph=False)
+    if ran is None:
         return None
-    finally:
-        for handle in handles:
-            handle.remove()
+    calls = ran[0]
     if any(len(seen) != 1 or seen[0] is None for seen in calls.values()):
         _restore_rng(rng)
         return None
     return {key: calls[name][0] for key, name in plan.items()}
+
+
+def _pluck_stop_site(model: nn.Module, stop_after: Any) -> tuple[bool, str | None]:
+    """Return ``(eligible, stop module)`` for a pluck's ``stop_after``.
+
+    ``None`` with no ambient ``tl.experimental.stop_after`` site runs the
+    whole forward. An explicit site is eligible only as an exact module
+    address that cannot also name a captured function: the capture compiles a
+    bare string into "module address OR function name, whichever fires
+    first", and a function match could halt before the module runs.
+    """
+
+    if stop_after is None:
+        return _active_stop_after_site() is None, None
+    if not isinstance(stop_after, str) or _plan(model, [stop_after]) is None:
+        return False, None
+    if stop_after.isidentifier() and _may_name_a_function(stop_after):
+        return False, None
+    return True, stop_after
+
+
+#: Namespaces whose attribute names are captured function names or layer types.
+_FUNCTION_NAMESPACES: tuple[Any, ...] = (
+    torch,
+    torch.Tensor,
+    torch.nn.functional,
+    torch.special,
+    torch.linalg,
+    torch.fft,
+)
+
+
+def _may_name_a_function(name: str) -> bool:
+    """Return whether ``name`` could be a captured function name or layer type."""
+
+    bare = name.strip("_").lower()
+    spellings = {name, bare, f"__{bare}__", f"{bare}_"}
+    return any(hasattr(space, spelling) for space in _FUNCTION_NAMESPACES for spelling in spellings)
+
+
+def try_module_output_pluck(
+    model: nn.Module, x: Any, layer: Any, stop_after: Any
+) -> torch.Tensor | None:
+    """Return ``tl.pluck``'s tensor from one hooked forward, or ``None`` to run the capture.
+
+    Eligible when ``layer`` is an exact module address, the model is in eval
+    mode and the input is one tensor or text on the model's device (the
+    :func:`torchlens.extract` fast-path conditions), and ``stop_after`` is
+    ``None`` (no ambient site either) or an exact module address that cannot
+    name a function. A stop module ends the forward from its hook after its
+    first call, as the capture halts inclusively after the site. The result is
+    returned only when the requested module ran exactly once before the
+    forward ended and returned one plain tensor; it keeps the autograd graph
+    when grad mode is on, as the capture's saved out does. Anything else
+    restores the random-number state and returns ``None``.
+    """
+
+    if not isinstance(layer, str) or _plan(model, [layer]) is None:
+        return None
+    eligible, stop_at = _pluck_stop_site(model, stop_after)
+    if not eligible:
+        return None
+    call = _eligible_call(model, x)
+    if call is None:
+        return None
+    rng = _rng_state()
+    keep_graph = torch.is_grad_enabled()
+    ran = _hooked_forward(model, call, [layer], keep_graph=keep_graph, stop_at=stop_at)
+    if ran is None:
+        return None
+    seen, stopped = ran[0][layer], ran[1]
+    # A stop site that never fired is the capture's refusal to give, not ours.
+    if len(seen) != 1 or seen[0] is None or stopped != (stop_at is not None):
+        _restore_rng(rng)
+        return None
+    return seen[0]
 
 
 def extract_outputs(

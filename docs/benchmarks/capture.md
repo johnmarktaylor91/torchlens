@@ -1,7 +1,7 @@
 # Capture speed, by kind of use
 
 What each way of using TorchLens costs against a plain forward pass of the same model, measured
-on 2026-11-03. TorchLens records every operation the model runs, so most kinds of capture cost
+on 2026-11-03 (the `tl.extract` row on 2026-11-08). TorchLens records every operation the model runs, so most kinds of capture cost
 far more than a forward hook; this page says how much, for each kind, including where TorchLens
 is slow. Every number is a median wall time from the harness in `benchmarks/capture/`, and every
 one comes from a result file in [`data/`](data/capture_2026-11-03.json) (one file per run; see
@@ -29,7 +29,7 @@ lists them.
 | The fast recorder, `tl.record(model, x, save=...)`: selected sites, no graph | not measured | 11x (150.06 ms) | 43x (98.55 ms) | 1.34x (39.17 s) | 50x (8.35 s) |
 | A trace saving selected sites, `tl.trace(model, x, save=...)`: the full graph, few tensors kept | 55x (77.96 ms) | 37x (505.21 ms) | 169x (389.71 ms) | 3.4x (99.88 s) | 296x (49.67 s) |
 | A trace saving every activation, `tl.trace(model, x)` | 55x (81.38 ms) | 47x (710.60 ms) | 186x (427.04 ms) | not measured | not measured |
-| One module's output by name, `tl.extract` | 58x (82.93 ms) | 41x (562.88 ms) | 164x (376.36 ms) | not measured | not measured |
+| One module's output by name, `tl.extract` (remeasured on 2026-11-08 with its hooked fast path; see [its section](#one-modules-output-by-name-tlextract)) | 35x (37.57 ms): the LSTM returns a tuple, so a full capture | 1.10x (14.18 ms) | 1.21x (2.70 ms), second GPU machine | not measured | not measured |
 | A sweep of edits, one recording per edit, `tl.record(..., intervene=...)` | not measured | 12x (1.79 s) | 70x (1.06 s) | 1.20x (32.32 s) | 53x (6.30 s) |
 | A sweep of edits, one trace per edit, `tl.trace(..., intervene=...)` | 52x (640.23 ms) | 35x (5.26 s) | 238x (3.61 s) | 1.85x (49.97 s) | 199x (23.84 s) |
 | Features over a stimulus set, `tl.extract_dataset` | 37x (356.00 ms) | 21x (2.69 s) | 241x (1.99 s), second GPU machine | not measured | not measured |
@@ -131,13 +131,12 @@ hook. Backward capture needs a trace; these runs did not time `tl.record` with g
 
 What it does: `tl.trace(model, x)` records every operation's metadata and graph edges, checks
 them, and saves every activation. `tl.trace(model, x, save=...)` records the same graph and keeps
-only the selected payloads. `tl.extract(model, x, {...})` reads named module outputs from one such
-call.
+only the selected payloads.
 
 When to use it: you need operations no module returns, you do not yet know the site, you want the
 graph, or you want the recording checked against the forward.
 
-Numbers: 37x to 58x a plain forward on the LSTM tagger and ResNet-18 on CPU, 164x to 186x on
+Numbers: 37x to 55x a plain forward on the LSTM tagger and ResNet-18 on CPU, 169x to 186x on
 ResNet-18 on GPU, and 296x on GPT-2 small on GPU; on GPT-2 small on one loaded CPU thread, where
 each forward takes about 1.8 s, 3.4x (see the summary).
 
@@ -147,6 +146,40 @@ and a trace keeping one module 381.29 ms; on the LSTM tagger on CPU 81.38 ms and
 
 Known costs: the trace's fixed cost dominates on small models (the LSTM tagger's 1.5 ms forward
 becomes about 80 ms).
+
+## One module's output by name, `tl.extract`
+
+What it does: `tl.extract(model, x, ["layer2"])` returns the outputs of the named modules. When
+every name is an exact module address, the model is in eval mode, the input is one tensor (or text)
+on the model's device and each named module runs once and returns one tensor, it runs one plain
+forward with forward hooks on those modules and records nothing. Otherwise, for example for a
+module that returns a tuple, it runs a full capture and reads the outputs from it.
+
+When to use it: reading a few module outputs by name, without writing hooks.
+
+Numbers (remeasured on 2026-11-08 on the CPU worker, after the hooked fast path landed): 1.10x a
+plain forward on ResNet-18 (14.18 ms against 12.90 ms), with outputs bit-identical to the forward
+hook's. The LSTM tagger's module returns a tuple (its output and its hidden state), so it takes the
+full capture: 35x (37.57 ms against 1.06 ms). On ResNet-18 on GPU (remeasured on 2026-11-08 on the
+second RTX 2080 Ti machine) it is 1.21x a plain forward (2.70 ms against 2.24 ms; the forward hook
+took 2.30 ms), again bit-identical to the hook's output. The 3 Nov GPU figure (376.36 ms, 164x) was
+a full capture and stays in [All
+measurements](#resnet-18-on-gpu-second-run-rtx-2080-ti-workstation) as history.
+
+| Workload (model, device, repeats) | Tool | Median (lowest to highest process median) |
+| --- | --- | --- |
+| ResNet-18, CPU, one module's output (`layer2`), 8 Nov, n=3 processes | plain forward, nothing attached | 12.90 ms (12.78 ms to 13.74 ms) |
+| ResNet-18, CPU, one module's output (`layer2`), 8 Nov, n=3 processes | forward hook | 12.96 ms (12.79 ms to 13.02 ms) |
+| ResNet-18, CPU, one module's output (`layer2`), 8 Nov, n=3 processes | `tl.extract` | 14.18 ms (13.95 ms to 14.18 ms) |
+| ResNet-18, GPU (second RTX 2080 Ti machine), one module's output (`layer2`), 8 Nov, n=3 processes | plain forward, nothing attached | 2.24 ms (2.24 ms to 2.83 ms) |
+| ResNet-18, GPU (second RTX 2080 Ti machine), one module's output (`layer2`), 8 Nov, n=3 processes | forward hook | 2.30 ms (2.29 ms to 2.33 ms) |
+| ResNet-18, GPU (second RTX 2080 Ti machine), one module's output (`layer2`), 8 Nov, n=3 processes | `tl.extract` | 2.70 ms (2.70 ms to 2.71 ms) |
+| LSTM tagger, CPU, one module's output (`lstm`), 8 Nov, n=3 processes | plain forward, nothing attached | 1.06 ms (1.06 ms to 1.06 ms) |
+| LSTM tagger, CPU, one module's output (`lstm`), 8 Nov, n=3 processes | forward hook | 1.07 ms (1.06 ms to 1.07 ms) |
+| LSTM tagger, CPU, one module's output (`lstm`), 8 Nov, n=3 processes | `tl.extract` (a full capture: the module returns a tuple) | 37.57 ms (37.16 ms to 38.96 ms) |
+
+Known costs: a module that returns a tuple or a dict, runs twice, or never runs takes the full
+capture, as does a model in training mode or an input on another device.
 
 ## Reruns of a finished trace
 
@@ -447,9 +480,11 @@ that reads one tensor. On a small model the capture's fixed cost dominates. The 
 
 What this means in practice:
 
-- To read one module's output, a forward hook is the faster tool. A capture is worth its cost
-  when you need operations no module returns, do not yet know the site, or want the recording
-  checked against the forward.
+- To read one module's output, `tl.extract` costs about a forward hook when the module returns
+  one tensor (1.10x a plain forward on ResNet-18 on CPU and 1.21x on GPU, 8 Nov). A module that returns a tuple,
+  like the LSTM, takes a full capture, and a forward hook is the faster tool there. A capture is
+  worth its cost when you need operations no module returns, do not yet know the site, or want
+  the recording checked against the forward.
 - To sweep many edits, use the bound edit (`tl.when(...).bind(model)`), not a trace per edit.
 - To pull selected activations in a loop, use `tl.record`, not `tl.trace`.
 - Batch feature extraction pays the capture cost per batch. Large batches spread it.
@@ -499,6 +534,13 @@ Each run's result file names its host and versions; the page's tables quote the 
   transformers 5.18.0, nnsight 0.8.1, TransformerLens 4.3.0, and a development build of TorchLens
   from that day.
 - Reruns of a finished trace (2026-11-05): see [their section](#reruns-of-a-finished-trace).
+- `tl.extract` remeasured (2026-11-08): a shared 32-core Intel Xeon 2.80 GHz Linux CPU worker, one torch thread per process, load average 6 to 7.
+  Python 3.10, torch 2.13.0 (CPU build), torchvision 0.28.0 and a development build of TorchLens
+  from that day, with the hooked fast path. Raw data:
+  [`data/capture_2026-11-08-extract.json`](data/capture_2026-11-08-extract.json).
+- `tl.extract` on GPU remeasured (2026-11-08): a 48-core Intel Xeon Gold 6126 2.60 GHz Linux GPU node with an NVIDIA GeForce RTX 2080 Ti (11 GiB), the third run's `tl.extract_dataset` machine, one torch thread per process, load average about 4.
+  Python 3.11, torch 2.14.1 and torchvision 0.29.1 built for CUDA 12.6, TorchLens 3.0.3. Raw data:
+  [`data/capture_2026-11-08-extract-gpu.json`](data/capture_2026-11-08-extract-gpu.json).
 - Recording a generation: see [its section](#recording-a-generation).
 
 Method. Each LSTM tagger and ResNet-18 row is three separate processes (two for some first-run

@@ -56,7 +56,8 @@ def _shipped_draw_default() -> Iterator[None]:
     and the caller ``chdir``s into its own ``tmp_path``.
     """
 
-    func = tl.Trace.draw
+    # Trace.draw is wrapped by the keyword-teaching decorator; patch the real function.
+    func = inspect.unwrap(tl.Trace.draw)
     saved = func.__defaults__
     positional = [
         p

@@ -113,6 +113,84 @@ class TinyAttention(nn.Module):
         return self.unembed(x + self.out_proj(mixed))
 
 
+class DenseBlock(nn.Module):
+    """A residual feed-forward block: linear, GELU, linear, added back to its input."""
+
+    def __init__(self, width: int) -> None:
+        super().__init__()
+        self.up = nn.Linear(width, 2 * width)
+        self.down = nn.Linear(2 * width, width)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x + self.down(nn.functional.gelu(self.up(x)))
+
+
+class Expert(nn.Module):
+    """One expert of a mixture: linear, SiLU, linear."""
+
+    def __init__(self, width: int) -> None:
+        super().__init__()
+        self.up = nn.Linear(width, 2 * width)
+        self.down = nn.Linear(2 * width, width)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.down(nn.functional.silu(self.up(x)))
+
+
+class MoELayer(nn.Module):
+    """Top-1 mixture of experts: a router sends each token to one expert, and only those run."""
+
+    def __init__(self, width: int, num_experts: int) -> None:
+        super().__init__()
+        self.router = nn.Linear(width, num_experts)
+        self.experts = nn.ModuleList([Expert(width) for _ in range(num_experts)])
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        tokens = x.reshape(-1, x.shape[-1])
+        choice = self.router(tokens).argmax(dim=-1)  # one expert per token
+        mixed = torch.zeros_like(tokens)
+        for index in choice.unique().tolist():  # Python control flow: the graph follows the routing
+            rows = torch.nonzero(choice == index).squeeze(1)
+            mixed = mixed.index_add(0, rows, self.experts[index](tokens[rows]))
+        return x + mixed.reshape(x.shape)
+
+
+class TinyMoE(nn.Module):
+    """A token model with three dense blocks and a mixture of eight experts in the fourth layer."""
+
+    def __init__(self, width: int = 16, num_experts: int = 8, vocab: int = 32) -> None:
+        super().__init__()
+        self.embed = nn.Embedding(vocab, width)
+        self.layers = nn.ModuleList(
+            [DenseBlock(width), DenseBlock(width), DenseBlock(width), MoELayer(width, num_experts)]
+        )
+        self.unembed = nn.Linear(width, vocab)
+
+    def forward(self, ids: torch.Tensor) -> torch.Tensor:
+        x = self.embed(ids)
+        for layer in self.layers:
+            x = layer(x)
+        return self.unembed(x)
+
+
+class EarlyExit(nn.Module):
+    """Three blocks, each with an exit head; the forward returns at the first confident head."""
+
+    def __init__(self, width: int = 8, num_classes: int = 4, threshold: float = 0.5) -> None:
+        super().__init__()
+        self.blocks = nn.ModuleList([nn.Linear(width, width) for _ in range(3)])
+        self.exits = nn.ModuleList([nn.Linear(width, num_classes) for _ in range(3)])
+        self.threshold = threshold
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        for block, exit_head in zip(self.blocks, self.exits, strict=True):
+            x = torch.relu(block(x))
+            logits = exit_head(x)
+            if torch.softmax(logits, dim=-1).max() > self.threshold:  # confident: leave here
+                return logits
+        return logits
+
+
 def tiny_mlp(batch: int = 4) -> tuple[nn.Module, torch.Tensor]:
     """Return the two-layer MLP and a ``(batch, 8)`` input."""
 
@@ -149,6 +227,22 @@ def tiny_attention(length: int = 5) -> tuple[nn.Module, torch.Tensor]:
     return TinyAttention().eval(), ids
 
 
+def tiny_moe(length: int = 2, seed: int = SEED) -> tuple[nn.Module, torch.Tensor]:
+    """Return the mixture-of-experts model and a ``(1, length)`` batch of token ids."""
+
+    _seeded()
+    model = TinyMoE().eval()
+    ids = torch.randint(0, 32, (1, length), generator=torch.Generator().manual_seed(seed))
+    return model, ids
+
+
+def early_exit() -> tuple[nn.Module, torch.Tensor]:
+    """Return the early-exit model and a ``(1, 8)`` input."""
+
+    gen = _seeded()
+    return EarlyExit().eval(), torch.randn(1, 8, generator=gen)
+
+
 def tiny_dataset(num_items: int = 64, width: int = 8) -> torch.Tensor:
     """Return ``num_items`` MLP inputs as one ``(num_items, width)`` tensor, for extraction."""
 
@@ -162,4 +256,6 @@ ALL_MODELS = {
     "tiny_rnn": tiny_rnn,
     "tiny_dict_model": tiny_dict_model,
     "tiny_attention": tiny_attention,
+    "tiny_moe": tiny_moe,
+    "early_exit": early_exit,
 }

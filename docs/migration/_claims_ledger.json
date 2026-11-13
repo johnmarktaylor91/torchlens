@@ -12,10 +12,13 @@
     {
       "id": "readme-any-pytorch-model",
       "category": "any-model",
-      "wording": "Inspect, visualize and intervene on any operation in any neural network.",
+      "wording": "Inspect, visualize and intervene on any operation in any neural network",
       "locations": [
         {
           "file": "README.md"
+        },
+        {
+          "file": "pyproject.toml"
         }
       ],
       "release": null,
@@ -301,27 +304,6 @@
         "perf-no-single-multiplier",
         "perf-fastlog-attribution"
       ]
-    },
-    {
-      "id": "pyproject-description",
-      "category": "capability",
-      "wording": "A package for extracting activations from PyTorch models and saving portable bundles",
-      "locations": [
-        {
-          "file": "pyproject.toml"
-        }
-      ],
-      "release": "v2.36.1@550b96a6",
-      "runtime_backend": "PyTorch eager (torch backend)",
-      "models": "n/a",
-      "evidence": [
-        "tests/test_quickstart_readme_gate.py"
-      ],
-      "evidence_note": "Plain description; to be replaced by the author's pitch.",
-      "exclusions": "",
-      "date": "2026-10-29",
-      "status": "release-supported",
-      "registry_ids": []
     },
     {
       "id": "github-repo-description",
@@ -741,6 +723,28 @@
       "evidence_note": "The linked page proves absolute completeness on one capture and relative completeness for a declared query language of attribute predicates, set operations and dataflow reachability (with two stated caveats); its worked examples run in tests/test_selection_completeness_examples.py.",
       "exclusions": "Relative completeness holds for the declared query language, with the two caveats the page spells out; completeness is about where, not how much one site influences another.",
       "date": "2026-11-05",
+      "status": "train-only",
+      "registry_ids": []
+    },
+    {
+      "id": "readme-extract-faster-options",
+      "category": "speed",
+      "wording": "Faster options reuse that graph or skip it",
+      "locations": [
+        {
+          "file": "README.md"
+        }
+      ],
+      "release": null,
+      "runtime_backend": "PyTorch eager (torch backend)",
+      "models": "LSTM tagger, ResNet-18 and GPT-2 small in the capture benchmarks",
+      "evidence": [
+        "docs/benchmarks/capture.md",
+        "docs/guides/fast_paths.md"
+      ],
+      "evidence_note": "trace.run, tl.record and tl.extract each measured below a first full trace on the same workload; tl.extract takes one plain forward with hooks when every requested module returns one tensor (1.10x a plain forward on ResNet-18 CPU, 8 Nov 2026).",
+      "exclusions": "A module that returns a tuple or dict (the LSTM tagger) makes tl.extract fall back to a full capture; trace.run falls back to a full capture when the call structure changes.",
+      "date": "2026-11-08",
       "status": "train-only",
       "registry_ids": []
     }

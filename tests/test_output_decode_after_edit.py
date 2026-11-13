@@ -132,37 +132,37 @@ def _capture_lm() -> Any:
     return tl.trace(model, torch.tensor([[[1.0, 0.0], [0.0, 1.0]]]))
 
 
+def _ids_and_texts(rows: list[dict[str, Any]]) -> list[tuple[int, str | None]]:
+    return [(int(row["token_id"]), row["text"]) for row in rows]
+
+
 def test_edited_fork_text_decode_reports_the_edited_token_ids() -> None:
-    """Changed argmax ids replace the captured ones; the stale captured text is not kept."""
+    """The edited fork's top next tokens replace the captured ones; the parent keeps its rows."""
 
     trace = _capture_lm()
-    assert trace.decode_output() == [
-        {"batch_item": 0, "rank": 1, "text": "tok0 tok1", "token_ids": [0, 1]}
-    ]
+    assert _ids_and_texts(trace.decode_output(k=2)) == [(1, "tok1"), (3, "tok3")]
 
     edited = trace.fork().do(tl.module("proj"), tl.zero_ablate())
 
-    # The session tokenizer is gone after capture, so the changed ids carry no text;
-    # passing a tokenizer at read time renders it.
-    assert edited.decode_output() == [
-        {"batch_item": 0, "rank": 1, "text": None, "token_ids": [3, 3]}
-    ]
-    assert edited.output_table().iloc[0]["token_ids"] == [3, 3]
-    assert edited.decode_output(style="hf_text", tokenizer=_Tokenizer())[0]["text"] == "tok3 tok3"
-    assert trace.decode_output()[0]["text"] == "tok0 tok1"
+    # Every position now reads the head bias, so token 3 is the top next token.
+    # Its text was decoded at capture (it ranked second), so the row keeps it.
+    assert _ids_and_texts(edited.decode_output(k=1)) == [(3, "tok3")]
+    assert edited.output_table().iloc[0]["token_id"] == 3
+    rendered = edited.decode_output(style="hf_text", tokenizer=_Tokenizer(), k=1)
+    assert _ids_and_texts(rendered) == [(3, "tok3")]
+    assert _ids_and_texts(trace.decode_output(k=1)) == [(1, "tok1")]
 
 
 def test_text_decode_keeps_captured_text_when_the_ids_do_not_change() -> None:
-    """An edit that leaves every argmax id in place keeps the captured text."""
+    """An edit that leaves the top next tokens in place keeps their captured text."""
 
     trace = _capture_lm()
     edited = trace.fork().do(tl.module("head"), tl.scale(0.5))
 
     out = trace.output_layers[0]
     assert not torch.allclose(edited[out].out, trace[out].out)
-    assert edited.decode_output() == [
-        {"batch_item": 0, "rank": 1, "text": "tok0 tok1", "token_ids": [0, 1]}
-    ]
+    assert _ids_and_texts(edited.decode_output(k=2)) == [(1, "tok1"), (3, "tok3")]
+    assert edited.decode_output(k=1)[0]["prob"] < trace.decode_output(k=1)[0]["prob"]
 
 
 def test_aborted_selection_batch_restores_the_decoded_output() -> None:

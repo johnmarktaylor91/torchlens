@@ -334,7 +334,10 @@ from the exact inputs and options the fused kernel received. A default capture
 already records them: the SDPA call's replay argument template holds `scale`,
 `is_causal`, `dropout_p` and `enable_gqa`, and the Q, K, V and mask tensors are
 the saved outputs of the ops that produced them. So a plain trace serves the
-facets:
+facets, and the forward itself is untouched: the fused kernel PyTorch chose runs as is, and the
+traced output equals a plain forward bit for bit (the FAQ entry
+[Does tracing change fused attention?](faq.md#does-tracing-change-fused-attention-sdpa-flashattention)
+and `notebooks/sdpa_fused_attention_check.ipynb` show the measurement per backend):
 
 ```python
 log = tl.trace(model, x)

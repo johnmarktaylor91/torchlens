@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
 from .._record_type import record_type
+from ._module_children import recorded_child_addresses
 
 if TYPE_CHECKING:
     from .._data_classes.module import Module
@@ -176,11 +177,7 @@ def _compute_child_condensed_flow_graphs(
     op_order = {op.label: index for index, op in enumerate(trace._layer_list)}
     for module in trace.modules:
         parent = module.address
-        child_addresses = tuple(
-            str(child)
-            for child in getattr(module, "address_children", ()) or ()
-            if child in trace.modules
-        )
+        child_addresses = recorded_child_addresses(trace, module)
         if not child_addresses:
             graphs[parent] = ChildCondensedFlowGraph(
                 parent=parent,

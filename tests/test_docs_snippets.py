@@ -28,6 +28,7 @@ import importlib.util
 import linecache
 import re
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 import pytest
@@ -269,8 +270,11 @@ _SKETCH_MARKER_RE = re.compile(r"^\s*#.*\bAPI sketch\b", re.IGNORECASE)
 #: ``AutoImageProcessor`` and ``Image``; the GoogLeNet fence uses ``googlenet``).
 #: ``README_FIXTURES`` defines the inputs the fences name but never build: the
 #: raw-PyTorch comparisons' GPT-2 tokenizer ``tok``, preprocessed ResNet input
-#: ``image`` and ImageNet label list ``cats``, and the RDM fence's three photos
-#: ``cat1``, ``cat2`` and ``car``. Every photo (``cat.jpg`` included) is a plain
+#: ``image`` and ImageNet label list ``cats``, the RDM fence's three photos
+#: ``cat1``, ``cat2`` and ``car``, and the Extract fence's second GPT-2 input ``new_text``.
+#: That fence's mixture of experts ``moe`` and its ``tokens`` are the learning path's
+#: ``tiny_moe()`` (``notebooks/learn/learn_models.py``, loaded by ``_readme_setup``), the
+#: model of the notebook the README links for it. Every photo (``cat.jpg`` included) is a plain
 #: synthetic image the test writes; the splash's printed labels and probabilities
 #: are gated on the real, checksum-pinned image by tests/test_quickstart_readme_gate.py.
 README_PRELUDE = (
@@ -288,6 +292,7 @@ README_FIXTURES = (
     "cat1, cat2, car = (\n"
     '    Image.new("RGB", (224, 224), color) for color in ((140, 110, 80), (90, 90, 90), (200, 30, 30))\n'
     ")\n"
+    'new_text = "The capital of Germany is"\n'
 )
 #: README comparison fences written for another library. Each leans on that
 #: library's own model wrapper, which the README never builds (``vit.trace(...)``
@@ -438,6 +443,18 @@ def _readme_setup(namespace: dict[str, Any], workdir: Path) -> None:
     Image.new("RGB", (256, 256), (140, 110, 80)).save(workdir / "cat.jpg")
     exec(compile(README_PRELUDE, "README.md:prelude", "exec"), namespace)
     exec(compile(README_FIXTURES, "README.md:fixtures", "exec"), namespace)
+    namespace["moe"], namespace["tokens"] = _learn_models().tiny_moe()
+
+
+def _learn_models() -> ModuleType:
+    """Load ``notebooks/learn/learn_models.py`` from its file, without touching ``sys.path``."""
+
+    path = _docs_dir().parent / "notebooks" / "learn" / "learn_models.py"
+    spec = importlib.util.spec_from_file_location("_readme_learn_models", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def _is_readme_foreign_fence(page_name: str, code: str) -> bool:

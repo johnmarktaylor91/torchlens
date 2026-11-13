@@ -554,7 +554,7 @@ def _warn_rescue_success(trigger: str) -> None:
     warnings.warn(
         "TorchLens re-ran the forward pass once to recover ops hidden by a "
         f"stale pre-wrap torch reference (trigger: {trigger}). The returned "
-        "trace is the rescue capture (capture_verified=False, reason "
+        "trace is the rescue capture (trace.provenance.verified=False, reason "
         "'mode_rescue_rerun', details on trace._rescue_rerun) and the model's "
         "forward executed TWICE -- undeclared Python side effects inside "
         "forward() double-applied. Remedy: fix the stale torch reference "

@@ -321,7 +321,7 @@ def _warn_scripted(found: list[tuple[_CallSite, _ScriptedCall]]) -> None:
             "(HAS_SCRIPT_FUNCTION_CALL_HOOK is False). Its body ran in the TorchScript "
             f"interpreter, so the {site.dispatch_count} operation(s) it dispatched are "
             "not in the graph; the completeness witness counted them as unaccounted and "
-            "the capture is marked capture_verified=False (trace.completeness_diagnostics "
+            "the capture is marked trace.provenance.verified=False (trace.completeness_diagnostics "
             f"lists them).{_more_sites(others)} See {_GOTCHA_POINTER}. Remedy: set "
             "PYTORCH_JIT=0 in the environment before the model's code is imported, for "
             "example `PYTORCH_JIT=0 python your_script.py`; torch.jit.script then returns "
@@ -352,7 +352,7 @@ def _warn_dlpack(found: list[_CallSite]) -> None:
             "the Python functions TorchLens wraps, so the "
             f"{site.dispatch_count} operation(s) dispatched from this line are not in the "
             "graph; the completeness witness counted them as unaccounted and the capture "
-            "is marked capture_verified=False (trace.completeness_diagnostics lists them)."
+            "is marked trace.provenance.verified=False (trace.completeness_diagnostics lists them)."
             f"{_more_sites(others)} See {_GOTCHA_POINTER}. Remedy: no TorchLens setting "
             "captures foreign kernels; read this capture as a lower bound, or capture a "
             "version of the model that computes this step with torch operations.",

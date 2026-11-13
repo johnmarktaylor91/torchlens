@@ -54,7 +54,7 @@ def test_unverified_capture_drops_feedforward_and_bounds_its_counts() -> None:
     assert "(capture unverified; counts are lower bounds)" in text.splitlines()[0]
     assert "\n  capture   unverified: escape_rescue_unrecovered; counts are lower bounds\n" in text
     assert ", (capture unverified" not in text
-    assert f" of {len(trace)} layer outputs, " in text
+    assert f" of {trace._num_ops} op outputs, " in text
 
 
 def test_the_named_option_records_every_op_and_drops_the_hint() -> None:

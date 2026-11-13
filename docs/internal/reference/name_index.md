@@ -393,7 +393,8 @@ carries the same tag at its definition.
     `fold_sites`), `requested` (the knob mirror), `folded_sites` and `site_join` (two
     distinct site-granular axes: grouping folds vs product-layer joins), `detector`,
     `effective`, and `note`.
-  - `detector`: `callsite_v1` for call-site grouping, `grouper_v1` for the structural grouper
+  - `detector`: `callsite_v2` for call-site grouping (`callsite_v1` on traces saved before
+    stateless modules grouped by call site), `grouper_v1` for the structural grouper
     that serves captures without call-site evidence, `unknown` when grouping did not run.
   - Loading: loads validate against the exact writer key set, closed vocabularies, and
     coherence rules. A parse failure or incoherence warns once and settles to the one
@@ -1484,8 +1485,8 @@ carries the same tag at its definition.
   resolves, with a did-you-mean over the built-in styles (`classification`, `imagenet`,
   `imagenet1k`, `hf_text`).
   - The same code refuses `style="hf_text"` when no rank-2 or rank-3 logits are retained.
-  - `style="hf_text"` without a `tokenizer=` is not a refusal: the rows carry the argmax
-    `token_ids` and `text` is `None` (the trace was captured without a tokenizer).
+  - `style="hf_text"` without a `tokenizer=` is not a refusal: the rows carry each next
+    token's `token_id` and `text` is `None` (the trace was captured without a tokenizer).
   - Output decoding is read-time only: the capture runs the automatic detector pass with no
     option, and `CaptureOptions` has no decode field.
   - `CaptureOptions(output_style=...)`, `CaptureOptions(output_head=...)` and the same
@@ -3189,7 +3190,7 @@ alphabetical order.
 | `Trace.cleanup` | Delete log data, break reference cycles and free cached GPU memory |
 | `Trace.completeness_diagnostics` | List of reports of ATen dispatch events the completeness witness could not account for; empty when capture was complete |
 | `Trace.compute_coverage` | Counts of layer-list rows in each of four compute-coverage categories, as a dict |
-| `Trace.decode_output` | Return the decoded output rows captured during tracing, up to `k` ranks per batch item; with `style=`, `head=` or `tokenizer=` decode again on demand from the retained output tensors without touching `decoded_output` (`style="hf_text"` without a tokenizer returns the argmax `token_ids` with `text` `None`); with nothing captured, run the output detectors over the retained output tensors and raise if none is retained or no detector resolves a style |
+| `Trace.decode_output` | Return the decoded output rows captured during tracing, up to `k` ranks per batch item; with `style=`, `head=` or `tokenizer=` decode again on demand from the retained output tensors without touching `decoded_output` (a text decode returns the top next tokens at the last position as `batch_item`, `rank`, `token_id`, `text`, `prob` rows; `style="hf_text"` without a tokenizer leaves `text` `None`); with nothing captured, run the output detectors over the retained output tensors and raise if none is retained or no detector resolves a style |
 | `Trace.do` | `trace.do(site, edit, /, *, model=None, inputs=None, intervention=None, loss=None)`: apply an intervention and replay, rerun or set it; the site (a selector-like site, or a mapping or list batch of `(site, edit)` pairs) and the edit (the value, hook or helper applied there, omitted for a batch) are positional-only |
 | `Trace.escape_diagnostics` | List of reports of raw torch callables that ran outside their registered wrapper during capture, each with file, line and function |
 | `Trace.factcore` | The single numbers substrate for this trace: counts, identity spine, parameter totals, compute aggregation and memory figures |
@@ -3227,6 +3228,7 @@ alphabetical order.
 | `Trace.output_id2label` | Dict mapping output class ids to label strings, used to decode model output, or `None` |
 | `Trace.output_layers` | Labels of the Layers that are model outputs |
 | `Trace.output_num_classes` | Number of output classes used to decode model output, or `None` |
+| `Trace.output_table` | Return the decoded output as a pandas dataframe, `k` rows per batch item: a classifier's top classes (`batch_item`, `rank`, `label`, `prob`) or a language model's top next tokens at the last position (`batch_item`, `rank`, `token_id`, `text`, `prob`; `token_id` is the vocabulary index, `prob` the softmax over the vocabulary at that position) |
 | `Trace.parent_trace` | The immediate parent Trace in a fork or rerun lineage, or `None` |
 | `Trace.preview_fastlog` | Render a preview of what a fastlog predicate would keep on this model graph |
 | `Trace.profile_enabled` | Whether this capture was run with profiling requested |

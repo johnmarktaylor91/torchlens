@@ -7,16 +7,21 @@ trace.
 
 ## The rule in plain words
 
-A layer is one operation written at one place in a module's code. Running that same place again
+A layer is one operation written at one place in the code. Running that same place again
 is another pass of the same layer: a loop, a recursion, a comprehension or a later generation step
 repeats it. Two different places are two layers, even when they compute the same operation with the
 same weights.
 
 Calling a module again is a separate concept: a module call. A module object called three times,
-from one line or from several, has three module calls, numbered `block:1`, `block:2`, `block:3`.
-The module is not looping; each op inside it simply runs once per module call, so its layer has
-one pass per call and the pass number equals the module call number. Everything inside one module
-instance is grouped by where it sits in that module's code.
+from one line or from several, has three module calls, numbered `block:1`, `block:2`, `block:3`,
+and every module call is recorded whatever the module holds. A module that owns state (parameters
+or buffers, its own or a descendant's) is a scope: each of its calls runs every op inside it once
+more, so those ops get one pass per module call and the pass number equals the module call number.
+Everything inside one such module is grouped by where it sits in that module's code. A module with
+no state (`nn.ReLU`, `nn.Dropout`, `nn.MaxPool2d`) is read as the function it is: its ops are
+grouped by where the stateful code around it called it, so one `nn.ReLU` called on two lines is two
+layers, exactly like `torch.relu` written on two lines, while one called from a loop line is one
+layer with a pass per iteration.
 
 Argument values, tensor shapes, shared weights and the shape of the graph are never evidence
 either way.
@@ -58,10 +63,15 @@ places in the code. `Looped` has one `tanh` layer and one `mul` layer, two passe
 For every recorded op TorchLens forms a key from four parts. Two ops are passes of one layer if
 and only if their keys are equal.
 
-1. **Scope**: the innermost module instance running when the op ran, by object identity (the root
-   model when no submodule is running). One instance reached through two parents is one scope.
+1. **Scope**: the innermost stateful module instance running when the op ran, by object identity
+   (the root model when none is running). A module is stateful when it, or any module below it,
+   registers a parameter or buffer that is not `None`; this is decided once per capture from what
+   the model declares, never from which weights the capture happened to read. One instance reached
+   through two parents is one scope.
 2. **Call site**: the chain of Python frames inside that module's current `forward` call, from the
-   `forward` down to the line that called the torch function. Each frame is reduced to its code
+   `forward` down to the line that called the torch function. A stateless module crossed on the way
+   adds its identity and its own frames, so two distinct `nn.ReLU` objects called from one line
+   (`nn.Sequential`'s loop, a `ModuleList` loop) stay two layers. Each frame is reduced to its code
    (file, function, first line and bytecode) and the instruction that was running in it. Helper
    functions, decorators, lambdas and torch's own Python (`torch.nn.functional`) are all part of
    the chain; TorchLens's own frames are not.
@@ -109,12 +119,23 @@ single-pass layers. Inputs and outputs are always single-pass layers.
 | Two same-type ops on one line, inside a loop | two layers, one pass per iteration each |
 | One raw weight used on two lines, `x @ W` twice | 2 single-pass `matmul` layers |
 | Embedding and output head with tied weights | separate layers |
-| One module called 3 times from a loop | 3 module calls; each op inside, one pass per call |
-| One module instance called from 3 different lines | 3 module calls; each op inside, one pass per call |
-| One `nn.ReLU` instance reused on 3 lines, with other ops between | 3 module calls; `relu` 3 passes |
+| One module with weights called 3 times from a loop | 3 module calls; each op inside, one pass per call |
+| One module instance with weights called from 3 different lines | 3 module calls; each op inside, one pass per call |
+| One `nn.ReLU` instance reused on 3 lines, with other ops between | 3 module calls; `relu` 3 single-pass layers |
+| `nn.Sequential(Linear, ReLU, Linear, ReLU)` | 2 single-pass `relu` layers (two distinct modules) |
+| A `ModuleList` of 3 distinct `nn.ReLU`, `for act in self.acts: x = act(x)` | 3 single-pass `relu` layers |
+| One `nn.ReLU` object passed to 8 blocks, each calling it on 2 lines | 16 module calls; 16 single-pass `relu` layers, two per block |
+| One `nn.ReLU` called from one loop line in the root `forward` | one module call per step; `relu` one pass per step |
+| `nn.Dropout`, `nn.MaxPool2d`, `nn.Flatten` or `nn.Identity` reused on 2 lines, train or eval | 2 single-pass layers |
+| A stateless `nn.Sequential(ReLU, Dropout)` called from one loop line, N times | every op N passes |
+| The same stateless `nn.Sequential` called from 2 lines | every op 2 single-pass layers |
+| A stateless module looped N times inside a stateful block called M times | 1 layer, M times N passes, numbered flat |
+| `BatchNorm` with running statistics reused on 2 lines | stateful: 2 module calls; each op 2 passes |
+| `BatchNorm2d(affine=False, track_running_stats=False)` reused on 2 lines | stateless: 2 single-pass layers |
+| A lazy module (`nn.LazyLinear`) called on 2 lines | stateful from the start: each op 2 passes |
 | One module instance shared by two parent modules | 2 module calls; each op inside, 1 layer with 2 passes |
 | A `ModuleList` of distinct but identical modules | separate layers |
-| Siamese encoder (one encoder on two inputs) | 2 module calls; every encoder op 2 passes |
+| Siamese encoder (one encoder on two inputs) | 2 module calls; every encoder op 2 passes, its activation modules included |
 | `[torch.exp(c) for c in cs]` | `exp` one pass per element |
 | `sum(h(x) for h in self.heads)` over a `ModuleList` | each head its own layer; builtin `sum` gives `radd` once and `add` N-1 times |
 | `map(torch.sin, xs)`, `map(lambda t: torch.sin(t), xs)` | `sin` one pass per element |
@@ -159,10 +180,20 @@ single-pass layers. Inputs and outputs are always single-pass layers.
 - A recording cooked with `Recording.to_trace()` groups by the call-site rule too: predicate
   capture keeps each recorded op's call site, so the cooked trace has the same layers and passes
   as `tl.trace` of the same model.
+- A module that first creates a parameter inside its own `forward` is stateless for the capture
+  that creates it: statefulness is read from the model before the forward runs.
+- Python attributes that are not parameters or buffers (a call counter, `Dropout.p`) are
+  configuration, not state, as for a plain function.
 - Captures without Python call-site evidence (the non-PyTorch backends) use the older
   structural grouper. `trace.options.grouping_policy["detector"]` says which
-  ran: `"callsite_v1"` for the call-site rule, `"grouper_v1"` for the structural grouper.
-- Saved traces keep the labels they were saved with; loading never regroups.
+  ran: `"callsite_v2"` for the call-site rule, `"grouper_v1"` for the structural grouper.
+  Traces saved before stateless modules were read as functions say `"callsite_v1"`; there every
+  module call was a pass of the ops inside it.
+- Saved traces keep the labels they were saved with; loading never regroups. A bundle that mixes
+  `"callsite_v1"` and `"callsite_v2"` traces of one model can label the same op differently.
+- A selector built from a layer label reaches only that layer: with a stateless `nn.ReLU` called on
+  two lines, `trace.edit("relu_1_3:all", ...)` reaches one of the two calls. Select the module
+  address (`layer1.0.relu`) to reach every call.
 
 ## How this relates to `site_key`
 

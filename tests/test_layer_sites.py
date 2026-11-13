@@ -68,8 +68,8 @@ class _Shrink(nn.Module):
     """Shared-site cohort fixture: one module called three times, each call
     taking a different branch line, mints three single-pass relu layers
     (grouping rule rows 41-42: per-line layers) that SHARE one site key, since
-    each is the first relu of its own call. (A reused ``nn.ReLU`` instance no
-    longer forms a cohort: its calls are one layer's passes, row 28.)"""
+    each is the first relu of its own call. (An ``nn.ReLU`` instance called
+    from one loop line forms no cohort: its calls are one layer's passes.)"""
 
     def __init__(self) -> None:
         super().__init__()

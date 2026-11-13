@@ -916,6 +916,16 @@
         "tests/test_sae5_save_door.py",
         "tests/test_selection_door.py"
       ],
+      "torchlens/_data_classes/_draw_keywords.py": [
+        "tests/test_auto_collapse_atomic_spans.py",
+        "tests/test_conditional_branches.py",
+        "tests/test_draw_keyword_teaching.py",
+        "tests/test_encoding_channels.py",
+        "tests/test_encoding_size.py",
+        "tests/test_indexing_coherence.py",
+        "tests/test_validation.py",
+        "tests/test_vizx_netron_baseline_diff.py"
+      ],
       "torchlens/_data_classes/_familiar_names.py": [
         "tests/test_indexing_coherence.py",
         "tests/test_io_plain_pickle.py",
@@ -1032,9 +1042,9 @@
         "tests/test_field_order_contract.py",
         "tests/test_indexing_coherence.py",
         "tests/test_io_scrub_policy.py",
+        "tests/test_pluck_fast_path.py",
         "tests/test_r18c_bridge_adapters.py",
-        "tests/test_record_field_policy.py",
-        "tests/test_strict_accessors.py"
+        "tests/test_record_field_policy.py"
       ],
       "torchlens/_data_classes/_module_accessor_filters.py": [
         "tests/surface_oracle/test_surface_oracle.py",
@@ -1395,8 +1405,8 @@
         "tests/test_io_pandas.py",
         "tests/test_postprocess_executor.py",
         "tests/test_postprocess_r14a_regressions.py",
-        "tests/test_shape_summary_row.py",
-        "tests/test_summary.py"
+        "tests/test_summary.py",
+        "tests/test_topology_summary.py"
       ],
       "torchlens/_data_classes/_template_walk.py": [
         "tests/godobject_oracle/test_aliases.py",
@@ -2146,9 +2156,9 @@
         "tests/behaviour/test_chunked_oracle.py",
         "tests/behaviour/test_hook_passes_restore.py",
         "tests/behaviour/test_hooks_oracle.py",
-        "tests/test_b2_sel_selector_doors.py",
         "tests/test_extract_fast_path.py",
         "tests/test_extract_text_fast_path.py",
+        "tests/test_pluck_fast_path.py",
         "tests/test_tvscope_clip_roundtrip.py"
       ],
       "torchlens/_extract_refusals.py": [
@@ -2158,7 +2168,7 @@
         "tests/behaviour/test_hooks_oracle.py",
         "tests/test_b2_sel_selector_doors.py",
         "tests/test_extract_fast_path.py",
-        "tests/test_extract_text_fast_path.py",
+        "tests/test_pluck_fast_path.py",
         "tests/test_tvscope_clip_roundtrip.py"
       ],
       "torchlens/_extraction/__init__.py": [
@@ -2181,7 +2191,7 @@
         "tests/behaviour/test_hooks_oracle.py",
         "tests/test_b2_sel_selector_doors.py",
         "tests/test_extract_fast_path.py",
-        "tests/test_extract_text_fast_path.py",
+        "tests/test_pluck_fast_path.py",
         "tests/test_tvscope_clip_roundtrip.py"
       ],
       "torchlens/_extraction/callable_identity.py": [
@@ -3143,9 +3153,9 @@
         "tests/test_io_platform_save_paths.py",
         "tests/test_io_secio_hardening.py",
         "tests/test_io_security.py",
+        "tests/test_pluck_fast_path.py",
         "tests/test_rf_ext_path.py",
-        "tests/test_tlspec_runnable_r75_envelope_path.py",
-        "tests/test_unpickle_c_path.py"
+        "tests/test_tlspec_runnable_r75_envelope_path.py"
       ],
       "torchlens/_io/payload_codec.py": [
         "tests/test_backend_registry.py",
@@ -4233,13 +4243,13 @@
       ],
       "torchlens/_postprocess/_grouping_stamp.py": [
         "tests/test_backend_constants_rule.py",
-        "tests/test_call_site_contract.py",
         "tests/test_grouping_stamp.py",
         "tests/test_loop_recurrence_hardening_2.py",
         "tests/test_preview_grad_tolerance_tripwires.py",
         "tests/test_refusal_gate_codes.py",
         "tests/test_selection_align.py",
-        "tests/test_validation_reasons_structural.py"
+        "tests/validation_goldens/test_arm_campaign_killers_mutants2.py",
+        "tests/validation_goldens/test_arm_campaign_killers_mutants3.py"
       ],
       "torchlens/_postprocess/_ingest_contract.py": [
         "tests/producer_parity/test_fastlog_late_buffer_probe.py",
@@ -5753,10 +5763,10 @@
         "tests/test_argpos_hardening.py",
         "tests/test_call_site_contract.py",
         "tests/test_capture_targets.py",
+        "tests/test_capture_unification_p3a.py",
         "tests/test_col_offset_map_frame_free.py",
         "tests/test_grouping_call_sites.py",
-        "tests/test_label_geometry.py",
-        "tests/test_loop_module_rolling.py",
+        "tests/test_livecheck_module_exit_only.py",
         "tests/test_r18h_introspect_hash.py"
       ],
       "torchlens/_utils/_callable_safety.py": [
@@ -5784,9 +5794,9 @@
         "tests/test_executor_cuda_cache_arming.py",
         "tests/test_numpy_bridge_compat.py",
         "tests/test_observe_kit_device_memory.py",
-        "tests/test_patching_helper_memory.py",
         "tests/test_r36_cuda_hygiene.py",
         "tests/test_rng_cuda_isolation.py",
+        "tests/test_sdpa_probe_forced_backend.py",
         "tests/test_torch_compat.py"
       ],
       "torchlens/_utils/_deferred_warnings.py": [
@@ -5853,7 +5863,7 @@
         "tests/test_extract_fast_path.py",
         "tests/test_grind_b4_lane_p.py",
         "tests/test_io_scrub_policy.py",
-        "tests/test_record_field_policy.py",
+        "tests/test_pluck_fast_path.py",
         "tests/test_repr_fix_contracts.py",
         "tests/test_repr_selection_intervention.py"
       ],
@@ -5954,7 +5964,7 @@
         "tests/test_foreign_kernel_boundary.py",
         "tests/test_lazy_torch_module_reads.py",
         "tests/test_numpy_bridge_compat.py",
-        "tests/test_runnable_fp32_precision_policy.py",
+        "tests/test_sdpa_probe_forced_backend.py",
         "tests/test_torch_compat.py",
         "tests/test_torch_compat_table.py"
       ],
@@ -6170,13 +6180,13 @@
       ],
       "torchlens/_utils/_subprocess.py": [
         "tests/test_doctor.py",
-        "tests/test_draw_headless.py",
+        "tests/test_doctor_expected_absences.py",
         "tests/test_r18i3_utils_residue.py",
         "tests/test_render_bugs.py",
-        "tests/test_render_substrate_vizfix.py",
         "tests/test_subprocess_grandchild_reaper.py",
         "tests/test_tlspec_unpickler_first_party_rce.py",
-        "tests/test_vizfix_skin_ink_and_legend.py"
+        "tests/test_vizfix_skin_ink_and_legend.py",
+        "tests/visualization/test_rolled_loop_route_fallback.py"
       ],
       "torchlens/_utils/_tensor_label.py": [
         "tests/test_capture_instrument.py",
@@ -6767,11 +6777,11 @@
         "tests/test_bundle_diff_renderer.py",
         "tests/test_cairosvg_capability.py",
         "tests/test_doctor.py",
+        "tests/test_doctor_expected_absences.py",
         "tests/test_explorer_watch_renderers.py",
         "tests/test_intervention_render_marks.py",
         "tests/test_label_geometry.py",
-        "tests/test_render_flow_reverse_index.py",
-        "tests/visualization/test_sibling_order_clusters.py"
+        "tests/test_render_flow_reverse_index.py"
       ],
       "torchlens/_visualization/_collapse_disclosures.py": [
         "tests/test_auto_collapse_atomic_spans.py",
@@ -7112,6 +7122,26 @@
         "tests/visualization/test_rolled_loop_edges.py",
         "tests/visualization/test_rolled_loop_route_fallback.py"
       ],
+      "torchlens/_visualization/_module_children.py": [
+        "tests/test_auto_collapse_atomic_spans.py",
+        "tests/test_auto_collapse_hardening.py",
+        "tests/test_collapse_auto_evenness.py",
+        "tests/test_collapse_optimizer.py",
+        "tests/test_collapse_power_ceiling.py",
+        "tests/test_collapse_segment_prefix.py",
+        "tests/test_render_substrate_collapse_parity.py",
+        "tests/test_render_substrate_themes.py"
+      ],
+      "torchlens/_visualization/_module_reuse.py": [
+        "tests/test_auto_collapse_atomic_spans.py",
+        "tests/test_default_buffer_fill.py",
+        "tests/test_draw_backward_key_and_rows.py",
+        "tests/test_draw_browser_widths.py",
+        "tests/test_draw_header_focus_key.py",
+        "tests/test_endpoint_rings.py",
+        "tests/test_transformer_lens_focus.py",
+        "tests/test_vizfix_skin_ink_and_legend.py"
+      ],
       "torchlens/_visualization/_mutated_params.py": [
         "tests/test_draw_headless.py",
         "tests/test_output_aesthetics.py",
@@ -7333,9 +7363,9 @@
         "tests/test_multi_trace_followons.py",
         "tests/test_render_bugs.py",
         "tests/test_render_substrate_vizfix.py",
-        "tests/test_rolled_pass_label_placement.py",
         "tests/test_vizfix_skin_ink_and_legend.py",
-        "tests/test_vizr_layout_and_outpath.py"
+        "tests/test_vizr_layout_and_outpath.py",
+        "tests/visualization/test_rolled_loop_route_fallback.py"
       ],
       "torchlens/_visualization/_rolled_edges.py": [
         "tests/test_auto_collapse_atomic_spans.py",
@@ -9147,11 +9177,11 @@
       ],
       "torchlens/backends/tf/_tf_compat.py": [
         "tests/test_doctor.py",
+        "tests/test_doctor_expected_absences.py",
         "tests/test_mechanical_belt.py",
         "tests/test_r18i3_utils_residue.py",
         "tests/test_r23_type_reduce_rce.py",
         "tests/test_report_honesty_wave0.py",
-        "tests/test_selective_save_zero_match_warning.py",
         "tests/test_tf_compat.py",
         "tests/test_tlspec_unpickler_first_party_rce.py"
       ],
@@ -9590,6 +9620,16 @@
         "tests/test_scoped_patching_escape_detection.py",
         "tests/test_wrap_state_compat.py"
       ],
+      "torchlens/backends/torch/_foreign_data_warning.py": [
+        "tests/behaviour/test_hook_passes_restore.py",
+        "tests/test_defaults.py",
+        "tests/test_exception_taxonomy.py",
+        "tests/test_save_union_lookup.py",
+        "tests/test_validate_save_options.py",
+        "tests/test_validation.py",
+        "tests/test_validation_degenerate_forward.py",
+        "tests/test_validation_uninitialized_dest.py"
+      ],
       "torchlens/backends/torch/_foreign_wrappers.py": [
         "tests/test_capture_guard_transactionality.py",
         "tests/test_completeness_witness.py",
@@ -9842,6 +9882,9 @@
         "tests/test_tl_lifecycle.py",
         "tests/test_validation_hardening.py",
         "tests/test_wrong_trace_cache_cluster.py"
+      ],
+      "torchlens/backends/torch/_module_state.py": [
+        "tests/test_grouping_call_sites.py"
       ],
       "torchlens/backends/torch/_op_markers.py": [
         "tests/test_capture_guard_transactionality.py",
@@ -10202,7 +10245,7 @@
         "tests/test_model_prep_hardening.py",
         "tests/test_model_state_hygiene.py",
         "tests/test_release_model.py",
-        "tests/test_tl_lifecycle.py",
+        "tests/test_session_forward_tag.py",
         "tests/test_torch_func_transforms.py"
       ],
       "torchlens/backends/torch/_sources_lazy.py": [
@@ -11752,8 +11795,8 @@
         "tests/test_auto_capture.py",
         "tests/test_capopts_truth_stop_after.py",
         "tests/test_freeze_module.py",
-        "tests/test_node_modes.py",
         "tests/test_onramp.py",
+        "tests/test_pluck_fast_path.py",
         "tests/test_public_entry_refusal_codes.py",
         "tests/test_replayable_callers.py",
         "tests/test_viz_render_identity_oracle.py"
@@ -12782,9 +12825,9 @@
         "tests/test_bundle_harness.py",
         "tests/test_bundle_module_edit_alignment.py",
         "tests/test_compare_gate_lattice.py",
-        "tests/test_intervention_phase9.py",
         "tests/test_multi_trace_followons.py",
-        "tests/test_report_honesty_wave0.py"
+        "tests/test_report_honesty_wave0.py",
+        "tests/test_topology_summary.py"
       ],
       "torchlens/intervention/_trace_edits.py": [
         "tests/test_intervention_phase8a.py",
@@ -13595,7 +13638,7 @@
         "tests/test_repr_fix_contracts.py"
       ],
       "torchlens/receptive_field/_path.py": [
-        "tests/test_extract_fast_path.py",
+        "tests/test_pluck_fast_path.py",
         "tests/test_r19b_rf_gradient_verify.py",
         "tests/test_rf_ext_forward_walk.py",
         "tests/test_rf_ext_path.py",
@@ -14169,12 +14212,12 @@
         "tests/test_distributed_honesty.py",
         "tests/test_doctor.py",
         "tests/test_doctor_backend_rows.py",
-        "tests/test_mechanical_belt.py",
+        "tests/test_doctor_expected_absences.py",
         "tests/test_r18a_compat_report.py"
       ],
       "torchlens/report/_environment.py": [
-        "tests/test_distributed_honesty.py",
         "tests/test_doctor.py",
+        "tests/test_doctor_expected_absences.py",
         "tests/test_mechanical_belt.py",
         "tests/test_r18a_compat_report.py",
         "tests/test_r18i3_utils_residue.py",
@@ -14422,6 +14465,16 @@
       "torchlens/report/_summary_result.py": [
         "tests/test_factcore_report_layer.py",
         "tests/test_summary_rebuild_result.py"
+      ],
+      "torchlens/report/_topology_text.py": [
+        "tests/test_compat_report.py",
+        "tests/test_factcore_report_layer.py",
+        "tests/test_r18a_compat_report.py",
+        "tests/test_report_family_cost.py",
+        "tests/test_report_family_perf.py",
+        "tests/test_report_honesty_wave0.py",
+        "tests/test_report_profile_behaviors.py",
+        "tests/test_w051_mechinterp_flops_report.py"
       ],
       "torchlens/report/_trace_facts.py": [
         "tests/test_auto_collapse_atomic_spans.py",

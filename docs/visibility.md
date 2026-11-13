@@ -50,6 +50,10 @@ Important examples:
 - `torch.nn.functional.scaled_dot_product_attention` is fused from TorchLens'
   perspective. You can intervene on the visible SDPA call output, but not the
   internal Q/K/V scores, attention probabilities, or value aggregation steps.
+  Reading them is still possible: the attention `facets` (`scores`, `pattern`, `z`)
+  are reconstructed read-only from the kernel's saved inputs and checked against
+  its output, without changing the kernel that runs; see
+  [Reconstruction](facets.md#reconstruction).
 - FlashAttention kernels have the same limitation: the kernel internals are not
   TorchLens leaf ops. A FlashAttention 4 call (`flash_attn.cute`) is one
   `autogradfunction` boundary op whose output you can intervene on.

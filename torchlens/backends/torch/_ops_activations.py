@@ -20,7 +20,7 @@ from ..._data_classes.op import (
     validate_train_mode_transform_output,
 )
 from ..._robustness import UnsupportedTensorVariantError
-from ..._utils._call_site import call_site_class
+from ..._utils._call_site import call_site_class, call_site_scope
 from ..._utils._tensor_label import (
     get_tensor_label,
     mark_detached_saved_activation,
@@ -63,18 +63,22 @@ def _call_site_equivalence_class(
     The class goes into the raw-graph workspace side table
     (``RawGraphWorkspace._call_site_classes``), never into ``equivalence_class``.
 
-    The key is ``(innermost module address, call-site chain, func_name, output
-    slot)``; ``N`` is its first-appearance index in this capture, so equal keys
-    get equal classes and the string is deterministic for the same model code.
-    Returns None when the chain is empty or belongs to a different wrapped call.
+    The key is ``(scope address, call-site chain, func_name, output slot)``,
+    the scope being the innermost stateful module on the op's module stack
+    (:func:`~torchlens._utils._call_site.call_site_scope`); ``N`` is its
+    first-appearance index in this capture, so equal keys get equal classes
+    and the string is deterministic for the same model code. Returns None when
+    the chain is empty or belongs to a different wrapped call.
     """
 
     ws = trace._raw_graph_ws
     pending = ws._pending_call_site
     if pending is None or pending[0] != fields_dict["func_call_id"] or not pending[1]:
         return None
-    modules = fields_dict["modules"]
-    scope = modules[-1][0] if modules else ""
+    scope = call_site_scope(
+        (address for address, _pass in fields_dict["modules"]),
+        trace._module_capture_ws.stateful_module_addresses,
+    )
     slot = i if fields_dict["in_multi_output"] else None
     key = (scope, pending[1], fields_dict["func_name"], slot)
     return call_site_class(ws._call_site_index, key, layer_type, slot)
@@ -225,7 +229,7 @@ def _log_output_tensor_info(
         fields_dict["equivalence_class"] = equivalence_class
         fields_dict["pass_number"] = 1
 
-    # Call-site grouping (step 7, ``callsite_v1``): when the capture walk saw
+    # Call-site grouping (step 7, ``callsite_v2``): when the capture walk saw
     # where this op ran, record its call-site class in the raw-graph workspace
     # side table that step 7 groups by. The class is internal and never
     # persisted (grouping rule section 3): ``equivalence_class`` above keeps the

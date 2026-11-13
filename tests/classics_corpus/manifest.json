@@ -1875,7 +1875,6 @@
     "feat:capture_warning",
     "feat:inplace",
     "feat:module_reused",
-    "feat:multipass",
     "func:__add__",
     "func:alpha_dropout",
     "func:cat",
@@ -1896,8 +1895,7 @@
     "mod:Sigmoid",
     "mod:Softmax",
     "size:lt50",
-    "trace:is_branching",
-    "trace:is_recurrent"
+    "trace:is_branching"
    ],
    "why": "first to cover 8 feature(s), e.g. func:alpha_dropout, mod:AlphaDropout, mod:SELU, func:selu",
    "census_seconds": 6.51,
@@ -3564,7 +3562,6 @@
     "dtype:float32",
     "feat:inplace",
     "feat:module_reused",
-    "feat:multipass",
     "func:atan",
     "func:conv2d",
     "func:dropout",
@@ -3578,8 +3575,7 @@
     "mod:Dropout",
     "mod:Linear",
     "mod:ReLU",
-    "size:lt50",
-    "trace:is_recurrent"
+    "size:lt50"
    ],
    "why": "first to cover 2 feature(s), e.g. func:atan, func:multiply",
    "census_seconds": 6.78,
@@ -4161,7 +4157,6 @@
     "dtype:int64",
     "feat:inplace",
     "feat:module_reused",
-    "feat:multipass",
     "feat:rank_ge5",
     "func:adaptive_max_pool3d_with_indices",
     "func:conv3d",
@@ -4179,8 +4174,7 @@
     "mod:MaxPool3d",
     "mod:ReLU",
     "size:lt50",
-    "trace:is_branching",
-    "trace:is_recurrent"
+    "trace:is_branching"
    ],
    "why": "first to cover 2 feature(s), e.g. func:adaptive_max_pool3d_with_indices, mod:AdaptiveMaxPool3d",
    "census_seconds": 15.19,
@@ -4697,7 +4691,6 @@
     "feat:internal_source",
     "feat:module_depth_ge4",
     "feat:module_reused",
-    "feat:multipass",
     "func:__getitem__",
     "func:__iadd__",
     "func:__mul__",
@@ -4736,8 +4729,7 @@
     "mod:ReLU",
     "mod:Sequential",
     "size:lt500",
-    "trace:is_branching",
-    "trace:is_recurrent"
+    "trace:is_branching"
    ],
    "why": "first to cover 2 feature(s), e.g. func:concatenate, func:concat",
    "census_seconds": 15.79,
@@ -5864,7 +5856,6 @@
     "feat:intermediate_output",
     "feat:internal_source",
     "feat:module_reused",
-    "feat:multipass",
     "func:__add__",
     "func:__eq__",
     "func:__getitem__",
@@ -5890,8 +5881,7 @@
     "mod:Sigmoid",
     "mod:Softplus",
     "size:lt500",
-    "trace:is_branching",
-    "trace:is_recurrent"
+    "trace:is_branching"
    ],
    "why": "first to cover 1 feature(s), e.g. func:atleast_2d",
    "census_seconds": 9.72,
@@ -6064,7 +6054,6 @@
     "feat:internal_source",
     "feat:module_depth_ge4",
     "feat:module_reused",
-    "feat:multipass",
     "feat:rank_ge5",
     "func:__add__",
     "func:__mul__",
@@ -6094,8 +6083,7 @@
     "mod:Sequential",
     "mod:UpsamplingBilinear2d",
     "size:lt500",
-    "trace:is_branching",
-    "trace:is_recurrent"
+    "trace:is_branching"
    ],
    "why": "first to cover 2 feature(s), e.g. mod:UpsamplingBilinear2d, mod:AvgPool2d",
    "census_seconds": 23.09,
@@ -6962,7 +6950,6 @@
     "feat:intermediate_output",
     "feat:internal_source",
     "feat:module_reused",
-    "feat:multipass",
     "func:__add__",
     "func:__getitem__",
     "func:batch_norm",
@@ -6978,8 +6965,7 @@
     "mod:ELU",
     "mod:Sequential",
     "size:lt500",
-    "trace:is_branching",
-    "trace:is_recurrent"
+    "trace:is_branching"
    ],
    "why": "first to cover 1 feature(s), e.g. func:feature_dropout_",
    "census_seconds": 21.05,
@@ -7646,7 +7632,6 @@
     "feat:inplace",
     "feat:internal_source",
     "feat:module_reused",
-    "feat:multipass",
     "func:__iadd__",
     "func:__mul__",
     "func:adaptive_avg_pool1d",
@@ -7674,8 +7659,7 @@
     "mod:Sequential",
     "mod:Sigmoid",
     "size:lt500",
-    "trace:is_branching",
-    "trace:is_recurrent"
+    "trace:is_branching"
    ],
    "why": "second witness for mod:AdaptiveAvgPool1d, func:adaptive_avg_pool1d, mod:AvgPool2d, func:avg_pool2d",
    "census_seconds": 11.12,
@@ -10376,7 +10360,6 @@
     "dtype:float32",
     "feat:inplace",
     "feat:module_reused",
-    "feat:multipass",
     "func:dropout_",
     "func:leaky_relu",
     "func:linear",
@@ -10385,8 +10368,7 @@
     "mod:Dropout",
     "mod:LeakyReLU",
     "mod:Linear",
-    "size:lt500",
-    "trace:is_recurrent"
+    "size:lt500"
    ],
    "why": "second witness for func:dropout_, mod:LeakyReLU, func:leaky_relu, mod:Dropout",
    "census_seconds": 9.21,
@@ -10404,7 +10386,6 @@
    "features": [
     "dtype:float32",
     "feat:module_reused",
-    "feat:multipass",
     "func:__add__",
     "func:cat",
     "func:clone",
@@ -10421,8 +10402,7 @@
     "mod:ReflectionPad2d",
     "mod:UpsamplingNearest2d",
     "size:lt500",
-    "trace:is_branching",
-    "trace:is_recurrent"
+    "trace:is_branching"
    ],
    "why": "second witness for mod:UpsamplingNearest2d, mod:ReflectionPad2d, func:clone, func:pad",
    "census_seconds": 9.75,

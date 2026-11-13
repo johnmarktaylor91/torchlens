@@ -1,15 +1,16 @@
-"""Call-site grouping (``detector="callsite_v1"``): one test per row of the rule's case table.
+"""Call-site grouping (``detector="callsite_v2"``): one test per row of the rule's case table.
 
-The rule: a layer is one operation written at one place in a module's code; running that
-place again (loop, recursion, comprehension) is another pass of the same layer, and an op inside
-a module runs once per module call (``m:1``, ``m:2``), so its passes match the module's calls. Two different places are two layers, even with the same
-function and the same weights. Argument values, shapes, shared weights and graph shape are
-never evidence. Each test traces a tiny model and compares the multiset of
-``(func_name, num_passes)`` over its layers with the row's expected answer, written as
-``"tanh:3 linear:1x2"`` (one tanh layer with 3 passes, two single-pass linear layers).
-
-Rows 27, 28, 30 and 31 depend on the module-call choice
-(``torchlens._utils._call_site.MODULE_CALL_IS_PASS``, decided True) and run under both values.
+The rule: a layer is one operation written at one place in the code; running that place
+again (loop, recursion, comprehension) is another pass of the same layer. A module that owns
+state (a parameter or buffer, its own or a descendant's) is a scope: an op inside it runs once
+per module call (``m:1``, ``m:2``), so its passes match the module's calls. A module with no
+state (``nn.ReLU``, ``nn.Dropout``) is read as the function it is, grouped by where the stateful
+code around it called it, its identity kept so two such modules on one loop line stay apart.
+Two different places are two layers, even with the same function and the same weights.
+Argument values, shapes, shared weights and graph shape are never evidence. Each test traces
+a tiny model and compares the multiset of ``(func_name, num_passes)`` over its layers with the
+row's expected answer, written as ``"tanh:3 linear:1x2"`` (one tanh layer with 3 passes, two
+single-pass linear layers).
 """
 
 from __future__ import annotations
@@ -46,7 +47,7 @@ def _capture(build: Callable[[], nn.Module], x: Any) -> Any:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         trace = tl.trace(model, x)
-    assert trace.options.grouping_policy["detector"] == "callsite_v1"
+    assert trace.options.grouping_policy["detector"] == "callsite_v2"
     return trace
 
 
@@ -76,9 +77,6 @@ def _shape(build: Callable[[], nn.Module], x: Any = None) -> Counter[tuple[str, 
     """Trace ``build()`` on ``x`` (default 2x4 ones) and return its layer shape."""
 
     return _layer_shape(_capture(build, _x() if x is None else x))
-
-
-FORK = pytest.mark.parametrize("module_call_is_pass", [True, False], ids=["module", "caller"])
 
 
 # ---------------------------------------------------------------- shared models
@@ -752,19 +750,26 @@ class NoPythonFrame(Holder):
         return self.total([x, x, x])
 
 
-def _no_python_frame() -> nn.Module:
+def _no_python_frame(stateful: bool = True) -> nn.Module:
     act, total = nn.Module(), nn.Module()
     act.forward = torch.relu  # type: ignore[method-assign]
     total.forward = functools.partial(functools.reduce, torch.add)  # type: ignore[method-assign]
+    if stateful:  # a registered buffer makes each module a grouping scope
+        act.register_buffer("state", torch.zeros(1))
+        total.register_buffer("state", torch.zeros(1))
     return NoPythonFrame(act=act, total=total)
 
 
 # Kept by the shrink-r4 coverage proof: sole branch coverage of backends/torch/_session_cleanup.py, backends/torch/_session_forwards.py and more and a sole campaign mutation kill.
 def test_row64_no_python_frame_inside_module_call() -> None:
-    """Row 64: no Python frame inside a module call falls back to position: a builtin
-    forward called twice is one layer 2p; two adds in one C-level call stay two layers."""
+    """Row 64: no Python frame inside a stateful module call falls back to position: a
+    builtin forward called twice is one layer 2p; two adds in one C-level call stay two
+    layers. Without state the modules read as the functions they are, so the C-level
+    ``reduce`` is one instruction making two same-function calls: one layer 2p (Limits)."""
     wrap_torch()  # the builtin forwards must hold the wrapped torch functions
     assert _shape(_no_python_frame) == _expect("__mul__:1 relu:2 add:1x2")
+    stateless = _shape(lambda: _no_python_frame(stateful=False))
+    assert stateless == _expect("__mul__:1 relu:2 add:2")
 
 
 class MapAndSum(nn.Module):
@@ -869,3 +874,214 @@ def test_row74_batchnorm_running_stats_stay_separate_layers() -> None:
     buffers = {op.layer_label: op for op in trace._layer_list if op.graph.is_buffer}
     assert buffers, "BatchNorm in train mode logs its running stats"
     assert {int(op.num_passes or 1) for op in buffers.values()} == {1}
+
+
+# ---------------------------------------------------------------- stateless modules (callsite_v2)
+
+
+def _only(shape: Counter[tuple[str, int]], *names: str) -> Counter[tuple[str, int]]:
+    """The part of a layer shape whose function is one of ``names``."""
+
+    return Counter({key: count for key, count in shape.items() if key[0] in names})
+
+
+class ActLoop(Holder):
+    def forward(self, x: Tensor) -> Tensor:
+        for act in self.acts:
+            x = act(x)
+        return x
+
+
+class SharedActBlock(Holder):
+    def forward(self, x: Tensor) -> Tensor:
+        y = self.act(self.l1(x))
+        return self.act(self.l2(y))
+
+
+class SharedActNet(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        act = nn.ReLU()
+        self.blocks = nn.ModuleList(SharedActBlock(act=act, l1=_lin(), l2=_lin()) for _ in range(3))
+
+    def forward(self, x: Tensor) -> Tensor:
+        for blk in self.blocks:
+            x = blk(x)
+        return x
+
+
+class RootStepLoop(Holder):
+    def forward(self, x: Tensor) -> Tensor:
+        h = torch.zeros(x.shape[0], 4)
+        for t in range(x.shape[1]):
+            h = self.act(self.lin(x[:, t]) + h)
+        return h
+
+
+class Encoder(Holder):
+    def forward(self, x: Tensor) -> Tensor:
+        return self.act(self.lin(x))
+
+
+class TwoLines(Holder):
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.m(x)
+        return self.m(x * 0.5)
+
+
+class OneLineLoop(Holder):
+    def forward(self, x: Tensor) -> Tensor:
+        for _ in range(3):
+            x = self.m(x)
+        return x
+
+
+class StatelessInnerLoopBlock(Holder):
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.lin(x)
+        for _ in range(2):
+            x = self.act(x)
+        return x
+
+
+class ReadmeLoop(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.fc1, self.fc2 = _lin(), _lin()
+
+    def forward(self, x: Tensor) -> Tensor:
+        if x.sum() < 0:
+            x = -x
+        for _ in range(2):
+            x = self.fc2(torch.relu(self.fc1(x)))
+        return x
+
+
+def test_stateless_module_on_three_lines_is_three_layers() -> None:
+    """One ``nn.ReLU`` called on three lines (the torchvision block pattern): three layers."""
+
+    shape = _shape(lambda: ReLUModuleReused(act=nn.ReLU(), l1=_lin(), l2=_lin(), l3=_lin()))
+    assert shape == _expect("linear:1x3 relu:1x3")
+
+
+def test_sequential_activations_stay_apart() -> None:
+    """Tripwire: ``Sequential(Linear, ReLU, Linear, ReLU)`` calls both ReLUs from one line."""
+
+    assert _shape(lambda: nn.Sequential(_lin(), nn.ReLU(), _lin(), nn.ReLU())) == _expect(
+        "linear:1x2 relu:1x2"
+    )
+
+
+def test_modulelist_of_distinct_activations_from_one_line() -> None:
+    """Three distinct ``nn.ReLU`` objects iterated from one line stay three layers."""
+
+    shape = _shape(lambda: ActLoop(acts=nn.ModuleList(nn.ReLU() for _ in range(3))))
+    assert shape == _expect("relu:1x3")
+
+
+def test_one_activation_shared_by_blocks_groups_per_block() -> None:
+    """Tripwire: one ``nn.ReLU`` passed to three blocks gives two layers per block."""
+
+    assert _shape(SharedActNet) == _expect("linear:1x6 relu:1x6")
+
+
+def test_stateless_module_in_root_step_loop_is_one_layer_per_step() -> None:
+    """A stateless module called from one loop line in the root forward: one pass per step."""
+
+    shape = _shape(lambda: RootStepLoop(act=nn.ReLU(), lin=_lin()), _x(2, 3, 4))
+    assert _only(shape, "relu", "linear") == _expect("relu:3 linear:3")
+
+
+def test_stateless_module_inside_stateful_encoder_follows_its_calls() -> None:
+    """Siamese: a stateless module inside a stateful encoder called on two lines: two passes."""
+
+    shape = _shape(lambda: SiameseTwoLines(enc=Encoder(lin=_lin(), act=nn.ReLU())))
+    assert _only(shape, "relu", "linear") == _expect("relu:2 linear:2")
+
+
+@pytest.mark.parametrize(
+    "make",
+    [
+        lambda: nn.Dropout(0.5).train(),
+        lambda: nn.Tanh(),
+        lambda: nn.BatchNorm1d(4, affine=False, track_running_stats=False),
+    ],
+    ids=["dropout", "tanh", "batchnorm_without_state"],
+)
+def test_stateless_module_on_two_lines_is_two_layers(make: Callable[[], nn.Module]) -> None:
+    """A stateless module reused on two lines gives single-pass layers only."""
+
+    shape = _shape(lambda: TwoLines(m=make()))
+    assert {passes for _func, passes in shape} == {1}, shape
+
+
+def test_batchnorm_with_running_stats_reused_is_two_passes() -> None:
+    """BatchNorm with running statistics owns buffers: called on two lines it is two passes."""
+
+    shape = _shape(lambda: TwoLines(m=nn.BatchNorm1d(4).eval()))
+    assert _only(shape, "batch_norm") == _expect("batch_norm:2")
+
+
+def test_lazy_module_is_stateful_before_its_first_call() -> None:
+    """A lazy module registers uninitialized parameters, so its calls are passes."""
+
+    shape = _shape(lambda: TwoLines(m=nn.LazyLinear(4)))
+    assert _only(shape, "linear") == _expect("linear:2")
+
+
+def test_stateless_sequential_from_one_loop_line_and_from_two_lines() -> None:
+    """A stateless ``Sequential`` reads as a function: one loop line N passes, two lines two."""
+
+    assert _shape(lambda: OneLineLoop(m=nn.Sequential(nn.ReLU(), nn.Tanh()))) == _expect(
+        "relu:3 tanh:3"
+    )
+    two = _shape(lambda: TwoLines(m=nn.Sequential(nn.ReLU(), nn.Tanh())))
+    assert _only(two, "relu", "tanh") == _expect("relu:1x2 tanh:1x2")
+
+
+def test_stateless_loop_inside_reused_block_numbers_flat() -> None:
+    """A stateless module looped N times inside a block called M times: one M*N-pass layer."""
+
+    shape = _shape(lambda: BlockLoop(block=StatelessInnerLoopBlock(lin=_lin(), act=nn.ReLU())))
+    assert _only(shape, "relu", "linear") == _expect("relu:6 linear:3")
+
+
+def test_readme_loop_model_keeps_its_two_pass_relu() -> None:
+    """The README loop model's relu is a loop and stays ``relu_1_5:2``."""
+
+    trace = _capture(ReadmeLoop, -_x(1, 4))
+    relu = next(op for op in trace._layer_list if op.func_name == "relu")
+    assert relu.layer_label == "relu_1_5"
+    assert int(relu.num_passes) == 2
+
+
+def test_stateful_module_facts() -> None:
+    """Statefulness: own or descendant non-None parameter or buffer, decided from the model."""
+
+    from torchlens.backends.torch._module_state import stateful_modules
+
+    holder = Holder(
+        lin=_lin(),
+        act=nn.ReLU(),
+        bn_free=nn.BatchNorm1d(4, affine=False, track_running_stats=False),
+        bn=nn.BatchNorm1d(4),
+        lazy=nn.LazyLinear(4),
+        wrap=Wrap(body=_lin()),
+        empty=nn.Sequential(nn.ReLU(), nn.Dropout()),
+    )
+    holder.register_buffer("unset", None)
+    found = set(stateful_modules(holder))
+    names = {name for name, module in holder.named_modules() if id(module) in found}
+    assert names == {"", "lin", "bn", "lazy", "wrap", "wrap.body"}
+
+
+def test_cooked_recording_groups_stateless_modules_like_trace() -> None:
+    """``tl.record`` keys call sites on the same stateful scope as ``tl.trace``."""
+
+    torch.manual_seed(0)
+    model = SharedActNet().eval()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        cooked = tl.record(model, _x(), save=lambda ctx: ctx.kind == "op").to_trace()
+    assert cooked.options.grouping_policy["detector"] == "callsite_v2"
+    assert _layer_shape(cooked) == _shape(SharedActNet)

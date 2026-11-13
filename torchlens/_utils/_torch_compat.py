@@ -544,13 +544,11 @@ def _probe_safe_weights_only_load() -> bool:
 
 def _probe_parameter_as_subclass_in_dispatch_mode() -> bool:
     """Return whether ``Parameter.as_subclass(torch.Tensor)`` works in a dispatch mode (see the leaf)."""
-
     return _real_op_probe_leaf().probe_parameter_as_subclass_in_dispatch_mode(TorchDispatchMode)
 
 
 def _probe_subclass_ctor_in_dispatch_mode() -> bool:
     """Return whether a strict Tensor subclass can be built in a dispatch mode (see the leaf)."""
-
     return bool(_real_op_probe_leaf().probe_subclass_ctor_in_dispatch_mode(TorchDispatchMode))
 
 
@@ -1630,7 +1628,9 @@ OPTIONAL_CAPABILITY_FLAGS: frozenset[str] = frozenset(
         # Torch 2.1 names the unchecked view replay ``_view_func``: the documented
         # fallback of get_view_func_replay, not a degradation.
         "HAS_VIEW_FUNC_UNSAFE",
-        # Newer-torch SDPA and view surfaces: absent means a model cannot call them.
+        # Newer-torch SDPA and view surfaces, and the third-party flash-attn 4 package (a CUDA
+        # extension, not torch): absent means a model cannot call them, so nothing degrades.
+        "HAS_FLASH_ATTENTION_4_INTERFACE",
         "HAS_REV_VIEW_FUNC_UNSAFE",
         "HAS_SDPA_GQA",
         "HAS_SDPA_EMPTY_ROW_ZERO",
@@ -1670,8 +1670,8 @@ OPTIONAL_CAPABILITY_FLAGS: frozenset[str] = frozenset(
         # Deterministic uninit-memory fill, device-agnostic GradScaler, torch.nn.attention,
         # torch.nn.RMSNorm, and tuple-dim any()/all() all postdate the torch>=2.1 floor: their
         # absence is a healthy old install with a real fallback (fill flag) or nothing to shim
-        # (TorchLens product code never constructs a GradScaler/RMSNorm or calls sdpa_kernel itself;
-        # the tuple-dim reduction falls back to sequential single-axis reduction).
+        # (product code never constructs a GradScaler/RMSNorm; sdpa_kernel only pins its own SDPA
+        # probes, which absorb a refusal without it; tuple-dim falls back to single-axis reduction).
         "HAS_DETERMINISTIC_FILL_FLAG",
         # fp32_precision controls (torch >= 2.9): absent means no second precision representation
         # exists to snapshot, not a degradation.

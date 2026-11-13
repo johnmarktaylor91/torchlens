@@ -101,12 +101,22 @@ REMOVED_PAPER_ERA_NAMES = [
 ]
 
 
+#: Removed accessor classes have no public import; their redirect names the public
+#: Trace attribute that returns them instead of the private module that defines them.
+PUBLIC_ATTRIBUTE_REDIRECTS = {
+    "GradFnAccessor": "torchlens.Trace.autograd",
+    "LayerAccessor": "torchlens.Trace.layers",
+    "ModuleAccessor": "torchlens.Trace.modules",
+}
+
+
 def test_removed_top_level_names_redirect_and_stay_hidden() -> None:
     """Every removed top-level spelling refuses typed and ``dir(torchlens)`` advertises none.
 
     One test over the four name tables (the per-name parametrization folded: its arcs are all
     covered by kept tests, but these tables are the data pin the migration guide cites per name).
-    A moved name's redirect names its canonical module and the canonical spelling resolves.
+    A moved name's redirect names its canonical module (or, for a removed accessor class, the
+    public Trace attribute that returns it) and the canonical spelling resolves.
     """
 
     failures: list[str] = []
@@ -114,8 +124,9 @@ def test_removed_top_level_names_redirect_and_stay_hidden() -> None:
         try:
             getattr(torchlens, old_name)
         except FacadeTeachingError as error:
-            if error.fields["code"] != "facade_redirect" or module_name not in str(error):
-                failures.append(f"{old_name}: redirect does not name {module_name}: {error}")
+            expected = PUBLIC_ATTRIBUTE_REDIRECTS.get(old_name, module_name)
+            if error.fields["code"] != "facade_redirect" or expected not in str(error):
+                failures.append(f"{old_name}: redirect does not name {expected}: {error}")
         else:
             failures.append(f"{old_name}: still resolves at the top level")
         if getattr(importlib.import_module(module_name), new_name, None) is None:

@@ -1,4 +1,4 @@
-"""The call-site grouping contract (``callsite_v1``) and its in-memory evidence.
+"""The call-site grouping contract (``callsite_v1``, ``callsite_v2``) and its in-memory evidence.
 
 Grouping rule section 3 keeps the call-site key internal: it is never persisted
 and never written into a public field, so ``equivalence_class`` keeps its

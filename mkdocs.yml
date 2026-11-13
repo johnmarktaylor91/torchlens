@@ -219,7 +219,7 @@ nav:
       - gallery/ioi_circuit.md
       - gallery/jacobian_lens.md
       - gallery/neuro_rdms.md
-  - Doors:
+  - Where to start:
       - doors/agents.md
       - doors/mechinterp.md
       - doors/neuroai.md
@@ -320,6 +320,7 @@ nav:
       - reference/observability_substrate.md
       - reference/onebackward_reads.md
       - reference/report_family.md
+      - reference/stable_api.md
       - reference/stats.md
       - reference/structure_only_capabilities.md
       - reference/summary.md

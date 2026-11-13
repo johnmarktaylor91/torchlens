@@ -1,11 +1,16 @@
-"""Call-site keys for layer grouping (step 7, ``detector="callsite_v1"``).
+"""Call-site keys for layer grouping (step 7, ``detector="callsite_v2"``).
 
 The grouping rule (``docs/guides/grouping.md``): an operation is a layer, and
-running the same place in a module's code again is another pass of it. The
-place is the chain of Python frames inside the innermost module call, from that
-module's ``forward`` down to the frame that called the torch function, each frame
-reduced to ``(code unit, instruction)``. Argument values, tensor shapes, shared
-weights and graph shape are never evidence.
+running the same place in the code again is another pass of it. The place is
+the chain of Python frames inside the innermost STATEFUL module call (a module
+that registers a parameter or buffer, itself or below it; the root model when
+none), from that module's ``forward`` down to the frame that called the torch
+function, each frame reduced to ``(code unit, instruction)``. A stateless module
+crossed on the way is read as the function it is: its frames stay in the chain
+behind one identity token, so one ``nn.ReLU`` called from two lines is two
+layers while two ``nn.ReLU`` objects called from one loop line stay apart.
+Argument values, tensor shapes, shared weights and graph shape are never
+evidence.
 
 This module turns the raw frames the capture walk already visits
 (``introspection._get_code_context``) into that chain. Everything is cached per
@@ -17,21 +22,70 @@ from __future__ import annotations
 import dis
 import sys
 import weakref
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from types import CodeType, FrameType
 from typing import Any
 
-#: The one place the module-call choice lives (decided True, 2026-10-29: calling
-#: one module object again is another module call, ``m:1``, ``m:2``, ``m:3``).
-#: True: a module instance is a scope, so each module call, from any line or
-#: through any parent, runs every op inside it once more, and the op's layer gets
-#: one pass per module call. False: the caller's frames stay in the chain, so
-#: ``self.m(x)`` on two lines gives two layers while module calls still read
-#: ``m:1`` and ``m:2``.
-MODULE_CALL_IS_PASS = True
-
 #: Marks a call-site equivalence class (``<type>@cs<N>``).
 CALL_SITE_CLASS_MARKER = "@cs"
+
+
+def call_site_scope(addresses: Iterable[str], stateful: frozenset[str] | None) -> str:
+    """The grouping scope of an op: the innermost stateful module on its module stack.
+
+    ``addresses`` is the op's module stack, outermost first. A module call is a
+    pass of the ops inside it only for a stateful module (the 2026-10-29 ruling,
+    narrowed to modules that own state on 2026-11-08); ``""`` (the root) when no
+    stateful module encloses the op. ``stateful`` is ``None`` before the session
+    decided it, and then every module is a scope.
+    """
+
+    stack = list(addresses)
+    if stateful is None:
+        return stack[-1] if stack else ""
+    for address in reversed(stack):
+        if address in stateful:
+            return address
+    return ""
+
+
+def stop_or_cross(frame: FrameType, position: int, crossed: list[tuple[int, Any]]) -> int:
+    """Stop the call-site chain at a module forward wrapper frame, or cross it.
+
+    ``position`` is the number of survivors (user frames, innermost first) the
+    capture walk kept below this wrapper. A stateless module's wrapper is
+    crossed: ``(position, module)`` is appended to ``crossed`` (its identity
+    becomes a token at that place in the chain) and ``-1`` is returned, so the
+    walk goes on to the stateful module or root that called it. A stateful
+    module's wrapper ends the chain: ``position`` is returned. The wrapper
+    (``model_prep.module_forward_decorator``) holds its ``module`` (closure)
+    and the ``trace`` it records into (local), read the way the walk reads
+    ``_call_impl``'s ``self``; the stateful set is that trace's
+    (``ModuleCaptureWorkspace.stateful_module_ids``). A wrapper that records
+    nothing, or a trace that decided no set, ends the chain as before.
+    """
+
+    names = frame.f_locals
+    workspace = getattr(names.get("trace"), "_module_capture_ws", None)
+    stateful_ids = getattr(workspace, "stateful_module_ids", None)
+    module = names.get("module")
+    if stateful_ids is not None and module is not None and id(module) not in stateful_ids:
+        crossed.append((position, module))
+        return -1
+    return position
+
+
+def chain_boundary(inner_boundary_pos: int, outer_boundary_pos: int, last_forward_pos: int) -> int:
+    """How many survivors (innermost first) belong to the op's call-site chain.
+
+    The chain stops at the innermost stateful module's forward wrapper
+    (:func:`stop_or_cross`). With no stateful wrapper it runs up to the root
+    model's forward (the outermost wrapper or ``forward`` survivor).
+    """
+
+    if inner_boundary_pos >= 0:
+        return inner_boundary_pos
+    return max(outer_boundary_pos, last_forward_pos + 1)
 
 
 def call_site_class(
@@ -39,8 +93,8 @@ def call_site_class(
 ) -> str:
     """Return the call-site class ``<type>@cs<N>`` of one op output.
 
-    ``key`` is ``(innermost module address, call-site chain, func_name, output
-    slot)``; ``N`` is its first-appearance number in ``index``, the per-capture
+    ``key`` is ``(scope address, call-site chain, func_name, output slot)``
+    (:func:`call_site_scope`); ``N`` is its first-appearance number in ``index``, the per-capture
     table the caller owns, so equal keys get equal classes and the string is
     deterministic for the same model code. Exhaustive capture and predicate
     recording mint through this one function, so a cooked recording groups by
@@ -205,12 +259,14 @@ def collapse_recursion(tokens: list[tuple[Any, Any]]) -> tuple[tuple[Any, Any], 
 
 
 def module_scope_entry(module: Any) -> tuple[tuple[str, int], int]:
-    """A raw chain entry for a module whose hook an op runs in.
+    """A raw chain entry for a module crossed inside the op's scope.
 
-    Hooks run in ``_call_impl`` before the module's forward wrapper, so the
-    module is not the op's scope; its identity in the chain keeps the hooks of
-    distinct modules (two weight-normed convolutions in one ``Sequential``)
-    apart while one module called again still repeats its hook's place.
+    Two kinds of module get one: a module whose hook the op runs in (hooks run
+    in ``_call_impl`` before the module's forward wrapper, so the module is not
+    the op's scope), and a stateless module the op runs inside. Its identity in
+    the chain keeps distinct modules apart (two weight-normed convolutions in
+    one ``Sequential``, two ``nn.ReLU`` objects called from ``Sequential``'s
+    loop line) while one module called again from one place repeats its place.
     """
 
     return (("module", id(module)), 0)

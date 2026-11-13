@@ -13,7 +13,7 @@
 | `normalize_sdist.py` | Deterministic sdist/wheel normalization for reproducible releases (invoked by `build_command` + the nightly double-build gate) |
 | `render_collapse_reference.py` | Regenerate the collapse reference images |
 | `render_large_graph.py` | Render synthetic large graphs with layout backends |
-| `run_notebooks.py` | Execute every user notebook with nbclient (nightly `notebooks` leg; needs the `test` extra); the `HEAVY_NOTEBOOKS` run alone after the `-j` pool; `--write-outputs` regenerates the stored outputs of the ten-minute tutorial, the learning path and the README-linked notebooks |
+| `run_notebooks.py` | Execute every user notebook with nbclient (nightly `notebooks` leg; needs the `test` extra); the `HEAVY_NOTEBOOKS` run alone after the `-j` pool; `--write-outputs` regenerates the stored outputs of the ten-minute tutorial, the learning path, the README-linked notebooks and the Mamba-130m Jacobian lens Colab |
 
 ## Release Safety
 A major version ships only on the maintainer's explicit command. Three stops, each failing

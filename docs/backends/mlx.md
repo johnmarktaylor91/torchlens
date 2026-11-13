@@ -44,7 +44,7 @@ payload.
 
 When the forward still reaches an operation no wrapper saw (a function outside the wrapped
 surface such as `mx.linalg.norm`, or an `mx.array(...)` built inside the forward), the trace
-is marked `capture_verified=False` with reason `unwrapped_op_in_capture` and a warning says
+is marked `provenance.verified=False` with reason `unwrapped_op_in_capture` and a warning says
 how many arrays were affected. Callers who want a hard stop instead switch the backend-local
 policy:
 

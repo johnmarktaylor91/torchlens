@@ -62,6 +62,33 @@
   structure but a different count in each run stay unpaired and say `ambiguous`. Traces with
   equal fingerprints pair by label, row for row as before, and `align="label"` always does.
 
+## v3.0.3 (2026-11-08)
+
+### Changed
+
+- **output_table**: on a language model, `output_table(k=3)` gives `k` rows per batch item for
+  the next token at the last position, with columns `batch_item`, `rank`, `token_id`, `text`
+  and `prob`; before, it gave one argmax row per item that joined every position's argmax into
+  one string.
+
+### Performance
+
+- **pluck**: `tl.pluck` takes the hooked fast path when the request is eligible, and with
+  `stop_after` on an eligible module it halts the forward at that module (GPT-2 small from
+  about 3.6x to 0.2x a plain forward).
+
+### Fixed
+
+- **packaging**: the `compat-shims` extra admits sentence-transformers 5.x, so it installs
+  alongside the `tlens-oracle` extra.
+
+### Documentation
+
+- How it works documents `unwrap_when_done` and `wrapped()`; the README's Extract section
+  separates `trace.run`, `tl.record` and `tl.extract`; a new tutorial notebook covers models
+  whose graph changes between forwards; the speed tables include pluck and the remeasured
+  `tl.extract` row.
+
 ## v3.0.2 (2026-11-06)
 
 ### Fixed

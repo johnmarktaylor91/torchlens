@@ -33,9 +33,9 @@ def _tiny_trace(**kwargs) -> tl.Trace:
 
 
 def _healthy() -> dict:
-    # Torch captures carry call-site evidence, so step 7 runs callsite_v1.
+    # Torch captures carry call-site evidence, so step 7 runs callsite_v2.
     return build_grouping_policy_stamp(
-        ran_recurrence_grouping=True, requested="structural", detector="callsite_v1"
+        ran_recurrence_grouping=True, requested="structural", detector="callsite_v2"
     )
 
 
@@ -76,7 +76,7 @@ def test_stamp_written_on_default_and_degraded_paths() -> None:
         "requested": "structural",
         "folded_sites": "none",
         "site_join": "none",
-        "detector": "callsite_v1",
+        "detector": "callsite_v2",
         "effective": True,
         "settlement_note": None,
     }
@@ -115,6 +115,8 @@ def test_validation_rule_matrix() -> None:
         "vocabulary"  # params_only is a POLICY value, never a requested value
     )
     assert validate_grouping_policy_stamp({**_healthy(), "detector": "grouper_v1"}) is None
+    # A trace saved under the earlier call-site detector loads its stamp verbatim.
+    assert validate_grouping_policy_stamp({**_healthy(), "detector": "callsite_v1"}) is None
     assert validate_grouping_policy_stamp({**_healthy(), "detector": "grouper_v2"}) == "vocabulary"
     assert validate_grouping_policy_stamp({**_healthy(), "effective": "yes"}) == "vocabulary"
     assert validate_grouping_policy_stamp({**_healthy(), "settlement_note": "oops"}) == (

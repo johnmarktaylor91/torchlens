@@ -966,7 +966,7 @@ def _torch_compile_row(model: nn.Module) -> DoctorCheck:
                 "are logged. One exception: the stance engages only when Dynamo is already "
                 "imported at capture entry, so a compiled callable CREATED inside the "
                 "forward of a process whose first torch._dynamo import happens mid-capture "
-                "is bypassed and disclosed (capture_verified=False, reason "
+                "is bypassed and disclosed (trace.provenance.verified=False, reason "
                 "dynamo_region_not_logged), not logged."
             )
         suggestion = (

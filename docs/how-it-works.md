@@ -161,8 +161,9 @@ The three main record types answer different questions.
   addressed as `block:1`, `block:2`.
 
 Grouping is structural. Two Ops belong to the same Layer when they share four things: the innermost
-module instance that ran them, the call site (the Python frame chain inside that module's
-`forward`), the operation name, and the output slot. A `for` loop that applies the same code three
+module instance that owns state (parameters or buffers) and ran them, the call site (the Python
+frame chain inside that module's `forward`, stateless modules such as `nn.ReLU` included as part of
+the place), the operation name, and the output slot. A `for` loop that applies the same code three
 times therefore yields one Layer with three passes, while the same three calls written out by hand
 yield three Layers, because their call sites differ. The [grouping guide](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/guides/grouping.md)
 covers the rule and its edge cases.

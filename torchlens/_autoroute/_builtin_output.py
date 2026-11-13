@@ -16,6 +16,7 @@ from torchlens._autoroute._decode_heads import (
     _safe_int,
     _safe_str,
     _select_tensor_by_head,
+    _softmax_topk,
     _tensor_candidates,
 )
 from torchlens._autoroute._decode_spellings import (
@@ -152,7 +153,7 @@ def _decode_selected(
     """Decode one selected tensor under a resolved style into JSON rows."""
 
     if resolved.style == "hf_text":
-        return _decode_hf_text(logits, meta)
+        return _decode_hf_text(logits, meta, top_n=top_n)
     labels = _labels_for_resolved(resolved)
     if labels is None:
         return None
@@ -770,9 +771,7 @@ def _decode_classification(
         return None
     if logits_copy.shape[-1] > len(labels):
         return None
-    probs = torch.softmax(logits_copy.float(), dim=-1)
-    k = min(top_n, int(probs.shape[-1]))
-    values, indices = torch.topk(probs, k=k, dim=-1)
+    values, indices, k = _softmax_topk(logits_copy, top_n)
     rows: list[dict[str, Any]] = []
     for batch_index in range(indices.shape[0]):
         for rank in range(k):

@@ -14,15 +14,16 @@ locally it needs the ``test`` extra (nbclient, ipykernel)::
 
 Only the notebooks in ``STORED_OUTPUT_NOTEBOOKS`` keep outputs in git (the ten-minute
 tutorial, the learning path, the multi-call bundle and activation patching notebooks the
-README links, the Jacobian lens recipe, whose GPT-2 small fit takes minutes to rerun, and the
-logit lens recipe the README links;
+README links, the Jacobian lens recipe, whose GPT-2 small fit takes minutes to rerun, the
+Mamba-130m Jacobian lens Colab notebook, whose stored figures show before Colab runs anything, and
+the logit lens recipe the README links;
 GitHub renders them as the first impression).
 ``--write-outputs`` executes them and writes their outputs back in place with machine paths, timings,
 widget state and other run-to-run noise scrubbed (``_scrub_outputs``); every other notebook is
 committed without outputs (``tests/test_notebook_output_policy.py``).
 
 Notebooks in ``HEAVY_NOTEBOOKS`` each run for minutes (batched backward passes through
-GPT-2 small, or a long concept-erasure sweep). Two of them sharing a 4-CPU runner each slow
+GPT-2 small or Mamba-130m, or a long concept-erasure sweep). Two of them sharing a 4-CPU runner each slow
 several-fold (past the cell timeout), so the runner executes the light notebooks in the ``-j`` pool first and then each heavy
 notebook alone, one at a time. The per-cell and whole-notebook timeouts are the same for
 both, so a heavy notebook that slows down still fails.
@@ -60,9 +61,11 @@ STORED_OUTPUT_NOTEBOOKS = (
     "notebooks/learn/08_semantic_shortcuts.ipynb",
     "notebooks/learn/09_scale.ipynb",
     "notebooks/learn/10_beyond_one_forward.ipynb",
+    "notebooks/learn/11_dynamic_graphs.ipynb",
     "examples/workflows/multi_call_bundle.ipynb",
     "examples/workflows/paired_prompt_patching.ipynb",
     "examples/methods/jacobian_lens_recipe.ipynb",
+    "examples/methods/jacobian_lens_mamba_colab.ipynb",
     "examples/methods/logit_lens_recipe.ipynb",
 )
 # Run alone, after the parallel pool: each runs for minutes, and sharing a 4-CPU runner with
@@ -72,6 +75,7 @@ HEAVY_NOTEBOOKS = frozenset(
     {
         "examples/methods/attribution_graph_transcoders_recipe.ipynb",
         "examples/methods/eap_ig_circuit_recipe.ipynb",
+        "examples/methods/jacobian_lens_mamba_colab.ipynb",
         "examples/methods/jacobian_lens_recipe.ipynb",
         "examples/methods/leace_concept_erasure_recipe.ipynb",
     }

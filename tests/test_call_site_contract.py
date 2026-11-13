@@ -1,9 +1,9 @@
-"""The call-site grouping contract (``callsite_v1``) is a live tripwire.
+"""The call-site grouping contract (``callsite_v2``) is a live tripwire.
 
 Grouping rule section 3 keeps the call-site key internal, so ``equivalence_class``
 keeps its argument/parameter fingerprint and step 7 groups by a raw-graph
 workspace side table. Two locked loop-detection invariants that encoded the old
-grouper's rule were replaced for ``callsite_v1`` traces:
+grouper's rule were replaced for call-site grouped traces:
 
 - old: layers sharing (func_name, param barcodes, equivalence_class) are one layer;
   new: two different layers never share a call-site key (contract (ii));
@@ -123,14 +123,14 @@ def test_equivalence_clause_still_fires_on_a_layer_type_mismatch() -> None:
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_loaded_trace_reports_the_contract_unchecked(tmp_path: Path) -> None:
-    """A loaded callsite_v1 trace has no side table: re-validation says so, never passes it."""
+    """A loaded call-site grouped trace has no side table: re-validation says so, never passes it."""
 
     torch.manual_seed(0)
     trace = tl.trace(_TanhLoop(), _x())
     spec = tmp_path / "loop.tlspec"
     trace.save(str(spec))
     loaded = tl.load(str(spec))
-    assert loaded.options.grouping_policy["detector"] == "callsite_v1"
+    assert loaded.options.grouping_policy["detector"] == "callsite_v2"
     assert contract.call_site_classes_for(loaded) is None
     check_metadata_invariants(loaded)
     unchecked = [

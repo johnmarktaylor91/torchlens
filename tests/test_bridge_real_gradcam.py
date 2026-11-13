@@ -17,7 +17,7 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens._errors import AmbiguousOpLookupError, InvalidArgumentError
+from torchlens._errors import InvalidArgumentError
 from torchlens._utils._record_group_table import record_member
 
 pytorch_grad_cam = pytest.importorskip("pytorch_grad_cam")
@@ -132,22 +132,23 @@ def test_constructor_options_still_reach_the_constructor(resnet) -> None:
 
 
 def test_label_of_a_module_that_runs_twice_is_refused(resnet) -> None:
-    """A basic block's relu runs twice; a label naming one of its calls refuses typed."""
+    """A basic block's relu module runs twice; a label naming one of its calls refuses typed."""
 
     _model, _x, log = resnet
     ops = [op for op in log._layer_list if _outermost(op) == "layer4.1.relu"]
     assert ops, "expected an op whose outermost module is layer4.1.relu"
-    # The bare label names the two-pass relu layer, not one op: it refuses typed
-    # rather than resolving to another op whose raw spelling it equals.
-    with pytest.raises(AmbiguousOpLookupError):
-        tl.bridge.pytorch_grad_cam.layer(log, ops[0].layer_label)
-    with pytest.raises(InvalidArgumentError) as info:
-        tl.bridge.pytorch_grad_cam.layer(log, ops[0].label)
-    assert info.value.fields["code"] == "bridge_module_site_multi_call"
-    # The remedy points at the enclosing single-call block, never at the
-    # multi-call module whose hook would mix both calls.
-    assert "'layer4.1'" in info.value.fields["remedy"]
-    assert "'layer4.1.relu'" not in info.value.fields["remedy"]
+    # Stateless modules group by call site (callsite_v2): the block's two relu
+    # calls sit on two source lines, so each is its own one-pass layer and the
+    # bare layer label names one op. The module behind that op still runs twice,
+    # so the bare label and the op label both refuse as a multi-call site.
+    for site in (ops[0].layer_label, ops[0].label):
+        with pytest.raises(InvalidArgumentError) as info:
+            tl.bridge.pytorch_grad_cam.layer(log, site)
+        assert info.value.fields["code"] == "bridge_module_site_multi_call"
+        # The remedy points at the enclosing single-call block, never at the
+        # multi-call module whose hook would mix both calls.
+        assert "'layer4.1'" in info.value.fields["remedy"]
+        assert "'layer4.1.relu'" not in info.value.fields["remedy"]
     with pytest.raises(InvalidArgumentError) as info:
         tl.bridge.pytorch_grad_cam.layer(log, "layer4.1.relu:1")
     assert info.value.fields["code"] == "bridge_module_site_multi_call"

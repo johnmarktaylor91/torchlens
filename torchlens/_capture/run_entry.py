@@ -37,6 +37,7 @@ from .._literals import (
 from .._save_budget import SaveBudgetExceededError, SaveBudgetOption
 from .._utils._tensor_label import get_tensor_label
 from .._utils.tensor_utils import SaveMode
+from ..backends.torch._foreign_data_warning import warn_unresolved_foreign_data
 from ..backends.torch.bound_root import (
     TLBoundMethodRoot,
 )
@@ -551,6 +552,7 @@ def _finish_run_entry(
         layers_to_save_request=r._selective_layers_to_save_request,
     )
     record_host_tensor_source_advisory(trace)
+    warn_unresolved_foreign_data(trace)
     _record_capture_intervention_event(
         trace,
         r.intervene_predicate

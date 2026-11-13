@@ -320,14 +320,16 @@ def test_plain_numpy_round_trip_is_not_collapsed() -> None:
     (``tests/test_foreign_data_roundtrip.py``): the host constructor is one ``foreigndata``
     op whose parent is the departed tensor, the ``detach`` stays visible, and the host
     arithmetic in the gap makes validation fail with a typed reason instead of the former
-    silent constant replay.
+    silent constant replay. The capture says so once, and says nothing else.
     """
 
     model = _PlainNumpyRoundTripModel()
     x = torch.randn(3, 4)
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", TorchLensWarning)
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter("always", TorchLensWarning)
         trace = tl.trace(model, x)
+    codes = [w.message.fields.get("code") for w in rec if isinstance(w.message, TorchLensWarning)]
+    assert codes == ["foreign_data_roundtrip_unresolved"]
     assert _boundary_ops(trace) == []
     assert not any(op.type == "fromnumpy" for op in trace._layer_list)
     round_trips = [op for op in trace._layer_list if op.func_name == "foreigndata"]

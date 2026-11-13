@@ -3,9 +3,10 @@
 Importing torchlens has **no side effects** on the torch namespace -- and no
 torch import at all until first use (tier-0 CLI verbs and
 manifest preflights stay torch-free). Torch functions are wrapped lazily on
-the first call to ``trace()`` and stay wrapped afterward. TorchLens 2.0 keeps
-the top-level namespace intentionally small; historical spellings live in
-their owning submodules.
+the first call to ``trace()`` and stay wrapped afterward. TorchLens keeps the
+top-level namespace intentionally small: other names live in their owning
+submodules, and a removed top-level spelling raises an AttributeError that
+names its new home.
 
 For AI agents: start with ``torchlens.agent.guide()`` (or ``python -m torchlens guide``), a
 cookbook of recipes; also ``trace.to_agent_json()``, ``trace.explain()`` and the CLI.
@@ -19,7 +20,7 @@ if _typing.TYPE_CHECKING:
     from ._data_classes.trace import Trace
 
 #: Released together with the io copy in _vocab/_package_version.py (test_version_coherence).
-__version__ = "3.0.2"
+__version__ = "3.0.3"
 
 _LAZY_ATTRS = {
     # Import cold-start laziness (rebaselined 2026-08-19): the former
@@ -223,10 +224,10 @@ _REDIRECTS: dict[str, str] = {
     "get_model_metadata": "use torchlens.trace(model, x, save='none') -- a metadata-only capture is a trace that saves no payloads",
     "get_model_structure": "use torchlens.summary(model, x) for the module tree, or torchlens.trace(model, x).modules",
     "GradFn": "use torchlens.types.GradFn",
-    "GradFnAccessor": "use torchlens._data_classes.grad_fn.GradFnAccessor",
+    "GradFnAccessor": "use torchlens.Trace.autograd (trace.autograd.grad_fns returns a GradFnAccessor; the class has no public import)",
     "GradFnCall": "use torchlens.types.GradFnCall",
     "intervening": "use torchlens.without_op -- intervening was renamed",
-    "LayerAccessor": "use torchlens._data_classes._layer_accessors.LayerAccessor",
+    "LayerAccessor": "use torchlens.Trace.layers (trace.layers returns a LayerAccessor; the class has no public import)",
     "list_logs": "use torchlens.io.list_traces",
     "load_intervention_spec": "use torchlens.io.load_intervention_spec",
     "log_forward_pass": "use torchlens.trace(model, x) -- log_forward_pass was the pre-2.0 capture verb",
@@ -236,7 +237,7 @@ _REDIRECTS: dict[str, str] = {
     "ModelHistory": "use torchlens.Trace -- ModelHistory was renamed ModelLog, then Trace",
     "ModelLog": "use torchlens.Trace -- ModelLog was renamed Trace",
     "Module": "use torchlens.types.Module",
-    "ModuleAccessor": "use torchlens._data_classes.module.ModuleAccessor",
+    "ModuleAccessor": "use torchlens.Trace.modules (trace.modules returns a ModuleAccessor; the class has no public import)",
     "ModuleCall": "use torchlens.types.ModuleCall",
     "ModuleInputSnapshot": "use torchlens.types.ModuleInputSnapshot",
     "NodeSpec": "use torchlens.viz.NodeSpec",

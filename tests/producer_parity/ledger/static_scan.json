@@ -4756,7 +4756,7 @@
   "field": "modules",
   "file": "torchlens/_visualization/_condensed_flow.py",
   "has_default": false,
-  "sites": 2,
+  "sites": 1,
   "via_getattr": false
  },
  {
@@ -4939,14 +4939,6 @@
   "ambiguous": true,
   "field": "modules",
   "file": "torchlens/_visualization/_header_block.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "modules",
-  "file": "torchlens/_visualization/_header_block.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -4963,6 +4955,22 @@
   "ambiguous": true,
   "field": "kind",
   "file": "torchlens/_visualization/_legend.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_visualization/_module_children.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_visualization/_module_reuse.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -5276,7 +5284,7 @@
   "field": "modules",
   "file": "torchlens/_visualization/collapse_optimizer.py",
   "has_default": false,
-  "sites": 15,
+  "sites": 14,
   "via_getattr": false
  },
  {
@@ -6872,6 +6880,14 @@
   "via_getattr": false
  },
  {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/backends/torch/_foreign_data_warning.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
   "ambiguous": false,
   "field": "func_call_id",
   "file": "torchlens/backends/torch/_function_boundary.py",
@@ -7156,7 +7172,7 @@
   "field": "module_stack",
   "file": "torchlens/backends/torch/_ops_predicate_events.py",
   "has_default": false,
-  "sites": 5,
+  "sites": 6,
   "via_getattr": false
  },
  {
@@ -10229,6 +10245,14 @@
   "file": "torchlens/report/_summary_result.py",
   "has_default": false,
   "sites": 9,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/report/_topology_text.py",
+  "has_default": false,
+  "sites": 1,
   "via_getattr": false
  },
  {

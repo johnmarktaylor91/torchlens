@@ -6027,3 +6027,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: d16082d4b10d94e98a3a026dc9cc19478ade4716
 recorded: 2026-11-13T02:05:21Z
+---
+generator: scripts/regen_ledgers.py (producer static half)
+flag: none (deterministic ledger step)
+reason: callsite_v2 stateless-module grouping: summary topology, reuse note and child-address modules
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 48fd01e1898cf7537a305d6338c628bf4b266c59
+recorded: 2026-11-08T23:38:07Z
+---
+generator: scripts/regen_ledgers.py (producer static half)
+flag: none (deterministic ledger step)
+reason: ledger-owner regen at c9c0d5381: static-scan moved
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: c9c0d53813804811b661c1af51b2f1f1c2a00366
+recorded: 2026-11-10T00:43:14+00:00

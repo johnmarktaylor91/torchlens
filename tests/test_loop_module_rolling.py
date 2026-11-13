@@ -11,7 +11,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._utils import _call_site
 from torchlens._visualization._pass_label_placement import place_pass_labels
 from torchlens._visualization._render_nodes import compute_default_node_lines
 
@@ -730,29 +729,47 @@ def test_colon_call_ranges_disambiguate_split_regions(tmp_path: Path) -> None:
     assert _normalized_title(inside_outside_trace, "linear", "lin") == "lin:1,2-4"
 
 
-def test_inside_outside_relu_continuous_chain_is_one_atomic_rectangle(tmp_path: Path) -> None:
-    """A continuous relu chain rolls to one atomic-module rectangle with a plain count.
+def test_continuous_relu_chain_is_one_atomic_rectangle(tmp_path: Path) -> None:
+    """A continuous relu chain from one loop line rolls to one atomic-module rectangle.
 
-    ``InsideOutsideRelu`` feeds each relu into the next, so all five calls form one
-    recurrent chain at a single site -- it rolls to one node, marked as the atomic
-    ``@relu`` module (a rectangle), with a plain ``(x5)`` count and no split range.
+    ``ReusedReluLoop`` feeds each relu call into the next from one loop line, so all
+    four calls form one recurrent chain at a single site -- it rolls to one node,
+    marked as the atomic ``@relu`` module (a rectangle), with a plain ``(x4)`` count
+    and no split range.
     """
 
-    trace = _trace(InsideOutsideRelu())
-    assert _normalized_title(trace, "relu", "relu") == "relu (x5)"
+    trace = _trace(ReusedReluLoop())
+    assert _normalized_title(trace, "relu", "relu") == "relu (x4)"
 
-    dot = _render_dot(trace, tmp_path, "inside_outside_relu", depth=1)
-    assert "relu_1_1 (x5)" in dot
+    dot = _render_dot(trace, tmp_path, "relu_loop_chain", depth=1)
+    assert "relu_1_1 (x4)" in dot
     # Atomic single-op module is marked as a module and rendered as a rectangle.
     assert "@relu" in dot
-    assert _dot_node_shapes(dot).get("relu_1_1 (x5)") == "box"
+    assert _dot_node_shapes(dot).get("relu_1_1 (x4)") == "box"
     # Single contiguous site -> no split call range on the marking.
     assert "@relu:" not in dot
 
 
-def test_separable_atomic_module_marks_distinct_calls(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_inside_outside_relu_chain_splits_at_the_outside_line(tmp_path: Path) -> None:
+    """A stateless relu called once before its loop is two layers, two atomic rectangles.
+
+    ``InsideOutsideRelu`` chains the outside call into four loop calls. ``nn.ReLU``
+    owns no state, so its calls group by call site (``callsite_v2``): the outside
+    line is one layer and the loop line a 4-pass layer, and the markings name the
+    calls each rectangle holds (``@relu:1`` and ``@relu:2-5``).
+    """
+
+    trace = _trace(InsideOutsideRelu())
+    dot = _render_dot(trace, tmp_path, "inside_outside_relu", depth=1)
+    shapes = _dot_node_shapes(dot)
+    assert shapes.get("relu_1_1") == "box"
+    assert shapes.get("relu_2_2") == "box"
+    assert "@relu:1" in dot
+    assert "@relu:2-5" in dot
+    assert "relu_1_1 (x" not in dot
+
+
+def test_separable_atomic_module_marks_distinct_calls(tmp_path: Path) -> None:
     """An atomic module reused at separable outside+inside sites labels its calls.
 
     Unlike the continuous chain, ``InsideOutsideReluSeparable`` uses the relu at an
@@ -762,10 +779,8 @@ def test_separable_atomic_module_marks_distinct_calls(
     already maximally collapsed.
     """
 
-    # Separable calls of one module instance are distinct layers only under pure
-    # call-site grouping; with MODULE_CALL_IS_PASS (the default) the reused relu
-    # is one 4-pass layer, the case test_grouping_call_sites row 28 pins.
-    monkeypatch.setattr(_call_site, "MODULE_CALL_IS_PASS", False)
+    # ``nn.ReLU`` owns no state, so its calls group by call site (``callsite_v2``):
+    # the outside line is one layer and the loop line a 3-pass layer.
     trace = _trace(InsideOutsideReluSeparable())
     shallow_dot = _render_dot(trace, tmp_path, "relu_sep_shallow", depth=1)
     deep_dot = _render_dot(trace, tmp_path, "relu_sep_deep", depth=1000)

@@ -2130,13 +2130,13 @@ class MLXBackend:
         if get_unwrapped_policy() == "refuse":
             raise BackendUnsupportedError(
                 message + " The MLX unwrapped policy is 'refuse'; capture under the default 'flag' "
-                "policy to keep the trace marked capture_verified=False instead",
+                "policy to keep the trace marked trace.provenance.verified=False instead",
                 code=UNWRAPPED_OP_REASON,
             )
 
         warnings.warn(
             TorchLensWarning(
-                message + " This capture is marked capture_verified=False. "
+                message + " This capture is marked trace.provenance.verified=False. "
                 "Remedy: route the computation through the wrapped mx, mx.fast or nn "
                 "surface, or set the MLX unwrapped policy to 'refuse' to make the gap an error",
                 code="unwrapped_op_in_capture",

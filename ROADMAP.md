@@ -24,7 +24,8 @@
 - Alternate storage backends after the current manifest/body split is stable.
 - Clearer migration tooling for older saved artifacts.
 
-## 3.0
+## Major releases
 
-Breaking changes are deferred until enough incompatible cleanup has accumulated to justify a major
-release. Scope and timing are TBD.
+3.0 shipped on 6 November 2026; 3.0.1 is the first 3.0 release on PyPI (`CHANGELOG.md` lists the
+changes, `MIGRATIONS.md` the upgrade path). Further breaking changes wait until enough incompatible
+cleanup has accumulated to justify another major release.

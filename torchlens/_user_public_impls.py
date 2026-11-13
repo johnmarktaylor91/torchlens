@@ -174,19 +174,19 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
 ) -> str:
     """Run a metadata-only forward pass and return a rendered summary report.
 
-    The one-call door is SAFE by default: the captured forward runs in
+    The one-call summary is SAFE by default: the captured forward runs in
     eval mode under ``torch.no_grad()``, and every module training flag plus
     the host/device RNG state is restored bit-identically afterwards -- a
     summary call never mutates the model (BatchNorm running stats included)
     or advances the caller's RNG streams. The function RETURNS the result
     and never auto-prints (the repr self-displays).
 
-    Input precedence follows the quickstart ladder: real
-    ``inputs`` XOR ``input_shape=`` XOR nothing. ``input_shape=``
+    Give exactly one of: a real ``inputs``, ``input_shape=``, or
+    nothing. ``input_shape=``
     synthesizes seeded tensors per the quickstart grammar and the synthesis
     is disclosed in the render; a zero-input call infers a verified input
-    and REUSES its verification trace (no second capture). Mixing the
-    spellings refuses typed (``input_rung_conflict``).
+    and REUSES its verification trace (no second capture). Passing a real
+    input and ``input_shape=`` together raises ``input_rung_conflict``.
 
     Parameters
     ----------
@@ -197,11 +197,11 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
         needs ``input_shape=`` or meta inputs. Requires ``transformers``; the
         string form is DOCUMENTED-UNSTABLE.
     inputs:
-        Positional args for ``model.forward()``. The quickstart input ladder
-        applies: a real input is the gold rung; omit it and pass
-        ``input_shape=`` for a declared shape with synthesized values; omit
-        both for an inferred shape. Non-gold rungs are disclosed in the
-        trace's persistent provenance record and in the summary text.
+        Positional args for ``model.forward()``. A real input is best; omit
+        it and pass ``input_shape=`` for a declared shape with synthesized
+        values, or omit both for an inferred shape. A synthesized input is
+        disclosed in the trace's persistent provenance record and in the
+        summary text.
     input_kwargs:
         Keyword args for ``model.forward()``.
     input_shape:
@@ -219,7 +219,7 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
     **summary_kwargs:
         Forwarded to ``Trace.summary`` (the summary grammar). They are
         validated BEFORE the capture runs: a removed legacy spelling or an
-        unknown option refuses typed without executing the model.
+        unknown option raises a typed error without executing the model.
 
     Returns
     -------
@@ -606,7 +606,7 @@ def validate_forward_pass(
         Torch intra-op threads for the validation forwards, restored afterwards.
     trace_observer:
         Called once per run with the validation trace after replay and before its
-        cleanup, or with ``None`` at a precondition refusal; see ``tl.validate``.
+        cleanup, or with ``None`` when a precondition fails; see ``tl.validate``.
 
     Returns
     -------

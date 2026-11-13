@@ -15,7 +15,7 @@ import torch
 from .._data_classes._lookup_kinds import _record_view
 from .._data_classes.trace import Trace
 from .._errors import AmbiguousOpLookupError
-from .._extract_fast import extract_outputs
+from .._extract_fast import extract_outputs, try_module_output_pluck
 from .._extract_refusals import (
     CaptureOptions,
     TorchLensError,
@@ -199,6 +199,16 @@ def pluck(
         ``op_lookup_not_found`` if ``layer`` does not resolve;
         ``activation_not_saved`` if it produced no saved tensor.
 
+    Notes
+    -----
+    When ``layer`` is an exact module address, the model is in eval mode and
+    the input is one tensor or text on the model's device (the conditions of
+    :func:`extract`'s fast path), pluck runs one plain forward with a hook on
+    that module instead of a capture, and returns the same tensor. A
+    ``stop_after`` that is an exact module address ends that forward from a
+    hook right after the module's first call, so the rest of the model never
+    runs. Any other request runs the full capture.
+
     Examples
     --------
     >>> relu_out = pluck(model, x, "relu")
@@ -206,6 +216,9 @@ def pluck(
     (1, 4, 8, 8)
     """
 
+    fast = try_module_output_pluck(model, inputs, layer, stop_after)
+    if fast is not None:
+        return fast
     # an explicit site rides the door's stop_after=, where the trace
     # validates it; without one the trace reads the ambient site itself.
     trace = _capture_trace(model, inputs, save=[layer], stop_after=stop_after)

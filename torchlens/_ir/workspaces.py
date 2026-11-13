@@ -87,7 +87,7 @@ class RawGraphWorkspace:
     _call_site_index: dict[Any, int] = field(default_factory=dict)
     #: Raw op label -> its call-site class (``<type>@cs<N>``, plus ``_outindex<k>``
     #: for one output slot of a multi-output call) for every op whose call site
-    #: the capture walk saw. Step 7 groups by it (``callsite_v1``) and checks the
+    #: the capture walk saw. Step 7 groups by it (``callsite_v2``) and checks the
     #: call-site contract against it. Internal and never persisted: it goes away
     #: with the workspace, and ``equivalence_class`` keeps its argument/parameter
     #: fingerprint for its other consumers.
@@ -137,6 +137,12 @@ class ModuleCaptureWorkspace:
     # wrapper) per decorated submodule; installed at session start, emptied by
     # the session cleanup that puts every prior forward back.
     session_forward_wrappers: list[tuple[Any, Any, Any]] = field(default_factory=list)
+    # The capture's stateful modules (own or descendant non-None parameter or buffer),
+    # by ``id`` for the capture walk's wrapper frames and by prepared address for
+    # module-stack entries: the call-site grouping scopes (``callsite_v2``). Decided once
+    # at session start; ``None`` before that, when every module is read as a scope.
+    stateful_module_ids: frozenset[int] | None = None
+    stateful_module_addresses: frozenset[str] | None = None
 
 
 def _init_module_hierarchy_data() -> dict[str, Any]:

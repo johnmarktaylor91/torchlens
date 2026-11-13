@@ -33,6 +33,10 @@ ATTENTION_MARK = "^"
 #: first (lossless, the fold row's ``×N``), then a counted elision.
 _SHAPE_CELL_BUDGET = 60
 
+#: Capture-footer wording for ``Trace.provenance.verified``; ``None`` (the default
+#: capture does not arm the completeness witness) reads "verification not checked".
+_VERIFIED_TEXT: dict[bool | None, str] = {True: "verified", False: "unverified"}
+
 
 class CellTotals(NamedTuple):
     """Whole-model denominators the percent cells divide by."""
@@ -518,8 +522,7 @@ def render_summary_pair(
     capture_bits = [facts.backend or "?"]
     if facts.outcome_status:
         capture_bits.append(facts.outcome_status)
-    if facts.capture_verified is True:
-        capture_bits.append("verified")
+    capture_bits.append(_VERIFIED_TEXT.get(facts.capture_verified, "verification not checked"))
     health = _health_text(facts.health_verdict)
     capture_bits.append(f"{health} ({facts.health_hint})" if facts.health_hint else health)
     lines.append(f"Capture  {' | '.join(capture_bits)}")

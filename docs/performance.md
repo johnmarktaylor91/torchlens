@@ -26,6 +26,7 @@ dygraph/eager replay and static-inventory audit costs; TensorFlow capture runs l
 | Disk-backed selected payloads | `tl.trace(..., storage=tl.to_disk(path))` | Keeps selected payloads portable without retaining them all in RAM. |
 | Intervention during the forward pass | `tl.trace(..., intervene=tl.when(...), save=...)` | Live edits cost more than passive capture; use only when the model must execute edited values. |
 | Steering or patching over many forwards or through `generate()` | `tl.when(site, action).bind(model)` | Capture-free, about 1x a plain forward hook; see [choosing a fast path](guides/fast_paths.md). |
+| One module's output | `tl.pluck(model, x, "module.address")`, with `stop_after="module.address"` to stop the forward pass after it | One plain forward with a hook, no capture (0.98x a plain forward on GPT-2 small, 0.18x with `stop_after=` at its third block), when the name is an exact module address, the model is in eval mode and the input is one tensor or text on the model's device; see [one module's output](guides/fast_paths.md#one-modules-output-tlpluck). Otherwise a full capture. |
 | Final logits only | plain `model(x)` | TorchLens adds wrapper dispatch and metadata work; skip it when no intermediate data is needed. |
 
 ## Fast activation pull
@@ -108,9 +109,15 @@ with the partial capture on `exc.partial_trace`.
 
 ### Escape diagnostics
 
-The sys.modules crawler is deleted (replaced by the rescue re-run + the
-mechanical belt), so the default capture pays no crawl cost. The callable
-detector is a separate, opt-in diagnostic cost:
+The default capture does not scan every loaded module for stale references to
+torch functions, so it pays no scanning cost. Two narrower steps cover that
+ground instead: when TorchLens wraps torch, it also patches module-level names
+bound to a torch function before the wrap (such as `from torch import bmm`); and
+when a finished `tl.trace` capture shows a sign that an op escaped the
+wrappers, TorchLens re-runs the forward once with a `TorchFunctionMode` that
+routes stale references to their wrappers, warns that the forward ran twice,
+and discloses the re-run on the trace. The callable detector is a separate,
+opt-in diagnostic cost:
 
 ```python
 import torch
@@ -136,8 +143,8 @@ mode is the cost; the values add memory (roughly 1.4x to 2.7x the saved `Op.out`
 intermediate ATen result is kept), not time. With the switch off nothing is installed.
 
 The independent aten-level completeness witness is also opt-in and can run alone or alongside the
-callable detector. **This is the only route to `capture_verified=True`.** A plain `tl.trace()` never
-arms it: every default capture reads `capture_verified=None`, which every honesty surface renders as
+callable detector. **This is the only route to `provenance.verified=True`.** A plain `tl.trace()` never
+arms it: every default capture reads `provenance.verified=None`, which every honesty surface renders as
 "not checked" -- not a clean bill. Escapes the wrappers themselves observe (worker-thread ops,
 `torch.jit.script` regions, direct `torch.ops.aten.*` calls, `.data.copy_()`) still ceiling the
 default capture to `False`, and tensor-to-scalar escapes (`.item()`, `int(argmax)`) raise the
@@ -172,7 +179,7 @@ unwrap_torch()
 ```
 
 A value-free capture (`structure_only=True`, on meta or real tensors) is never verified: under the
-witness it still reads `capture_verified=None`, and `completeness_witness_verified` records the
+witness it still reads `provenance.verified=None`, and `completeness_witness_verified` records the
 census result.
 
 The witness attaches each aten dispatch to the live wrapper token, `func_call_id`, and leaf barcode;
@@ -189,9 +196,9 @@ still accounted normally.
 event observed during active logging was correlated to an emitted op or to an exact audited boundary.
 It does not prove that every user call route entered active logging. In particular, a transform callable
 built before wrapping can escape without a transform boundary op; TorchLens detects that route and leaves
-the census result `True` while setting `capture_verified=False` with
+the census result `True` while setting `provenance.verified=False` with
 `capture_verification_reason="transform_call_route_unverified"`. `escape_detector_verified=True` makes
-the separate claim that the callable detector saw no observable raw-call escape. `capture_verified=True`
+the separate claim that the callable detector saw no observable raw-call escape. `provenance.verified=True`
 is the combined result only when the enabled census/detector checks pass, no raw-transform escape was
 detected, and the owner-thread qualification remains valid. A bypassed `torch.compile` region reports
 the more specific `capture_verification_reason="dynamo_region_not_logged"` in preference to any of the
@@ -495,8 +502,8 @@ Representative CPU rows ("vs raw" = multiple of the raw forward pass):
 | gpt2_hooked | fastlog_halt_25 | 283.6 | **0.83x** |
 
 (Full exhaustive capture (`tl_trace`) costs ~14x the forward and amortizes on large models; the
-`fastlog_*` rows show selective / early-exit capture, where halting at 25% depth drops below the
-raw-forward cost. TinyNet ratios are dominated by fixed per-capture overhead — see the full table.)
+`fastlog_*` rows show selective / early-exit capture with `tl.record` (named `fastlog` when these
+numbers were measured), where halting at 25% depth drops below the raw-forward cost. TinyNet ratios are dominated by fixed per-capture overhead — see the full table.)
 
 ## Re-capturing baselines (canonical host)
 
