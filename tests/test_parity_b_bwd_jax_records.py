@@ -245,3 +245,25 @@ def test_custom_vjp_region_is_refused_not_recorded() -> None:
     with pytest.raises(RunCapabilityUnavailableError, match="unavailable"):
         trace.backward(lambda out: out)
     assert not trace._grad_fn_logs
+
+
+def test_whole_control_flow_region_is_refused_not_recorded() -> None:
+    def scan_fn(xs: Any) -> Any:
+        def body(c: Any, x: Any) -> Any:
+            c2 = jnp.tanh(c + x)
+            return c2, c2
+
+        _, ys = jax.lax.scan(body, jnp.zeros((3,)), xs)
+        return jnp.sum(ys)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        trace = tl.trace(
+            scan_fn,
+            _x(4, 3),
+            backend="jax",
+            capture=tl.options.CaptureOptions(jax_control_flow="region"),
+        )
+    with pytest.raises(RunCapabilityUnavailableError, match="unavailable"):
+        trace.backward(lambda out: out)
+    assert not trace._grad_fn_logs
