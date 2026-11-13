@@ -104,6 +104,23 @@ the program refuses with `intervention_with_derived_grads_unsupported`:
 - `GradOptions(intermediate_grads=True)`, whose per-boundary replay is not edit-aware
   yet.
 
+### Finished-trace edits
+
+`trace.fork().do(site, edit)` edits a finished JAX trace: the edit is applied at the
+site and each downstream equation is replayed once through the JAX replay adapter, so
+the fork equals a live `intervene=` capture with the same edit and passes the backend
+replay check. The six helpers above and a callable `fn(out, *, ctx)` work; a donor
+value from another JAX capture patches in through a callable. These refuse with a
+typed error before anything is committed:
+
+- an op downstream of the site that the adapter cannot replay, named in the message:
+  the two ops of a `custom_vjp` region and the stateful `rng_uniform` primitive
+  (`backend_replay_op_unreplayable`);
+- a gradient edit (`replay_gradient_edit_unsupported`) and a differentiable replay
+  (`backend_replay_not_differentiable`);
+- `tl.patch_from` with a JAX donor array (`backend_replay_helper_unsupported`; the
+  callable form `fork.do(site, lambda out, *, ctx: donor)` works).
+
 ### Source lines
 
 Each op's `source.frames` holds the user frames from the equation's traceback, plus the
