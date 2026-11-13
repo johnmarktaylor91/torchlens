@@ -28,6 +28,13 @@ from torchlens._capture._recorded_tensor import (
 )
 from torchlens.backends.torch import _ops_descriptive_fields as desc_mod
 
+# The resolvers as defined, bound before any spy: the ``spied`` fixture repoints every
+# module attribute holding them (``flops_mod`` and ``salient_mod`` included), so a test
+# that re-resolves through the module attribute would call the spy, which appends to the
+# very list being iterated and never ends.
+_RESOLVE_FLOPS = flops_mod.compute_forward_flops
+_RESOLVE_SALIENT = salient_mod.extract_salient_args
+
 
 class _Corpus(nn.Module):
     """One forward that reaches every salient extractor family and every FLOPs tier."""
@@ -100,8 +107,8 @@ def spied() -> Iterator[dict[str, list[tuple]]]:
     """Record each resolver's recorded inputs and call-time result during captures."""
 
     seen: dict[str, list[tuple]] = {"salient": [], "flops": [], "descriptive": []}
-    orig_salient = salient_mod.extract_salient_args
-    orig_flops = flops_mod.compute_forward_flops
+    orig_salient = _RESOLVE_SALIENT
+    orig_flops = _RESOLVE_FLOPS
     orig_set = desc_mod._set_descriptive_fields
 
     def salient_spy(layer_type, func_name, args, kwargs, param_shapes=None):
@@ -173,10 +180,10 @@ def test_resolvers_on_recorded_inputs_give_the_call_time_values(spied) -> None:
     assert spied["flops"] and spied["salient"] and spied["descriptive"]
     for inputs, value in spied["flops"]:
         assert not _holds_live_tensor(inputs)
-        assert flops_mod.compute_forward_flops(*inputs) == value, inputs[0]
+        assert _RESOLVE_FLOPS(*inputs) == value, inputs[0]
     for inputs, value in spied["salient"]:
         assert not _holds_live_tensor(inputs)
-        assert salient_mod.extract_salient_args(*inputs) == value, inputs[0]
+        assert _RESOLVE_SALIENT(*inputs) == value, inputs[0]
     for (family, func_name), value in spied["descriptive"]:
         again = desc_mod.resolve_descriptive(family, func_name)
         assert again == value, func_name
