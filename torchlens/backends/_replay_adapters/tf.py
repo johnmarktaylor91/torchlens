@@ -119,7 +119,7 @@ def _resolve(trace: Any, op: Any) -> tuple[Any, Any]:
     if isinstance(op, str):
         record = ops.get(op)
         if record is None:
-            raise LookupError(f"no op labelled {op!r} in this trace")
+            raise ReplayRefusal("unknown_label", "no op with this label in the trace", op_label=op)
         op = record
     raw = getattr(op, "_label_raw", None) or getattr(op, "label_raw", None)
     record = ops.get(raw, op) if isinstance(raw, str) else op
@@ -221,7 +221,9 @@ def vjp(
 
     capture = _require_replayable(trace, op)
     if len(cotangents) != 1:
-        raise ValueError(f"expected 1 cotangent for {capture.label_raw}, got {len(cotangents)}")
+        raise ReplayRefusal(
+            "arity", f"expected 1 cotangent, got {len(cotangents)}", op_label=capture.label_raw
+        )
     occurrences = [tf.identity(tf.convert_to_tensor(value)) for value in parent_values]
     if cotangents[0] is None:
         return tuple(None for _ in occurrences)
@@ -247,17 +249,18 @@ def _dense(tf: Any, grad: Any) -> Any:
 
 
 def _require_replayable(trace: Any, op: Any) -> Any:
-    """Return the op's capture, or raise ``ValueError`` naming why it cannot replay."""
+    """Return the op's capture, or raise :class:`ReplayRefusal` naming why it cannot replay."""
 
     if _is_capture(op):
         capture = op
     else:
         record, capture = _resolve(trace, op)
         if capture is None:
-            raise ValueError(_no_capture_reason(record))
+            label = getattr(record, "label", None)
+            raise ReplayRefusal("cannot_replay", _no_capture_reason(record), op_label=label)
     reason = _capture_reason(capture)
     if reason is not None:
-        raise ValueError(f"cannot replay {capture.label_raw}: {reason}")
+        raise ReplayRefusal("cannot_replay", reason, op_label=capture.label_raw)
     return capture
 
 
@@ -275,8 +278,10 @@ def _assemble_inputs(capture: Any, parent_values: Sequence[Any]) -> list[Any]:
     ordered = sorted(capture.inputs, key=lambda item: item.input_index)
     parents = [i for i in ordered if i.producer_label_raw or i.source_label_raw]
     if len(parents) != len(parent_values):
-        raise ValueError(
-            f"{capture.label_raw} takes {len(parents)} parent value(s), got {len(parent_values)}"
+        raise ReplayRefusal(
+            "arity",
+            f"takes {len(parents)} parent value(s), got {len(parent_values)}",
+            op_label=capture.label_raw,
         )
     values = iter(parent_values)
     inputs: list[Any] = []
@@ -518,7 +523,7 @@ def bind_recipes(trace: Any, recipes: Mapping[str, OpRecipe]) -> None:
     import tensorflow as tf  # deferred: optional dependency
 
     ops, _ = _index(trace)
-    order = {id(op): position for position, op in enumerate(_ordered_ops(ops))}
+    order = {id(op): position for position, op in enumerate(trace._layer_list)}
     rebuilt: list[tuple[int, Any]] = []
     init_labels: list[str] = []
     unresolved: list[Any] = []
@@ -546,16 +551,10 @@ def bind_recipes(trace: Any, recipes: Mapping[str, OpRecipe]) -> None:
     trace._tf_op_captures = tuple(capture for _, capture in rebuilt)
     trace._tf_init_op_labels = tuple(init_labels)
     trace._tf_unresolved_producers = tuple(unresolved)
+    # A cached replay status describes the capture list just replaced (for a
+    # loaded trace: "stripped"); drop it so the next validation recomputes.
+    trace._validation_replay_status = None
     _INDEX_CACHE.pop(id(trace), None)
-
-
-def _ordered_ops(ops: Mapping[str, Any]) -> list[Any]:
-    """Unique op records in trace order."""
-
-    seen: dict[int, Any] = {}
-    for record in ops.values():
-        seen.setdefault(id(record), record)
-    return list(seen.values())
 
 
 def _checked_record(ops: Mapping[str, Any], label: str, item: OpRecipe) -> tuple[Any, str]:
@@ -597,9 +596,10 @@ def _rebuilt_inputs(tf: Any, ops: Mapping[str, Any], item: OpRecipe) -> tuple[An
             raise ReplayRefusal("slots", f"parent {occurrence.parent_label!r}", op_label=label)
         kind, role = roles[index]
         is_source = role == "source"
+        tensor = _payload_tensor(tf, parent)
         records.append(
             (index, TFInputCapture(index, None if is_source else parent_raw, kind,
-                                   parent_raw if is_source else None, None, None))
+                                   parent_raw if is_source else None, tensor, None))
         )  # fmt: skip
     for path, literal in item.literals:
         index = int(path[0])
