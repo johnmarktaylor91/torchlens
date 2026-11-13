@@ -124,10 +124,7 @@ def _trace_mlx_model(
         Captured technical-preview MLX trace.
     """
 
-    if activation_transform is MISSING:
-        resolved_activation_transform = None
-    else:
-        resolved_activation_transform = activation_transform
+    activation_fn = None if activation_transform is MISSING else activation_transform
     capture_options = merge_capture_options(
         capture=capture,
         _layers_to_save=layers_to_save,
@@ -168,7 +165,7 @@ def _trace_mlx_model(
         if save is not None
         else _resolve_save_transforms(
             capture_options,
-            activation_transform=resolved_activation_transform,
+            activation_transform=activation_fn,
             grad_transform=grad_transform,
             save_raw_activations=save_raw_activations,
             save_raw_grads=save_raw_grads,
@@ -202,8 +199,6 @@ def _trace_mlx_model(
             model_input_args = transformed_input
 
     backend = MLXBackend()
-    # Static-label save= and structure-only are decided at capture: only selected
-    # values stay in memory and the rest are spilled replay witnesses.
     retention = _mlx_retention_request(save_predicate, capture_options)
     with retention_scope(retention):
         trace = backend.capture_trace(
@@ -248,7 +243,11 @@ def _trace_mlx_model(
 
 
 def _mlx_retention_request(save_predicate: Any, capture_options: Any) -> RetentionRequest | None:
-    """The capture-time retention request for an MLX capture, if any."""
+    """The capture-time retention request for an MLX capture, if any.
+
+    Static-label save= and structure-only are decided at capture: only selected
+    values stay in memory and the rest are spilled replay witnesses.
+    """
 
     if bool(getattr(capture_options, "structure_only", False)):
         return RetentionRequest(structure_only=True)

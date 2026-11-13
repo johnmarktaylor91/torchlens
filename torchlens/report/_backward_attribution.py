@@ -42,6 +42,10 @@ from .._data_classes._backward_providers import register_backward_provider
 from .._utils import _torch_compat
 from ..backends.torch._backward_dispatch import shared_backward_partners
 
+# Engine tier: every eager import is L2 or below, and the torch backward driver
+# imports it at load to register the backward providers.
+__tl_layer__ = "L2"
+
 #: Closed key set of the persisted per-pass record (SCHEMA-REQUESTS row 15).
 EXECUTED_FLOPS_RECORD_KEYS: frozenset[str] = frozenset(
     {"convention", "executed_flops", "uncounted_ops", "rows", "unattributed"}

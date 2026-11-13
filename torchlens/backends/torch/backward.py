@@ -22,9 +22,7 @@ import torch
 
 from ... import _state
 from ..._capture import projections
-from ..._capture.peak_memory import (
-    record_backward_peak,
-)
+from ..._capture.peak_memory import record_backward_peak
 from ..._capture.predicates import _evaluate_keep_op
 from ..._capture.projections import sync_recording_grad_records_from_sidecar
 from ..._data_classes._fork_lineage import _is_fork_relative
@@ -69,9 +67,7 @@ from ..._utils.tensor_utils import synchronize_pending_cpu_async_copies
 from ...errors import ConfigurationError
 from ...recording._exceptions import InvalidStorageError, RecorderStateError
 from ...recording._types import CaptureSpec
-from ...report import (
-    _backward_attribution,  # noqa: F401  (registers the BackwardPass attribution providers)
-)
+from ...report import _backward_attribution  # noqa: F401  (registers backward providers)
 from ._autograd_grad_boundary import (
     record_autograd_backward_boundary,
     record_autograd_grad_boundary,

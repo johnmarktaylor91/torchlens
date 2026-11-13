@@ -21,18 +21,24 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from typing import Any
 
-from ...intervention._grad_site_neutral import (
-    arm_grad_sites,
-    armed_grad_sites,
-    build_grad_site_edits,
-    grad_site_targets,
-)
 from ._helper_hooks import tf_helper_hook
 
 _STAGED = "_tf_grad_site_clauses"
 """Trace attribute holding the capture's ``tl.grad`` clauses, in clause order."""
 _ARMED_KEYS = "_tf_grad_sites_armed"
 """Trace attribute holding ``(clause, (label, pass_index))`` for each site already armed."""
+
+
+def grad_site_neutral() -> Any:
+    """The backend-neutral gradient-site module (imported on first use).
+
+    The TensorFlow modules reach it only through this function, so the backend
+    tier keeps no eager import of the intervention tier.
+    """
+
+    from ...intervention import _grad_site_neutral  # deferred: L4 module, tl.grad clauses only
+
+    return _grad_site_neutral
 
 
 def stage_tf_grad_clauses(trace: Any, clauses: Sequence[Any]) -> None:
@@ -79,10 +85,11 @@ def arm_tf_grad_sites(trace: Any, tf: Any) -> None:
     clauses arm afresh.
     """
 
-    armed = list(trace.__dict__.get(_ARMED_KEYS, ())) if armed_grad_sites(trace) else []
+    neutral = grad_site_neutral()
+    armed = list(trace.__dict__.get(_ARMED_KEYS, ())) if neutral.armed_grad_sites(trace) else []
     edits: list[Any] = []
     for index, clause in enumerate(staged_tf_grad_clauses(trace)):
-        for edit in build_grad_site_edits(
+        for edit in neutral.build_grad_site_edits(
             clause.selector,
             tf_grad_apply(clause.decision.hook, tf),
             lambda inner: resolve_forward_labels(trace, inner),
@@ -96,7 +103,7 @@ def arm_tf_grad_sites(trace: Any, tf: Any) -> None:
             edits.append(edit)
     trace.__dict__[_ARMED_KEYS] = tuple(armed)
     if edits:
-        arm_grad_sites(trace, tuple(edits))
+        neutral.arm_grad_sites(trace, tuple(edits))
 
 
 def grad_replay_clauses(trace: Any, tf: Any, when: Callable[[Any, Any], Any]) -> list[Any]:
@@ -110,7 +117,9 @@ def grad_replay_clauses(trace: Any, tf: Any, when: Callable[[Any, Any], Any]) ->
     clauses = []
     for clause in staged_tf_grad_clauses(trace):
         apply = tf_grad_apply(clause.decision.hook, tf)
-        for inner, pass_index in grad_site_targets(clause.selector, selector_operands):
+        for inner, pass_index in grad_site_neutral().grad_site_targets(
+            clause.selector, selector_operands
+        ):
             if pass_index in (None, 1):
                 clauses.append(when(inner, _tape_edit(apply, tf)))
     return clauses

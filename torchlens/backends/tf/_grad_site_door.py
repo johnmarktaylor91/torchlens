@@ -20,8 +20,7 @@ from __future__ import annotations
 from typing import Any
 
 from ...errors import RunCapabilityUnavailableError
-from ...intervention._grad_site_neutral import arm_grad_sites, build_grad_site_edits
-from ._grad_sites import resolve_forward_labels, selector_operands, tf_grad_apply
+from ._grad_sites import grad_site_neutral, resolve_forward_labels, selector_operands, tf_grad_apply
 
 _CODE = "run_capability_unavailable"
 _STAGE = "tf_grad_site_door"
@@ -58,7 +57,7 @@ def do_signal_plan(trace: Any, plan: Any, request: Any) -> Any:
     edits: list[Any] = []
     for index, (site, edit) in enumerate(_pairs(plan.backward)):
         edits.extend(
-            build_grad_site_edits(
+            grad_site_neutral().build_grad_site_edits(
                 site,
                 tf_grad_apply(edit, tf),
                 lambda inner: resolve_forward_labels(trace, inner),
@@ -66,7 +65,7 @@ def do_signal_plan(trace: Any, plan: Any, request: Any) -> Any:
                 name=f"tf_do_grad_{index}",
             )
         )
-    arm_grad_sites(trace, tuple(edits))
+    grad_site_neutral().arm_grad_sites(trace, tuple(edits))
     return trace
 
 

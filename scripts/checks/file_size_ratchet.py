@@ -446,7 +446,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     "torchlens/backends/paddle/backend.py": 2650,
     "torchlens/_runnable/state.py": 2850,
     "torchlens/_capture/arg_positions.py": 2650,
-    "torchlens/backends/jax/jaxpr.py": 2450,
+    "torchlens/backends/jax/jaxpr.py": 2200,
     "torchlens/_capture_state_helpers.py": 2350,
     # 2500 -> 2550 (2026-08-29 F10 re-reconcile): merge union -- the F03
     # split base measured 2464 and the F10 lovely bundle card (outcome

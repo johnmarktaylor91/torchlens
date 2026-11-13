@@ -36,7 +36,8 @@ Jaxpr-first JAX backend. It fills the backend protocol (no `capture_backend`); i
   are CAPTURED by mode-gated handlers that run before the refusal backstop;
   `REJECTED_NESTED_PRIMITIVES` refusals apply under the explicit reject mode.
   `EFFECT_PRIMITIVES` and `PURE_JIT_CALL_PRIMITIVES` classify callback and
-  jit-call equations. Inside an attributed Equinox/NNX module the enclosing
+  jit-call equations; they and the nested-call inlining predicates live in
+  `_jaxpr_inlining.py`, and `jaxpr.py` re-exports the two sets. Inside an attributed Equinox/NNX module the enclosing
   equation's `tlm_`/`tlc_` scope is threaded into nested jit, taken cond
   branches, scan and while bodies; synthetic control captures (`scan_read`,
   `scan_stack`, `cond_decision`, `while_decision`) get the equation's stacks.

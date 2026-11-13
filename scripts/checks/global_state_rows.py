@@ -836,6 +836,10 @@ _PROCESS_CACHES = frozenset(
         # by the 16 view classes, and the per-type record-kind memo (Op, Layer or
         # neither) that record_member() consults on every duck-typed read.
         ("torchlens/_utils/_record_group_table.py", "OP_GROUP_VIEWS"),
+        # BackwardPass provider table: filled at import by the torch backward
+        # dispatch and the backward attribution module (name -> function); never
+        # cleared, holds no capture state.
+        ("torchlens/_data_classes/_backward_providers.py", "_PROVIDERS"),
         ("torchlens/_utils/_record_group_table.py", "_RECORD_KIND_BY_TYPE"),
         ("torchlens/_utils/_call_site.py", "_CODE_TOKENS"),
         ("torchlens/_utils/_call_site.py", "_INSTRUCTION_MAPS"),
