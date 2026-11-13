@@ -224,39 +224,13 @@ def test_golden_scorecard_canonical_bytes() -> None:
 
 
 #: MLX's red cells on its packet roster, keyed ``(case_id, family)``, with the cause
-#: substring each detail must carry. One cause, not an MLX capture gap: loaded
-#: non-torch traces drop the runtime capture replay needs. The list holding a
+#: substring each detail must carry. None remain: a trace saved at the replay
+#: level validates after load from its saved recipes. The list holding a
 #: Sequential's children has its own module record (``block.layers``, class
 #: ``list``), so ``mod_nested_residual`` passes the module-hierarchy invariant. The
 #: shared preview option policy refuses with the per-cause code, so every
 #: ``c1_refusal_*`` cell passes.
-_MLX_ROSTER_FAMILIES: tuple[str, ...] = (
-    "fn_chain_branch",
-    "fn_multi_output",
-    "fn_loop3",
-    "fn_norm_softmax",
-    "fn_reshape_transpose",
-    "fn_where_clip",
-    "mod_mlp",
-    "mod_shared_twice",
-    "mod_cnn",
-    "mod_nested_residual",
-)
-MLX_KNOWN_RED_CELLS: dict[tuple[str, str], str] = {
-    **{
-        ("c2_validation_after_load", family): "runtime capture data was stripped"
-        for family in _MLX_ROSTER_FAMILIES
-    },
-}
-
-
-def _after_load_reds(families: tuple[str, ...]) -> dict[tuple[str, str], str]:
-    """Loaded non-torch traces drop the runtime capture replay needs (a format gap)."""
-
-    return {
-        ("c2_validation_after_load", family): "runtime capture data was stripped"
-        for family in families
-    }
+MLX_KNOWN_RED_CELLS: dict[tuple[str, str], str] = {}
 
 
 #: A red cell's expected cause substring, or ``(state, cause)`` for a cell that is
@@ -271,9 +245,9 @@ def _known_red_cells(
 ) -> dict[tuple[str, str], _RedCause]:
     """One backend's red cells keyed ``(case_id, family)`` with each cause substring."""
 
+    del families  # every after-load cell passes: loaded traces replay from saved recipes
     return {
         **{(case_id, ""): cause for case_id, cause in refusals.items()},
-        **_after_load_reds(families),
         **extra,
     }
 
@@ -367,8 +341,9 @@ def _tf_known_red_cells() -> dict[tuple[str, str], str]:
     from tests.conformance._rosters import tf as tf_roster
 
     keras = {
-        ("c1_validation_passes", family): "effect regions unverified"
+        (case_id, family): "effect regions unverified"
         for family in _TF_KERAS_MODULE_ROWS
+        for case_id in ("c1_validation_passes", "c2_validation_after_load")
     }
     return _known_red_cells({}, tf_roster.CONFIG_BUILT_FAMILIES, keras)
 
@@ -391,7 +366,7 @@ def test_jax_pack_earns_c1_with_its_named_red_cells(
     from tests.conformance._rosters import ECOSYSTEM_ENV
 
     monkeypatch.delenv(ECOSYSTEM_ENV, raising=False)
-    _assert_named_reds(("jax", str(jax.__version__)), tmp_path, _jax_known_red_cells(), 9, "C1")
+    _assert_named_reds(("jax", str(jax.__version__)), tmp_path, _jax_known_red_cells(), 9, "C2")
 
 
 @pytest.mark.rare
@@ -441,8 +416,8 @@ def test_mlx_pack_earns_c1_with_its_named_red_cells(tmp_path: Path) -> None:
         assert red[key].state == "failed", red[key]
         assert cause in red[key].detail, (key, red[key].detail)
     assert card.counts["denominator"] == _preview_denominator("mlx")
-    # Only the after-load reds remain and they sit in C2, so the ladder stops at C1.
-    assert card.highest_tier == "C1"
+    # No red cell remains, so the ladder reaches C2.
+    assert card.highest_tier == "C2"
     # C1 needs the pretrained-family floor; the config-built roster has none.
     with pytest.raises(ConfigurationError) as excinfo:
         claim_string(report)
@@ -484,4 +459,4 @@ def test_paddle_pack_earns_c1_with_its_named_red_cells(tmp_path: Path) -> None:
 
     families = tuple(spec.family for spec in config_built_specs())
     known = _known_red_cells({}, families, {})
-    _assert_named_reds(("paddle", str(paddle.__version__)), tmp_path, known, 12, "C1")
+    _assert_named_reds(("paddle", str(paddle.__version__)), tmp_path, known, 12, "C2")
