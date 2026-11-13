@@ -20,7 +20,7 @@ import numpy as np
 import pytest
 
 from tests.support import replay_fake_adapter as fake
-from torchlens._io import _replay_recipe_codec as codec
+from torchlens._io import _replay_recipe_adapter as binder, _replay_recipe_codec as codec
 from torchlens._io.format3.payloads import PayloadStore
 from torchlens._validation_status import is_known_validation_reason
 
@@ -68,13 +68,13 @@ def adapter(monkeypatch: pytest.MonkeyPatch) -> types.SimpleNamespace:
     """The fake adapter served for ``jax``, with a pinned framework version."""
 
     module = _adapter()
-    monkeypatch.setattr(codec, "get_adapter", lambda name: module)
-    monkeypatch.setattr(codec, "installed_framework_version", lambda name: _VERSION)
+    monkeypatch.setattr(binder, "get_adapter", lambda name: module)
+    monkeypatch.setattr(binder, "installed_framework_version", lambda name: _VERSION)
     return module
 
 
 def _section(adapter: Any, trace: Any | None = None) -> dict[str, Any]:
-    document = codec.build_section(trace or _fake_trace(), adapter, "jax")
+    document = binder.build_section(trace or _fake_trace(), adapter, "jax")
     # The fake's recipes say backend "fake"; the section is saved for "jax".
     for row in document["recipes"]:
         row["backend"] = "jax"
@@ -104,13 +104,13 @@ def test_load_binds_recipes_once_with_repeated_parents_and_multi_output(
     tmp_path: Path, adapter: Any
 ) -> None:
     loaded = _load(tmp_path, _section(adapter))
-    assert codec.loaded_replay_recipe_status(loaded) is None
+    assert binder.loaded_replay_recipe_status(loaded) is None
     assert set(loaded.captures) == {"x", "y", "z", "s"}
     assert loaded.captures["y"].parent_labels == ("x", "x")
     assert loaded.captures["s"].output_slots == ("s", "s_1")
     assert loaded.captures["z"].literals == ((("factor",), 2.5),)
     loaded.captures = {}
-    assert codec.loaded_replay_recipe_status(loaded) is None
+    assert binder.loaded_replay_recipe_status(loaded) is None
     assert loaded.captures == {}, "a bound section is never bound twice"
 
 
@@ -120,7 +120,7 @@ def test_op_without_recipe_reports_unverified_by_name(tmp_path: Path, adapter: A
 
     document = _section(_adapter(recipe=recipe))
     loaded = _load(tmp_path, document)
-    status = codec.loaded_replay_recipe_status(loaded)
+    status = binder.loaded_replay_recipe_status(loaded)
     assert status is not None
     assert (status.state, status.is_available, status.source) == ("unverified", False, "loaded")
     assert "z" in status.message
@@ -137,7 +137,7 @@ def test_raising_adapter_recipe_is_recorded_and_named(tmp_path: Path, adapter: A
         return fake.recipe(trace, op)
 
     loaded = _load(tmp_path, _section(_adapter(recipe=recipe)))
-    status = codec.loaded_replay_recipe_status(loaded)
+    status = binder.loaded_replay_recipe_status(loaded)
     assert status is not None and status.state == "unverified"
     assert "cannot describe y" in status.decisions[0]["detail"]
 
@@ -158,7 +158,7 @@ def test_recipe_of_a_session_refused_op_is_kept_for_the_validator(
     document = _section(_adapter(recipe=recipe))
     assert document["not_replayable"] == []
     loaded = _load(tmp_path, document)
-    assert codec.loaded_replay_recipe_status(loaded) is None
+    assert binder.loaded_replay_recipe_status(loaded) is None
     assert loaded.captures["o"].op_identity == "opaque"
 
 
@@ -177,8 +177,8 @@ def test_framework_version_mismatch_is_unavailable(
     tmp_path: Path, adapter: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     loaded = _load(tmp_path, _section(adapter))
-    monkeypatch.setattr(codec, "installed_framework_version", lambda name: "fake-10.0")
-    status = codec.loaded_replay_recipe_status(loaded)
+    monkeypatch.setattr(binder, "installed_framework_version", lambda name: "fake-10.0")
+    status = binder.loaded_replay_recipe_status(loaded)
     assert status is not None
     assert (status.state, status.is_available) == ("unavailable", False)
     assert _VERSION in status.message and "fake-10.0" in status.message
@@ -202,7 +202,7 @@ def test_corrupt_section_is_unavailable_naming_cause(
     document = _section(adapter)
     mutate(document)
     loaded = _load(tmp_path, document)
-    status = codec.loaded_replay_recipe_status(loaded)
+    status = binder.loaded_replay_recipe_status(loaded)
     assert status is not None and status.state == "unavailable"
     assert needle in status.message
     assert loaded.captures == {}
@@ -210,14 +210,14 @@ def test_corrupt_section_is_unavailable_naming_cause(
 
 def test_unparsable_section_is_unavailable(tmp_path: Path, adapter: Any) -> None:
     loaded = _load(tmp_path, "{not json")
-    status = codec.loaded_replay_recipe_status(loaded)
+    status = binder.loaded_replay_recipe_status(loaded)
     assert status is not None and status.state == "unavailable"
     assert "unreadable" in status.message
 
 
 def test_section_for_another_backend_is_unavailable(tmp_path: Path, adapter: Any) -> None:
     loaded = _load(tmp_path, _section(adapter), backend="tf")
-    status = codec.loaded_replay_recipe_status(loaded)
+    status = binder.loaded_replay_recipe_status(loaded)
     assert status is not None and status.state == "unavailable"
     assert "'jax'" in status.message
 
@@ -229,10 +229,10 @@ def test_raising_bind_is_unavailable_with_cause(
         raise KeyError("payload of y")
 
     module = _adapter(bind_recipes=bind)
-    monkeypatch.setattr(codec, "get_adapter", lambda name: module)
-    monkeypatch.setattr(codec, "installed_framework_version", lambda name: _VERSION)
+    monkeypatch.setattr(binder, "get_adapter", lambda name: module)
+    monkeypatch.setattr(binder, "installed_framework_version", lambda name: _VERSION)
     loaded = _load(tmp_path, _section(module))
-    status = codec.loaded_replay_recipe_status(loaded)
+    status = binder.loaded_replay_recipe_status(loaded)
     assert status is not None and status.state == "unavailable"
     assert "KeyError" in status.message
 
@@ -242,7 +242,7 @@ def test_unlisted_section_file_is_ignored(tmp_path: Path, adapter: Any) -> None:
     loaded = _LoadedTrace()
     codec.attach_replay_recipes(loaded, tmp_path, {"files": {}})
     assert codec.loaded_section(loaded) is None
-    assert codec.loaded_replay_recipe_status(loaded) is None
+    assert binder.loaded_replay_recipe_status(loaded) is None
 
 
 def test_section_released_with_trace(tmp_path: Path, adapter: Any) -> None:
@@ -257,12 +257,12 @@ def test_section_released_with_trace(tmp_path: Path, adapter: Any) -> None:
 
 def test_write_only_at_replay_level_for_adapter_backends(tmp_path: Path, adapter: Any) -> None:
     trace = _fake_trace()
-    assert not codec.write_replay_recipes(tmp_path, trace, backend="jax", save_level="portable")
-    assert not codec.write_replay_recipes(
+    assert not binder.write_replay_recipes(tmp_path, trace, backend="jax", save_level="portable")
+    assert not binder.write_replay_recipes(
         tmp_path, trace, backend="torch", save_level="executable_with_callables"
     )
     assert not (tmp_path / codec.REPLAY_RECIPES_FILE).exists()
-    assert codec.write_replay_recipes(
+    assert binder.write_replay_recipes(
         tmp_path, trace, backend="jax", save_level="executable_with_callables"
     )
     written = json.loads((tmp_path / codec.REPLAY_RECIPES_FILE).read_text())
@@ -274,7 +274,7 @@ def test_loaded_trace_resaves_its_section_unchanged(tmp_path: Path, adapter: Any
     loaded = _load(tmp_path, document)
     out = tmp_path / "resave"
     out.mkdir()
-    assert codec.write_replay_recipes(
+    assert binder.write_replay_recipes(
         out, loaded, backend="jax", save_level="executable_with_callables"
     )
     assert json.loads((out / codec.REPLAY_RECIPES_FILE).read_text()) == document
@@ -294,10 +294,10 @@ def _bind_with_params(trace: Any, recipes: Any, *, param_payloads: Any) -> None:
 
 def _write_params_section(root: Path, monkeypatch: pytest.MonkeyPatch, values: Any) -> Any:
     module = _adapter(live_param_payloads=lambda trace: values, bind_recipes=_bind_with_params)
-    monkeypatch.setattr(codec, "get_adapter", lambda name: module)
-    monkeypatch.setattr(codec, "installed_framework_version", lambda name: _VERSION)
+    monkeypatch.setattr(binder, "get_adapter", lambda name: module)
+    monkeypatch.setattr(binder, "installed_framework_version", lambda name: _VERSION)
     store = PayloadStore(root)
-    assert codec.write_replay_recipes(
+    assert binder.write_replay_recipes(
         root, _fake_trace(), backend="jax", save_level="executable_with_callables", store=store
     )
     store.close()
@@ -323,7 +323,7 @@ def test_parameter_values_round_trip_into_bind(
     text = (tmp_path / codec.REPLAY_RECIPES_FILE).read_text()
     assert "0.5" not in text, "parameter values live in payload blobs, not in the section"
     loaded = _attach(tmp_path)
-    assert codec.loaded_replay_recipe_status(loaded) is None
+    assert binder.loaded_replay_recipe_status(loaded) is None
     assert set(loaded.params) == set(_PARAMS)
     for address, value in _PARAMS.items():
         got = loaded.params[address]
@@ -342,12 +342,12 @@ def test_loaded_trace_resaves_its_parameter_values(
     second = tmp_path / "second"
     second.mkdir()
     store = PayloadStore(second)
-    assert codec.write_replay_recipes(
+    assert binder.write_replay_recipes(
         second, loaded, backend="jax", save_level="executable_with_callables", store=store
     )
     store.close()
     again = _attach(second)
-    assert codec.loaded_replay_recipe_status(again) is None
+    assert binder.loaded_replay_recipe_status(again) is None
     for address, value in _PARAMS.items():
         np.testing.assert_array_equal(again.params[address], value)
 
@@ -359,9 +359,9 @@ def test_raising_parameter_report_is_recorded_and_nothing_is_kept(
         raise RuntimeError("no parameter capture")
 
     module = _adapter(live_param_payloads=live)
-    monkeypatch.setattr(codec, "get_adapter", lambda name: module)
-    monkeypatch.setattr(codec, "installed_framework_version", lambda name: _VERSION)
-    assert codec.write_replay_recipes(
+    monkeypatch.setattr(binder, "get_adapter", lambda name: module)
+    monkeypatch.setattr(binder, "installed_framework_version", lambda name: _VERSION)
+    assert binder.write_replay_recipes(
         tmp_path, _fake_trace(), backend="jax", save_level="executable_with_callables"
     )
     document = json.loads((tmp_path / codec.REPLAY_RECIPES_FILE).read_text())
@@ -373,9 +373,9 @@ def test_parameter_values_without_a_store_are_recorded_as_a_problem(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     module = _adapter(live_param_payloads=lambda trace: _PARAMS)
-    monkeypatch.setattr(codec, "get_adapter", lambda name: module)
-    monkeypatch.setattr(codec, "installed_framework_version", lambda name: _VERSION)
-    assert codec.write_replay_recipes(
+    monkeypatch.setattr(binder, "get_adapter", lambda name: module)
+    monkeypatch.setattr(binder, "installed_framework_version", lambda name: _VERSION)
+    assert binder.write_replay_recipes(
         tmp_path, _fake_trace(), backend="jax", save_level="executable_with_callables"
     )
     document = json.loads((tmp_path / codec.REPLAY_RECIPES_FILE).read_text())
@@ -397,7 +397,7 @@ def test_corrupt_parameter_reference_is_unavailable(
     mutate(document["param_payloads"])
     (tmp_path / codec.REPLAY_RECIPES_FILE).write_text(json.dumps(document))
     loaded = _attach(tmp_path)
-    status = codec.loaded_replay_recipe_status(loaded)
+    status = binder.loaded_replay_recipe_status(loaded)
     assert status is not None and status.state == "unavailable"
     assert needle in status.message
     assert loaded.captures == {}
@@ -406,7 +406,7 @@ def test_corrupt_parameter_reference_is_unavailable(
 def test_param_payloads_field_must_be_an_object(tmp_path: Path, adapter: Any) -> None:
     document = _section(adapter)
     document["param_payloads"] = []
-    status = codec.loaded_replay_recipe_status(_load(tmp_path, document))
+    status = binder.loaded_replay_recipe_status(_load(tmp_path, document))
     assert status is not None and status.state == "unavailable"
     assert "param_payloads" in status.message
 
@@ -414,10 +414,10 @@ def test_param_payloads_field_must_be_an_object(tmp_path: Path, adapter: Any) ->
 def test_bind_gets_no_parameter_keyword_without_saved_values(tmp_path: Path, adapter: Any) -> None:
     # The two-argument _bind_capturing would raise TypeError on a keyword.
     loaded = _load(tmp_path, _section(adapter))
-    assert codec.loaded_replay_recipe_status(loaded) is None
+    assert binder.loaded_replay_recipe_status(loaded) is None
     assert set(loaded.captures) == {"x", "y", "z", "s"}
 
 
 def test_installed_framework_version_reads_metadata_only() -> None:
-    assert codec.installed_framework_version("torch") == ""
-    assert isinstance(codec.installed_framework_version("jax"), str)
+    assert binder.installed_framework_version("torch") == ""
+    assert isinstance(binder.installed_framework_version("jax"), str)

@@ -9,9 +9,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ._replay_recipe_codec import write_replay_recipes
+from ._replay_recipe_adapter import write_replay_recipes
 from .format3.payloads import PayloadStore
 from .format3.recipe import write_trace_recipe
+
+#: Layer of this module: it calls the adapter-facing replay recipe writer and is
+#: imported only by the save body (``bundle``).
+__tl_layer__ = "L3"
 
 __all__ = ("write_trace_sidecars",)
 
