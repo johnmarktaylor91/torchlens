@@ -10,9 +10,11 @@ captures, with the same shape:
 * the traced region is the innermost run of user frames up to the first
   TorchLens frame (the capture boundary), so its outermost frame is the model
   entry (the function root, or the module root's ``__call__``);
-* the call site is the first user frame outside that boundary, the line that
-  called ``tl.trace``, as torch's call site is the first frame above the
-  outermost ``forward``;
+* the call site is the line that called ``tl.trace``, read from the live stack
+  when capture starts (the first frame outside TorchLens, ``jax`` and
+  ``jaxlib``), as torch's call site is the first frame above the outermost
+  ``forward``; equation tracebacks stop at the traced function and never
+  include it;
 * the context is outermost first: call site, model entry, ..., the innermost
   frame that ran the primitive.
 
@@ -23,8 +25,9 @@ torch; otherwise only a file fingerprint is kept and text is read on access.
 from __future__ import annotations
 
 import os
+import sys
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, NamedTuple
 
 from ..._data_classes.func_call_location import FuncCallLocation
 
@@ -40,6 +43,15 @@ def _package_dirs() -> tuple[tuple[str, ...], str]:
     return tuple(os.path.realpath(root) + os.sep for root in roots), (
         os.path.realpath(torchlens_root) + os.sep
     )
+
+
+class _LiveFrame(NamedTuple):
+    """A live Python frame in the shape of a JAX traceback frame."""
+
+    file_name: str
+    line_num: int
+    function_name: str
+    function_start_line: int
 
 
 def _traceback_frames(eqn: Any) -> list[Any]:
@@ -64,6 +76,7 @@ class EquationFrames:
         self._verdicts: dict[str, str] = {}
         self._fingerprints: dict[Any, Any] = {}
         self._cache: dict[tuple[tuple[str, int, str], ...], tuple[FuncCallLocation, ...]] = {}
+        self._call_site = self._live_call_site()
 
     @classmethod
     def for_trace(cls, trace: Any, save_code_context: Any) -> EquationFrames:
@@ -87,28 +100,32 @@ class EquationFrames:
             self._verdicts[file_name] = kind
         return kind
 
+    def _live_call_site(self) -> _LiveFrame | None:
+        """Return the first live frame outside TorchLens and JAX: the trace call site."""
+
+        frame = sys._getframe(1)
+        while frame is not None and self._kind(frame.f_code.co_filename) != "user":
+            frame = frame.f_back
+        if frame is None:
+            return None
+        code = frame.f_code
+        qualname = getattr(code, "co_qualname", code.co_name)  # feature detection: 3.11+
+        return _LiveFrame(code.co_filename, frame.f_lineno, qualname, code.co_firstlineno)
+
     def _select(self, frames: Sequence[Any]) -> list[Any]:
         """Return the context frames outermost first: call site, entry ... innermost."""
 
         inner: list[Any] = []
-        boundary: int | None = None
-        for position, frame in enumerate(frames):
+        for frame in frames:
             kind = self._kind(frame.file_name)
             if kind == "torchlens":
-                boundary = position
                 break
             if kind == "user":
                 inner.append(frame)
         if not inner:
             return []
         context = list(reversed(inner))
-        if boundary is None:
-            return context
-        call_site = next(
-            (frame for frame in frames[boundary:] if self._kind(frame.file_name) == "user"),
-            None,
-        )
-        return [call_site, *context] if call_site is not None else context
+        return [self._call_site, *context] if self._call_site is not None else context
 
     def locations(self, eqn: Any) -> tuple[FuncCallLocation, ...]:
         """Return the ``FuncCallLocation`` context of one equation."""
@@ -124,10 +141,11 @@ class EquationFrames:
     def _location(self, frame: Any) -> FuncCallLocation:
         """Build one location exactly as the torch capture walk does, minus the frame object."""
 
-        loc = FuncCallLocation(
+        # Any: ``_linecache_entry`` is a runtime-only row cell with no declared annotation.
+        loc: Any = FuncCallLocation(
             file=frame.file_name,
             line_number=int(frame.line_num),
-            func_name=frame.function_name,
+            func_name=frame.function_name.rsplit(".", maxsplit=1)[-1],
             num_context_lines_requested=self.num_context_lines,
             _frame_func_obj=None,
             code_firstlineno=int(getattr(frame, "function_start_line", frame.line_num)),
