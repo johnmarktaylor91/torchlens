@@ -127,7 +127,8 @@ def family(op_type: str) -> str | None:
     if op_type in {op for _, op in STATEFUL_FUNCTIONS}:
         return "generator_state"
     random_like = "Random" in op_type or "TruncatedNormal" in op_type
-    if op_type.startswith("Stateless") and random_like:
+    key_helper = "GetKeyCounter" in op_type or op_type.endswith("GetAlg")
+    if op_type.startswith("Stateless") and random_like and not key_helper:
         return "stateless"
     return None
 
