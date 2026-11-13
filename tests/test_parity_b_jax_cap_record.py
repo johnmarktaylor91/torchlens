@@ -125,6 +125,27 @@ def test_all_trace_equations_are_recorded() -> None:
     assert len(recording.records) == len(trace.jax_equation_captures)
 
 
+def test_record_pass_releases_every_primitive_capture(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The record pass keeps no capture values, yet every selected value is delivered."""
+
+    results: list[Any] = []
+    interpret = _record.interpret_closed_jaxpr_with_inlining
+
+    def spying_interpret(*args: Any, **kwargs: Any) -> Any:
+        result = interpret(*args, **kwargs)
+        results.append(result)
+        return result
+
+    monkeypatch.setattr(_record, "interpret_closed_jaxpr_with_inlining", spying_interpret)
+    params, x = _params(), _x()
+    recording = tl.record(_mlp, (params, x), save=_ops, backend="jax")
+
+    primitive = [i for i, c in enumerate(results[-1].captures) if c.kind == "primitive"]
+    assert primitive
+    assert set(primitive) <= set(results[-1].released_capture_indices)
+    _assert_records_match_trace(recording, _trace_payloads(_mlp, params, x))
+
+
 def test_value_dependent_branch_records_the_taken_branch_per_pass() -> None:
     """A concrete ``cond`` predicate picks each pass's branch, as ``tl.trace`` does."""
 

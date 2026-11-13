@@ -9,7 +9,9 @@ argument leaves, closure constants, then captures in interpreter order). A value
 reaches the sink only when the sink requests it. When a decision says stop, the
 hook unwinds the interpreter, so no equation after the stop frontier binds.
 
-No ``Trace`` is built: the producer never finalizes, labels or validates a graph.
+No ``Trace`` is built: the producer never finalizes, labels or validates a graph,
+and no capture keeps its values (``_retention.KEEP_NONE``), so the interpreter
+frees each intermediate after its last use; only values the sink selected stay.
 """
 
 from __future__ import annotations
@@ -24,7 +26,9 @@ from ..._ir.capture_events import CaptureEvents
 from ...recording._backend_events import BackendOpEvent, RecordSink
 from ._edits import _REGION_LAYER_TYPES
 from ._input_kwargs import bind_input_kwargs
+from ._interp_hooks import InterpreterHooks
 from ._module_frames import jax_event_module_frames
+from ._retention import KEEP_NONE, set_retention
 from .jaxpr import flatten_dynamic_args, interpret_closed_jaxpr_with_inlining
 from .modules import discover_equinox_module_tree, discover_nnx_module_tree
 
@@ -34,6 +38,14 @@ _JAX_MAX_CONTROL_FLOW_UNROLL = 64
 
 class _StopRecording(Exception):
     """Raised inside the equation hook to unwind the interpreter at a stop."""
+
+
+class _PassRetention:
+    """Retention key of one record pass: no capture keeps its values.
+
+    The hook hands every selected value to the sink before the capture is
+    stored, so the interpreter may free each intermediate after its last use.
+    """
 
 
 class JaxPayloadCodec:
@@ -124,6 +136,8 @@ class JaxRecordProducer:
         closed_jaxpr, consts, output = _derive_and_run(call_fn, args, (), tree)
         flat_args, _treedef = flatten_dynamic_args(args, ())
         emitter = _EventEmitter(sink, self)
+        retention = _PassRetention()
+        set_retention(retention, KEEP_NONE)
         try:
             emitter.emit_sources(backend, args, consts)
             result = interpret_closed_jaxpr_with_inlining(
@@ -132,6 +146,7 @@ class JaxRecordProducer:
                 jax_control_flow=_JAX_CONTROL_FLOW,
                 jax_max_control_flow_unroll=_JAX_MAX_CONTROL_FLOW_UNROLL,
                 equation_hook=emitter.hook,
+                hooks=InterpreterHooks(session=retention),
             )
             emitter.emit_pending(result.captures)
         except _StopRecording:
