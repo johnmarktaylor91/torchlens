@@ -177,7 +177,7 @@ def test_raw_module_pass_validates_and_matches_a_plain_tape(backward_ready: Any)
     plain_out = model(x).numpy()
     trace = backward_ready(model, x)
     np.testing.assert_array_equal(trace.output.numpy(), plain_out)
-    assert trace.backward(_square_sum) is trace
+    assert trace.backward(_square_sum, save_grads=True) is trace
     _assert_valid(trace, 1)
     with tf.GradientTape() as tape:
         loss = _square_sum(model(x))
@@ -194,7 +194,7 @@ def test_raw_module_pass_validates_and_matches_a_plain_tape(backward_ready: Any)
 def test_diamond_accumulates_and_validates(backward_ready: Any) -> None:
     x = tf.constant([0.3, -1.2, 2.0])
     trace = backward_ready(diamond, x)
-    trace.backward(trace.output)
+    trace.backward(trace.output, save_grads=True)
     result = _assert_valid(trace, 1)
     assert result.sums_checked > 0
     with tf.GradientTape() as tape:
@@ -212,8 +212,8 @@ def test_keras_mlp_two_passes_each_validate(backward_ready: Any) -> None:
     plain_out = model(x).numpy()
     trace = backward_ready(model, x)
     np.testing.assert_array_equal(trace.output.numpy(), plain_out)
-    trace.backward(_square_sum)
-    trace.backward(lambda out: tf.reduce_mean(out))
+    trace.backward(_square_sum, save_grads=True)
+    trace.backward(lambda out: tf.reduce_mean(out), save_grads=True)
     assert len(trace.autograd.backward_passes) == 2
     for pass_number in (1, 2):
         _assert_valid(trace, pass_number)
