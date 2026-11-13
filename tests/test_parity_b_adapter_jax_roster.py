@@ -18,6 +18,7 @@ from tests.test_parity_b_adapter_jax_support import (  # noqa: E402
     capture,
     engine_grads,
     equation_ops,
+    func,
     graph_forward,
     oracle_grads,
     round_trip_validates,
@@ -83,7 +84,7 @@ def test_replayed_graph_is_differentiable_by_jax() -> None:
 
     adapter = get_adapter("jax")
     _net, _example, trace = _row_trace("chain_branch_function")
-    (leaf,) = [op for op in trace._layer_list if op.layer_type == "input"]
+    (leaf,) = [op for op in trace._layer_list if func(op) == "input"]
 
     def loss(value):  # type: ignore[no-untyped-def]
         outputs = graph_forward(adapter, trace, {leaf.label: value})

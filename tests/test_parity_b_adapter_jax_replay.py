@@ -17,12 +17,13 @@ from tests.test_parity_b_adapter_jax_support import (  # noqa: E402
     capture,
     engine_grads,
     equation_ops,
+    func,
     oracle_grads,
     round_trip_validates,
     saved_parent_values,
 )
 from torchlens.backends._replay_adapters import (  # noqa: E402
-    ReplayRecipeError,
+    ReplayRefusal,
     get_adapter,
 )
 
@@ -58,7 +59,7 @@ def test_get_adapter_returns_complete_module(adapter) -> None:  # type: ignore[n
 
 def test_repeated_parent_gets_one_cotangent_per_occurrence(adapter) -> None:  # type: ignore[no-untyped-def]
     trace = capture(lambda v: v * v, _x(3))
-    (mul,) = [op for op in equation_ops(trace) if "mul" in op.layer_type]
+    (mul,) = [op for op in equation_ops(trace) if func(op) == "mul"]
     occurrences = adapter.step(trace, mul).inputs
     assert len(occurrences) == 2
     assert occurrences[0].parent_label == occurrences[1].parent_label
@@ -87,7 +88,7 @@ def test_integer_parent_has_no_cotangent(adapter) -> None:  # type: ignore[no-un
 
     trace = capture(gather, _x(5))
     _assert_forward_all(adapter, trace)
-    (argmax,) = [op for op in equation_ops(trace) if "argmax" in op.layer_type]
+    (argmax,) = [op for op in equation_ops(trace) if func(op) == "argmax"]
     assert not jnp.issubdtype(argmax.out.dtype, jnp.floating)
     _assert_grads_match(adapter, trace)
 
@@ -118,15 +119,15 @@ def test_bind_refuses_missing_foreign_and_corrupt_recipes(adapter) -> None:  # t
     trace = capture(lambda v: jnp.exp(v) * 2.0, _x(3))
     recipes = {op.label: adapter.recipe(trace, op) for op in equation_ops(trace)}
     first = next(iter(recipes))
-    with pytest.raises(ReplayRecipeError):
+    with pytest.raises(ReplayRefusal):
         adapter.bind_recipes(trace, {k: v for k, v in recipes.items() if k != first})
-    with pytest.raises(ReplayRecipeError):
+    with pytest.raises(ReplayRefusal):
         adapter.bind_recipes(
             trace, {**recipes, first: dataclasses.replace(recipes[first], backend="tf")}
         )
     tree = json.loads(json.dumps(encode_recipe(recipes[first])))
     tree["op_identity"] = "jax.primitive.not_a_primitive"
-    with pytest.raises(ReplayRecipeError):
+    with pytest.raises(ReplayRefusal):
         decode_recipe(tree, backend="jax", allowlist=adapter.ALLOWLIST)
 
 
@@ -179,5 +180,5 @@ def test_opaque_region_is_refused_and_unbindable(adapter) -> None:  # type: igno
         pytest.skip("callback captured without an opaque op")
     recipes = {op.label: adapter.recipe(trace, op) for op in equation_ops(trace)}
     trace.jax_region_captures = ()  # a loaded trace: region captures are not rebuilt
-    with pytest.raises(ReplayRecipeError):
+    with pytest.raises(ReplayRefusal):
         adapter.bind_recipes(trace, {k: v for k, v in recipes.items() if v is not None})

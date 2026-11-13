@@ -20,6 +20,14 @@ def capture(net: Any, example: Any) -> Any:
         return tl.trace(net, example, backend="jax")
 
 
+def func(op: Any) -> str:
+    """The op's recorded function name (``input``, ``constant`` or the primitive)."""
+
+    from torchlens._utils._record_group_table import record_member
+
+    return str(record_member(op, "func_name", "") or "")
+
+
 def equation_ops(trace: Any) -> tuple[Any, ...]:
     from torchlens.backends.jax.backend import _jax_equation_ops
 
@@ -57,7 +65,7 @@ def _float_leaves(trace: Any) -> dict[str, Any]:
     return {
         op.label: op.out
         for op in trace._layer_list
-        if op.layer_type == "input"
+        if func(op) == "input"
         and not isinstance(op.out, tuple)
         and jnp.issubdtype(op.out.dtype, jnp.floating)
     }
