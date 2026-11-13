@@ -39,7 +39,7 @@ print(status.state)
 | backward_capture | unsupported | True backward graphs are deferred. |
 | has_validation_replay | supported | Replay distinguishes verified operations and partial regions. |
 | fastlog | unsupported | Sparse recording is not declared. |
-| can_intervene | supported | `intervene=` edits equation outputs at capture, with derived gradients of the edited program; `stop_after=` refuses. See Edits. |
+| can_intervene | supported | `intervene=` edits equation outputs at capture and, with `grad_options=`, the gradient at `tl.grad(...)` sites; derived gradients follow the edited program; `stop_after=` refuses. See Edits. |
 | rng_replay | unsupported | RNG replay is not declared. |
 | payload_materialization | supported | Portable forward and derived array payloads are materialized. |
 | has_streaming | unsupported | Streaming capture refuses. |
@@ -76,7 +76,8 @@ compares the result with the saved output. A selector that matches nothing follo
 These shapes refuse with a typed error:
 
 - a non-callable `intervene=` (`trace_option_unsupported`);
-- a gradient site (`backward_capture_unsupported`);
+- a gradient site without `grad_options=` (`backward_capture_unsupported`; see Gradient
+  sites);
 - `tl.module(...)`, a module's output boundary, which the jaxpr does not carry
   (`trace_option_unsupported`);
 - `followed_by` and `preceded_by` selectors (`followed_by_unsupported`);
@@ -103,6 +104,22 @@ the program refuses with `intervention_with_derived_grads_unsupported`:
 - an edit inside a `lax.cond` branch (the gradient program binds the `cond` whole);
 - `GradOptions(intermediate_grads=True)`, whose per-boundary replay is not edit-aware
   yet.
+
+#### Gradient sites
+
+`tl.when(tl.grad(site), edit)` with `grad_options=` edits the gradient that flows into
+each equation output `site` matches: the derived gradients of parameters and inputs are
+those of `jax.vjp` with the edit applied to that output's cotangent. The forward values
+are unchanged, so no op is marked edited. `tl.grad(a) | tl.grad(b)` edits both sites, and
+`tl.in_backward_pass(1)` names the one backward pass derived gradients run. The helpers
+and callables of Edits apply to the cotangent; an edit must keep its shape and dtype.
+These refuse with `backward_capture_unsupported`: a gradient site without
+`grad_options=` (JAX computes gradients only as derived gradients), a clause that mixes
+`tl.grad(...)` with activation sites, autograd-node selectors, and
+`tl.in_backward_pass(n)` with `n > 1`. A gradient site inside a loop body or `cond`
+branch refuses like an edit there (`intervention_with_derived_grads_unsupported`).
+`trace.do` with a `tl.grad(...)` site on a finished JAX trace refuses with
+`run_capability_unavailable`.
 
 ### Finished-trace edits
 
