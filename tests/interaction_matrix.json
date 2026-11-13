@@ -282,7 +282,7 @@
    "status": "asymmetry",
    "asymmetry": "A06",
    "confidence": "high",
-   "note": "torch full; JAX edits equation outputs (any predicate, six helpers or a callable, derived gradients of the edited program); MLX, eager TF and tinygrad static selectors; Paddle a helper subset; graph-only TF refuses."
+   "note": "torch full; JAX edits equation outputs (any predicate, six helpers or a callable, derived gradients of the edited program, tl.grad sites with grad_options); MLX, eager TF and tinygrad static selectors; Paddle a helper subset; graph-only TF refuses."
   },
   {
    "a": "backend",
