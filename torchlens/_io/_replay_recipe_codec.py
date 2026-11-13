@@ -8,8 +8,11 @@ torch already uses to ship re-execution payloads) the save now also writes one
 data-only :class:`~torchlens.backends._replay_adapters.OpRecipe` per op to
 ``replay_recipes.json`` beside the records; the manifest's ``files`` table
 digests it like every other listed file. Array values are never in the section:
-parents, parameters and constants are named by label and come from the payload
-blobs the artifact already holds.
+parents and constants are named by label and come from the payload blobs the
+artifact already holds. A loaded trace keeps no parameter bytes, so the values
+an adapter reports through ``live_param_payloads`` are stored as payload blobs
+of their own; the section's ``param_payloads`` maps each parameter address to
+its blob, and they reach ``bind_recipes`` as its ``param_payloads`` keyword.
 
 On the first read of ``validation_replay_status`` after ``tl.load``, the
 recipes are decoded against the backend adapter's closed op allowlist and
@@ -35,6 +38,9 @@ from importlib import metadata
 from pathlib import Path
 from typing import Any, Final
 
+import numpy as np
+
+from .._utils._numpy_bridge import tensor_from_numpy, tensor_to_numpy
 from .._validation_status import ValidationStatus
 from ..backends._replay_adapters import (
     ADAPTER_BACKENDS,
@@ -47,6 +53,8 @@ from ..backends._replay_adapters import (
     validate_recipe,
 )
 from . import _json
+from .format3.payloads import NUMPY_CODEC, PayloadStore, host_tensor, read_tensor
+from .format_errors import ArtifactError
 
 __all__ = (
     "REPLAY_RECIPES_FILE",
@@ -83,6 +91,11 @@ _FRAMEWORK_DISTRIBUTIONS: Final[Mapping[str, tuple[str, ...]]] = {
     "tinygrad": ("tinygrad",),
 }
 
+#: Section field mapping each saved parameter address to its payload blob.
+_PARAM_FIELD: Final = "param_payloads"
+#: Section field naming why the parameter values could not be saved.
+_PARAM_PROBLEM_FIELD: Final = "param_payload_problem"
+
 #: Loaded sections keyed weakly by their trace; a row dies with its trace.
 _LOADED_SECTIONS: weakref.WeakKeyDictionary[Any, LoadedReplayRecipes] = weakref.WeakKeyDictionary()
 
@@ -100,11 +113,14 @@ class LoadedReplayRecipes:
         else ``None``.
     bound:
         Whether ``bind_recipes`` already rebuilt the capture list.
+    params:
+        Saved parameter values, ``{parameter address: NumPy array}``.
     """
 
     document: Mapping[str, Any]
     problem: str | None = None
     bound: bool = field(default=False)
+    params: Mapping[str, Any] = field(default_factory=dict)
 
     @property
     def backend(self) -> str:
@@ -218,21 +234,88 @@ def build_section(trace: Any, adapter: Any, backend: str) -> dict[str, Any]:
     }
 
 
-def _section_for_save(trace: Any, backend: str) -> Mapping[str, Any] | None:
+def _store_array(store: PayloadStore, array: np.ndarray) -> dict[str, Any]:
+    """Queue one host array as a NumPy-codec payload blob; return its reference."""
+
+    if array.dtype.kind in {"O", "S", "U", "V"}:
+        raise TypeError(f"a {array.dtype} parameter cannot be stored as a payload blob")
+    tensor = host_tensor(tensor_from_numpy(np.array(array, copy=True, order="C")))
+    blob, key = store.submit(tensor, codec=NUMPY_CODEC)
+    return {"blob": blob, "key": key, "dtype": array.dtype.str, "shape": list(array.shape)}
+
+
+def _param_fields(values: Any, store: PayloadStore | None) -> dict[str, Any]:
+    """Section fields for parameter ``values`` (``{address: array}``), stored in ``store``.
+
+    ``values`` is a mapping, or the exception the adapter raised producing it;
+    a failure is recorded as ``param_payload_problem`` and no value is kept,
+    so each parameter op then fails closed when the loaded trace validates.
+    """
+
+    if isinstance(values, BaseException):
+        return {_PARAM_PROBLEM_FIELD: f"{type(values).__name__}: {values}"}
+    if not values:
+        return {}
+    if store is None:
+        return {_PARAM_PROBLEM_FIELD: "the save offered no payload store for parameter values"}
+    try:
+        refs = {
+            str(address): _store_array(store, np.asarray(value))
+            for address, value in values.items()
+        }
+    except (TypeError, ValueError) as exc:
+        return {_PARAM_PROBLEM_FIELD: f"{type(exc).__name__}: {exc}"}
+    return {_PARAM_FIELD: refs}
+
+
+def _live_params(trace: Any, adapter: Any) -> Any:
+    """The adapter's ``{address: array}`` for ``trace``, or the exception it raised."""
+
+    live = getattr(adapter, "live_param_payloads", None)
+    if live is None:
+        return {}
+    # Complexity: adapter code runs inside a save; a failure is recorded in the
+    # section and its parameter ops fail closed after load.
+    try:
+        return dict(live(trace))
+    except Exception as exc:  # noqa: BLE001 - recorded in the section
+        return exc
+
+
+def _section_for_save(
+    trace: Any, backend: str, store: PayloadStore | None
+) -> Mapping[str, Any] | None:
     """The section to write for ``trace``, or ``None`` when none applies."""
 
     if bool(getattr(trace, "_loaded_from_bundle", False)):
-        # A loaded trace re-saves the section it was loaded with, unchanged.
+        # A loaded trace re-saves the section it was loaded with, its parameter
+        # values stored again in the new artifact.
         section = loaded_section(trace)
-        return None if section is None or section.problem else section.document
+        if section is None or section.problem:
+            return None
+        document = {
+            k: v
+            for k, v in section.document.items()
+            if k not in (_PARAM_FIELD, _PARAM_PROBLEM_FIELD)
+        }
+        kept = {k: v for k, v in section.document.items() if k == _PARAM_PROBLEM_FIELD}
+        return {**document, **kept, **_param_fields(dict(section.params), store)}
     try:
         adapter = get_adapter(backend)
     except ReplayRefusal:
         return None
-    return build_section(trace, adapter, backend)
+    document = build_section(trace, adapter, backend)
+    return {**document, **_param_fields(_live_params(trace, adapter), store)}
 
 
-def write_replay_recipes(root: Path, trace: Any, *, backend: str, save_level: str) -> bool:
+def write_replay_recipes(
+    root: Path,
+    trace: Any,
+    *,
+    backend: str,
+    save_level: str,
+    store: PayloadStore | None = None,
+) -> bool:
     """Write ``replay_recipes.json`` under a staged trace artifact when it applies.
 
     Parameters
@@ -245,6 +328,9 @@ def write_replay_recipes(root: Path, trace: Any, *, backend: str, save_level: st
         The trace's backend name.
     save_level:
         Resolved save level; only ``executable_with_callables`` writes.
+    store:
+        The artifact's payload store, for parameter values the adapter
+        reports (before the store closes).
 
     Returns
     -------
@@ -255,7 +341,7 @@ def write_replay_recipes(root: Path, trace: Any, *, backend: str, save_level: st
 
     if save_level != REPLAY_RECIPE_SAVE_LEVEL or backend not in ADAPTER_BACKENDS:
         return False
-    document = _section_for_save(trace, backend)
+    document = _section_for_save(trace, backend, store)
     if document is None:
         return False
     text = json.dumps(document, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
@@ -277,7 +363,44 @@ def _header_problem(document: Any) -> str | None:
     for key in ("recipes", "missing", "not_replayable"):
         if not isinstance(document.get(key), list):
             return f"section field {key!r} is not a list"
+    if not isinstance(document.get(_PARAM_FIELD, {}), Mapping):
+        return f"section field {_PARAM_FIELD!r} is not an object"
     return None
+
+
+def _read_params(root: Path, refs: Mapping[str, Any]) -> dict[str, np.ndarray]:
+    """Read every saved parameter value back as a NumPy array of its saved dtype and shape."""
+
+    params: dict[str, np.ndarray] = {}
+    for address, ref in refs.items():
+        if not isinstance(ref, Mapping):
+            raise ValueError(f"parameter {address!r} has no blob reference")
+        tensor = read_tensor(root, blob=str(ref["blob"]), key=str(ref["key"]))
+        array = np.asarray(tensor_to_numpy(tensor))
+        dtype = np.dtype(str(ref["dtype"]))
+        if array.dtype != dtype:
+            raise ValueError(f"parameter {address!r} reads as {array.dtype}, saved as {dtype}")
+        params[str(address)] = array.reshape(tuple(int(n) for n in ref["shape"]))
+    return params
+
+
+def _read_section(root: Path) -> LoadedReplayRecipes:
+    """Read and check the section file and its parameter values."""
+
+    try:
+        document = _json.read_bounded(root / REPLAY_RECIPES_FILE, follow_symlinks=False)
+    except (OSError, ValueError) as exc:
+        return LoadedReplayRecipes(document={}, problem=f"the section is unreadable: {exc}")
+    problem = _header_problem(document)
+    if problem is not None:
+        return LoadedReplayRecipes(document={}, problem=problem)
+    try:
+        params = _read_params(root, document.get(_PARAM_FIELD) or {})
+    except (ArtifactError, KeyError, TypeError, ValueError) as exc:
+        return LoadedReplayRecipes(
+            document={}, problem=f"has unreadable parameter values ({type(exc).__name__}: {exc})"
+        )
+    return LoadedReplayRecipes(document=document, params=params)
 
 
 def attach_replay_recipes(trace: Any, root: Path, manifest: Mapping[str, Any]) -> None:
@@ -300,14 +423,7 @@ def attach_replay_recipes(trace: Any, root: Path, manifest: Mapping[str, Any]) -
     files = manifest.get("files")
     if not isinstance(files, Mapping) or REPLAY_RECIPES_FILE not in files:
         return
-    try:
-        document = _json.read_bounded(root / REPLAY_RECIPES_FILE, follow_symlinks=False)
-    except (OSError, ValueError) as exc:
-        section = LoadedReplayRecipes(document={}, problem=f"the section is unreadable: {exc}")
-    else:
-        problem = _header_problem(document)
-        section = LoadedReplayRecipes(document=document if problem is None else {}, problem=problem)
-    _LOADED_SECTIONS[trace] = section
+    _LOADED_SECTIONS[trace] = _read_section(root)
 
 
 def loaded_section(trace: Any) -> LoadedReplayRecipes | None:
@@ -403,8 +519,11 @@ def _bind(trace: Any, section: LoadedReplayRecipes) -> ValidationStatus | None:
         return _unavailable(trace, backend, f"a saved replay recipe was refused: {exc}.")
     # Complexity: bind_recipes is adapter code reading loaded payloads; a raise
     # leaves no capture list, so the trace reports unavailable with the cause.
+    # Parameter values go as a keyword only when there are any, so adapters
+    # whose recipes read no parameter keep the two-argument contract.
+    params = {"param_payloads": dict(section.params)} if section.params else {}
     try:
-        adapter.bind_recipes(trace, recipes)
+        adapter.bind_recipes(trace, recipes, **params)
     except Exception as exc:  # noqa: BLE001 - reported in the status message, never swallowed
         return _unavailable(
             trace, backend, f"binding the saved replay recipes raised {type(exc).__name__}: {exc}."

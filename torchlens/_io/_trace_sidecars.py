@@ -48,5 +48,5 @@ def write_trace_sidecars(
     """
 
     entry = write_trace_recipe(root, trace, store=store, save_level=save_level)
-    write_replay_recipes(root, trace, backend=backend, save_level=save_level)
+    write_replay_recipes(root, trace, backend=backend, save_level=save_level, store=store)
     return entry
