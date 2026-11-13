@@ -29,6 +29,7 @@ JAX_REFUSAL_CODES: tuple[str, ...] = (
     "runtime_version_unsupported",
     "foreign_tensor_input",
     "constant_unrealizable",
+    "backward_capture_unsupported",
     "fastlog_unsupported",
     "interventions_unsupported",
     "intervention_result_invalid",

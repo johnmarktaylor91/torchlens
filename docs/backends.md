@@ -296,7 +296,8 @@ ablated = tl.trace(model, x, backend="tf", intervene=tl.when(tl.func("relu"), tl
 
 - `tl.record(..., backend="tf")` runs the eager forward with lean per-op events and keeps values
   only for the selected ops; graph-only callables refuse.
-- Not available: streaming (`storage=`); it refuses with a typed error.
+- Not available: true backward capture (`backward_ready=True`, `save_grads=`) and streaming
+  (`storage=`); each refuses with a typed error.
 
 Leaf gradients are derived gradients, not backward capture:
 
@@ -320,12 +321,6 @@ output live and attaches exact op-level records: only unambiguous `status == "ex
 `trace.autograd.intermediate_derived_grads` and read-only `op.autograd.derived_grad`. `has_backward_pass`
 stays `False`. Graph-only captures refuse `grad_options`, because the replay cannot run inside a
 frozen graph.
-
-Backward capture: eager TensorFlow traces captured with `backward_ready=True` support
-`trace.backward(loss)`, where `loss` is a scalar tensor or a callable of the trace output. Each
-gradient rule TensorFlow runs becomes a grad-fn node linked to its forward op; `save_grads` keeps
-all gradient values or none (selectors refuse). `tf.function` captures, `retain_graph=` and other
-torch-only backward keywords refuse typed. Multi-output ops are recorded but not replay-checked.
 
 ## MLX
 
@@ -444,7 +439,7 @@ What it does:
   still apply after capture). `capture=CaptureOptions(structure_only=True)` runs the real forward
   with no payloads; validation refuses typed. `storage=tl.to_disk(path)` streams payloads into a
   bundle during capture (not combined with `save=` or structure-only). `tl.record(backend="paddle")`
-  works. Refused: `save_grads=`.
+  works. Refused: `save_grads=` and `backward_ready=True`.
 - Live `intervene=` and `stop_after=`: the wrapper holds each concrete output before the caller
   sees it, so predicates run with real values and may be callables (the eager `RecordContext`
   carries `tensor_requires_grad`, `is_scalar_bool` and `bool_value`), and replacements flow into
@@ -496,15 +491,7 @@ trace.autograd.derived_grads["inputs.0"]
 
 `GradOptions(intermediate_grads=True, max_intermediate_grads=...)` runs a second guarded Paddle AD
 replay; only unambiguous `status == "exact"` records reach `trace.autograd.intermediate_derived_grads`
-and `op.autograd.derived_grad`, and `has_backward_pass` stays `False`.
-
-Backward capture: Paddle traces captured with `backward_ready=True` support `trace.backward(loss)`,
-where `loss` is a scalar tensor computed from the live output, a callable of the output, or
-`None` when the output is the scalar loss. TorchLens walks Paddle's dygraph grad nodes from the
-loss and records one grad-fn node per node, with gradients read from Paddle's own hooks;
-`retain_graph=` keeps Tensor.backward's meaning. A gradient Paddle does not expose (a list-slot
-gradient with other consumers, an ambiguous slot match, a disconnected loss) refuses with
-`run_capability_unavailable`. `save_grads=` still refuses. Full page: [Paddle](backends/paddle.md).
+and `op.autograd.derived_grad`, and `has_backward_pass` stays `False`. Full page: [Paddle](backends/paddle.md).
 
 ## JAX
 
@@ -562,10 +549,6 @@ What it does:
   `lax.scan` or `lax.while_loop` are attributed; each loop iteration is its own module call, and
   their returns are unrecorded (`CaptureGapWarning`). `checkpoint`/`remat`, `custom_vjp` and
   `shard_map` inside a module refuse typed.
-- Backward capture: `trace.backward(lambda out: jnp.sum(out ** 2))` records a backward pass from
-  JAX's own derivative rules, one `GradFn` per backward equation, with per-op gradients. The loss
-  is a callable of `trace.output` returning a real scalar; custom-VJP calls and whole control-flow
-  regions refuse.
 - `.tlspec` saves use `payload_policy="array_payloads"` and load back as `jax.Array`; typed PRNG
   keys round-trip as typed keys. Fully addressable single-host sharded arrays are saved as
   assembled host values with versioned `jax_sharding_*` fields and a `jax_named_sharding` block
@@ -698,10 +681,10 @@ The implementation view of the same facts, one row per backend:
 |---|---|---|---|---|---|
 | `torch` | Stable eager wrapper capture | Replay validation | Materialized `.tlspec` payloads | `torch_module` | True backward capture |
 | `mlx` | Eager-dispatch capture; live `intervene=`/`stop_after=` (static or value-dependent), also with `grad_options=` and `tl.grad` sites | Live per-op replay and parent perturbation over the captured (whitelisted) op set | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.autograd.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads` |
-| `jax` | Jaxpr-first functional capture | Live per-equation replay and parent perturbation | Materialized forward/derived array `.tlspec` payloads | `function_root`, Equinox/NNX `pytree_module` | `trace.autograd.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads`; true backward capture via `trace.backward(loss_fn)` |
+| `jax` | Jaxpr-first functional capture | Live per-equation replay and parent perturbation | Materialized forward/derived array `.tlspec` payloads | `function_root`, Equinox/NNX `pytree_module` | `trace.autograd.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads` |
 | `tinygrad` | UOp-snapshot functional capture; live `intervene=` (static or value-dependent), also with `grad_options=` and `tl.grad` sites; finished-trace edits | Live UOp replay and parent perturbation on `DEV=PYTHON` payloads | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.autograd.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads` |
-| `paddle` | Dygraph/eager capture with live forward `intervene=`/`stop_after=`, finished-trace edits and `tl.grad` sites on derived gradients | Live replay/perturbation plus static inventory guard; corroborated user-intervention carve-out | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.autograd.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads`; true backward capture via `trace.backward(loss)` with `backward_ready=True` |
-| `tf` | Eager op-callback capture with live `intervene=`/`stop_after=` (static or value-dependent); implemented graph-only FuncGraph static path for compiled/SavedModel entries | Callback self-consistency plus per-op replay/perturbation accounting | Materialized forward array `.tlspec` payloads | `function_root`, Keras/`tf.Module` object `object_module` | `trace.autograd.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads` (eager entries only); true backward capture via `trace.backward(loss)` with `backward_ready=True` (eager entries only) |
+| `paddle` | Dygraph/eager capture with live forward `intervene=`/`stop_after=`, finished-trace edits and `tl.grad` sites on derived gradients | Live replay/perturbation plus static inventory guard; corroborated user-intervention carve-out | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.autograd.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads` |
+| `tf` | Eager op-callback capture with live `intervene=`/`stop_after=` (static or value-dependent); implemented graph-only FuncGraph static path for compiled/SavedModel entries | Callback self-consistency plus per-op replay/perturbation accounting | Materialized forward array `.tlspec` payloads | `function_root`, Keras/`tf.Module` object `object_module` | `trace.autograd.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads` (eager entries only) |
 
 Replay validation on the non-PyTorch backends (`has_validation_replay`) replays each captured op from
 its parents' saved payloads and perturbation-checks the dependency. Unlike torch's validator it

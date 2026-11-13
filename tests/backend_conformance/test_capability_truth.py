@@ -115,9 +115,9 @@ EXPECTED_GATED_CAPABILITIES: dict[str, dict[str, bool]] = {
         "structure_only_capture": True,
     },
     "jax": {
-        # Lifted 2026-11 (parity wave B): native backward capture through
-        # torchlens.backends._backward_native.jax (tests/test_parity_b_bwd_jax_records.py).
-        "backward_capture": True,
+        # Held 2026-11: native backward capture (torchlens.backends._backward_native.jax)
+        # is built but not declared until the non_torch_backward_inert contract allows it.
+        "backward_capture": False,
         # Lifted 2026-11 (pp-b-jax-cap): tl.record lean events (tests/test_parity_b_jax_cap_record.py).
         "fastlog": True,
         # Lifted 2026-11 (pp-b-jax-int): live intervene= edits equation outputs
@@ -137,9 +137,9 @@ EXPECTED_GATED_CAPABILITIES: dict[str, dict[str, bool]] = {
         "structure_only_capture": False,
     },
     "paddle": {
-        # Lifted 2026-11 (parity wave B): native backward capture through
-        # torchlens.backends._backward_native.paddle (tests/test_parity_b_backward_flips.py).
-        "backward_capture": True,
+        # Held 2026-11: native backward capture (torchlens.backends._backward_native.paddle)
+        # is built but not declared until the non_torch_backward_inert contract allows it.
+        "backward_capture": False,
         # Lifted 2026-11 (pp-b-paddle-cap): tl.record lean events (tests/test_parity_b_paddle_cap_record.py).
         "fastlog": True,
         # Lifted 2026-08: live intervene=/halt= dispatch through the eager
@@ -153,9 +153,9 @@ EXPECTED_GATED_CAPABILITIES: dict[str, dict[str, bool]] = {
         "structure_only_capture": True,
     },
     "tf": {
-        # Lifted 2026-11 (parity wave B): native backward capture through
-        # torchlens.backends._backward_native.tf (tests/test_parity_b_backward_flips.py).
-        "backward_capture": True,
+        # Held 2026-11: native backward capture (torchlens.backends._backward_native.tf)
+        # is built but not declared until the non_torch_backward_inert contract allows it.
+        "backward_capture": False,
         # Lifted 2026-11 (pp-b-tf-cap): tl.record lean eager events (tests/test_parity_b_tf_cap_record.py).
         "fastlog": True,
         # Lifted 2026-08: intervene= and halt= for eager entries via the
@@ -380,7 +380,7 @@ class _StubTrace:
         self._provenance_backend = backend
 
 
-@pytest.mark.parametrize("name", ("mlx", "tinygrad"))
+@pytest.mark.parametrize("name", ("mlx", "tinygrad", "paddle", "tf"))
 def test_backward_accessor_guard_redirects_to_derived_grads(name: str) -> None:
     """Derived-grads backends refuse with the derived-gradient redirect."""
 

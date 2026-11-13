@@ -990,7 +990,7 @@ def register_default_backend_specs() -> None:
             validate_entry=_jax_validate_entry,
             validate_trace=_jax_validate_trace,
             capabilities=BackendCapabilities(
-                backward_capture=True,
+                backward_capture=False,
                 has_validation_replay=True,
                 fastlog=True,
                 can_intervene=True,
@@ -1055,7 +1055,7 @@ def register_default_backend_specs() -> None:
             validate_entry=_paddle_validate_entry,
             validate_trace=_paddle_validate_trace,
             capabilities=BackendCapabilities(
-                backward_capture=True,
+                backward_capture=False,
                 has_validation_replay=True,
                 fastlog=True,
                 can_intervene=True,
@@ -1091,7 +1091,7 @@ def register_default_backend_specs() -> None:
             validate_entry=_tf_validate_entry,
             validate_trace=_tf_validate_trace,
             capabilities=BackendCapabilities(
-                backward_capture=True,
+                backward_capture=False,
                 has_validation_replay=True,
                 fastlog=True,
                 can_intervene=True,
