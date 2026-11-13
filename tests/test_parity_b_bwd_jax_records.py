@@ -105,9 +105,13 @@ def _assert_recorded(
         assert adapter.close(leaf_grads[op.label], op.grad), op.label
 
     recorded = recorded_backward_from_trace(trace, 1)
-    graph, calls, checker = native_jax.validation_inputs(trace, recorded)
+    inputs = native_jax.validation_inputs(trace, recorded, 1)
     result = check_backward_records(
-        trace, checker, graph, RecordedBackward(calls=calls, grads=recorded.grads), leaf_grads
+        trace,
+        inputs.adapter,
+        inputs.graph,
+        RecordedBackward(calls=inputs.calls, grads=inputs.grads),
+        leaf_grads,
     )
     assert result.passed, result.findings
     assert result.leaves_checked == len(leaves)

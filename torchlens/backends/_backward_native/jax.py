@@ -58,6 +58,7 @@ __all__ = (
     "backward_ready_scope",
     "record_backward",
     "retain_backward_state",
+    "ValidationInputs",
     "validation_inputs",
 )
 
@@ -503,25 +504,49 @@ class _MarkerAdapter:
         return getattr(self.adapter, name)
 
 
-def validation_inputs(trace: Any, recorded: Any) -> tuple[ReplayGraph, dict[str, Any], Any]:
-    """The graph, calls and adapter ``validation._backward_neutral.check_backward_records`` takes.
+@dataclass(frozen=True)
+class ValidationInputs:
+    """What ``validation._backward_neutral.check_backward_records`` takes for one pass."""
 
-    ``recorded`` is ``recorded_backward_from_trace(trace, pass_number)``. An
-    output op is TorchLens's marker for a returned value: its gradient is the
-    loss's cotangent, which it passes to its producer unchanged. Its recorded
-    ``Op.grad`` is entered as that identity call, and the adapter returned
-    checks it with the identity derivative, so the producer's gradient is
-    checked as the sum of the loss's cotangent and its other consumers'
-    contributions.
+    graph: ReplayGraph
+    calls: dict[str, Any]
+    grads: dict[str, Any]
+    adapter: Any
+
+
+def _pass_grads(trace: Any, pass_number: int) -> dict[str, Any]:
+    """Recorded ``Op.grad`` per op ``label`` (pass-qualified, as the graph names ops)."""
+
+    grads: dict[str, Any] = {}
+    for op in trace._layer_list:
+        for record in op._slot("_grad_records") or ():
+            if record.backward_pass_number == pass_number and record.grad is not None:
+                grads[jax_adapter._parent_label(op)] = record.grad
+    return grads
+
+
+def validation_inputs(trace: Any, recorded: Any, pass_number: int) -> ValidationInputs:
+    """The graph, calls, gradients and adapter to check one recorded pass with.
+
+    ``recorded`` is ``recorded_backward_from_trace(trace, pass_number)``; its
+    calls are keyed by the ``GradFn``'s op label. Gradients are read by the
+    pass-qualified op label the graph uses, so ops recorded in several forward
+    passes keep one gradient each. An output op is TorchLens's marker for a
+    returned value: its gradient is the loss's cotangent, which it passes to
+    its producer unchanged. Its recorded ``Op.grad`` is entered as that
+    identity call, and the adapter returned checks it with the identity
+    derivative, so the producer's gradient is checked as the sum of the loss's
+    cotangent and its other consumers' contributions.
     """
 
     program = build_program(trace)
     if isinstance(program, str):
-        return ReplayGraph(nodes=(), value={}.__getitem__), {}, jax_adapter
+        no_values: dict[str, Any] = {}
+        return ValidationInputs(ReplayGraph((), no_values.__getitem__), {}, {}, jax_adapter)
+    grads = _pass_grads(trace, pass_number)
     calls = dict(recorded.calls)
     markers = frozenset(n.label for n in program.nodes if n.kind == "passthrough")
     for label in markers:
-        grad = recorded.grads.get(label)
-        if grad is not None:
-            calls[label] = ((grad,), (grad,))
-    return _graph(program), calls, _MarkerAdapter(jax_adapter, markers)
+        if grads.get(label) is not None:
+            calls[label] = ((grads[label],), (grads[label],))
+    return ValidationInputs(_graph(program), calls, grads, _MarkerAdapter(jax_adapter, markers))
