@@ -45,7 +45,7 @@ from ..._output_slot import returned, stopped
 from ..._postprocess._materialize import materialize_from_events
 from ..._quantities import Duration
 from ..._trace_core.relation_views import freeze_trace_relation_views
-from ..._validation_status import ValidationReplaySource, ValidationStatus  # noqa: TC001
+from ..._validation_status import ValidationStatus  # noqa: TC001
 from ...backends.registry import (
     BackendName,
     get_backend_spec,
@@ -88,6 +88,16 @@ from ._param_tree import (
     _alias_to_primary,
     _iter_parameter_tree,
     _iter_trainable_parameter_tree,
+)
+from ._replay_status import (
+    _mlx_detailed_counts,
+    _mlx_metadata_failed_decision,
+    _mlx_nothing_replayed_decision,
+    _mlx_trace_decision,
+    _mlx_unverified_count,
+    _mlx_validation_source,
+    _name_first_failure,
+    kept_or_unavailable_status,
 )
 from ._source_frames import adopt_code_context_records, mlx_code_context
 from ._tap_observers import (
@@ -325,134 +335,6 @@ def _find_mlx_compiled_attributes(
     if isinstance(model, mlx_nn.Module):
         _scan_module("", model, 0)
     return tuple(sorted(found))
-
-
-def _name_first_failure(status: ValidationStatus) -> ValidationStatus:
-    """Return ``status`` with a failed message that names the first offending op.
-
-    Parameters
-    ----------
-    status
-        A folded replay status.
-
-    Returns
-    -------
-    ValidationStatus
-        Unchanged unless ``state == "failed"`` and a failed decision exists;
-        then the message reads ``Replay validation failed at <op_label>
-        (<reason>): <detail>.``
-    """
-
-    if status.state != "failed":
-        return status
-    first = next((d for d in status.decisions if d.get("decision") == "failed"), None)
-    if first is None:
-        return status
-    return replace(
-        status,
-        message=(
-            f"Replay validation failed at {first.get('op_label')!s} "
-            f"({first.get('reason')!s}): {first.get('detail', '')!s}."
-        ),
-    )
-
-
-def _mlx_loaded_replay_unavailable(trace: Trace) -> bool:
-    """Return whether a loaded MLX trace lacks live replay artifacts.
-
-    Parameters
-    ----------
-    trace
-        Trace being validated.
-
-    Returns
-    -------
-    bool
-        True when replay must report unavailable instead of a pass/fail bool.
-    """
-
-    if not bool(getattr(trace, "_loaded_from_bundle", False)):
-        return False
-    if not bool(getattr(trace, "_mlx_op_captures", ())):
-        return True
-    return str(getattr(trace, "payload_load_status", "")).startswith("audit_only")
-
-
-def _mlx_validation_source(trace: Trace) -> ValidationReplaySource:
-    """Return the validation source label for ``trace``.
-
-    Parameters
-    ----------
-    trace
-        Trace being validated.
-
-    Returns
-    -------
-    ValidationReplaySource
-        ``"loaded"`` for bundle-loaded traces, otherwise ``"live"``.
-    """
-
-    return "loaded" if getattr(trace, "_loaded_from_bundle", False) else "live"
-
-
-def _mlx_trace_decision(phase: str, reason: str, detail: str) -> dict[str, Any]:
-    """One failed trace-level validation decision row."""
-
-    return {
-        "op_label": "<trace>",
-        "func_name": None,
-        "phase": phase,
-        "decision": "failed",
-        "reason": reason,
-        "detail": detail,
-    }
-
-
-def _mlx_metadata_failed_decision(reasons: Mapping[str, str]) -> dict[str, Any]:
-    """The trace-level row recorded when backend-neutral metadata invariants fail."""
-
-    return _mlx_trace_decision(
-        "metadata", reasons["metadata_invariant"], "backend-neutral metadata invariants failed"
-    )
-
-
-def _mlx_nothing_replayed_decision(reasons: Mapping[str, str]) -> dict[str, Any]:
-    """The trace-level row recorded when no op was replay-validated."""
-
-    return _mlx_trace_decision(
-        "coverage", reasons["nothing_replayed"], "no op was replay-validated"
-    )
-
-
-def _mlx_unverified_count(
-    trace: Trace,
-    failed_count: int,
-    unverified_reasons: dict[str, int],
-    count_region_annotations: Callable[[Trace], int],
-) -> int:
-    """Unverified-op count for a passing replay; zero once anything failed."""
-
-    if failed_count != 0:
-        return 0
-    # Perturbation gaps stay UNVERIFIED evidence, never a silent
-    # pass; only the named constant leaves are exempted.
-    return count_region_annotations(trace) + sum(unverified_reasons.values())
-
-
-def _mlx_detailed_counts(
-    trace: Trace, validate_detailed: Callable[[Trace], Any]
-) -> tuple[int, int, tuple[dict[str, Any], ...], dict[str, int], dict[str, int]]:
-    """Run the detailed per-op oracle and unpack its counts, stamping perturbation gaps."""
-
-    outcome = validate_detailed(trace)
-    trace._mlx_perturbation_gaps = outcome.perturbation_gaps
-    return (
-        outcome.replayed_count,
-        outcome.failed_count,
-        outcome.decisions,
-        dict(outcome.exempted_reason_counts),
-        dict(outcome.unverified_reason_counts),
-    )
 
 
 def _append_replay_inventory(trace: Trace, capture: MLXOpCapture) -> None:
@@ -1022,8 +904,7 @@ class MLXBackend:
         fill_unset_declared_fields(trace)
         trace.name = name
         trace._provenance_backend = cast(BackendName, self.name)
-        # Root identity (C07X item (iv)), spelled as tf and new_preview_function_trace do; the
-        # qualname is also the saved root module record's class_qualname (a declared str).
+        # Root identity (C07X item (iv)); the qualname is also the root record's class_qualname.
         if module_tree is not None:
             qualname = f"{type(model).__module__}.{type(model).__qualname__}"
             trace._provenance_root_entry_point = f"module_call:{qualname}.__call__"
@@ -1446,9 +1327,9 @@ class MLXBackend:
             payload-stripped traces return the unavailable status.
         """
 
-        status = trace.validation_replay_status
-        if not status.is_available or _mlx_loaded_replay_unavailable(trace):
-            return self._stamp_unavailable_status(trace)
+        kept = kept_or_unavailable_status(trace, self._stamp_unavailable_status)
+        if kept is not None:
+            return kept
         replayed_count = 0
         failed_count = 0
         decisions: tuple[dict[str, Any], ...] = ()
