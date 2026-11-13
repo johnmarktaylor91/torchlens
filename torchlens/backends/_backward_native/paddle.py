@@ -58,7 +58,6 @@ from ..._ir.events import (
     OpGradObserved,
     ParamGradObserved,
 )
-from ..._runnable import RunnableErrorCode
 from ...errors import RunCapabilityUnavailableError
 from .._backward_neutral import (
     PayloadPolicy,
@@ -68,13 +67,16 @@ from .._backward_neutral import (
 )
 from .._replay_adapters import paddle as adapter
 
-__all__ = [
+__all__ = (
     "PAYLOADS",
     "BackwardScope",
     "backward_ready_scope",
     "record_backward",
     "retain_backward_state",
-]
+)
+
+_CODE = "run_capability_unavailable"  # RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE
+_DETECTION_STAGE = "native_backward_capture"
 
 STATE_KEY = "_paddle_backward_state"
 """``trace.__dict__`` key of the retained backward state."""
@@ -771,8 +773,8 @@ def record_backward(trace: Any, loss: Any = None, **backward_kwargs: Any) -> Non
     except _Unavailable as error:
         raise RunCapabilityUnavailableError(
             f"backward() is unavailable on this Paddle trace: {error}.",
-            code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
-            detection_stage="native_backward_capture",
+            code=_CODE,
+            detection_stage=_DETECTION_STAGE,
         ) from None
     for event in events:
         journal_backward_event(trace, event)
