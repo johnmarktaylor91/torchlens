@@ -100,7 +100,7 @@ def test_jax_intervene_helpers_edit_and_validate(action: Any, expected: Any) -> 
     np.testing.assert_allclose(_out(trace), np.asarray(expected(x)), rtol=1e-6, atol=1e-6)
     edited = _edited(trace)
     assert [op.func_name for op in edited] == ["tanh"]
-    assert edited[0].intervention_fired
+    assert edited[0].fire_results
     assert trace.validate_forward_pass([])
 
 
@@ -144,14 +144,17 @@ def test_jax_intervene_matches_torch_twin() -> None:
 
     torch = pytest.importorskip("torch")
 
-    def torch_model(x: Any) -> Any:
+    class TorchModel(torch.nn.Module):
         """Torch twin of :func:`_model`."""
 
-        return torch.tanh(x @ torch.from_numpy(_W) + torch.from_numpy(_B)) * 2.0
+        def forward(self, x: Any) -> Any:
+            """Return ``tanh(x @ W + b) * 2``."""
+
+            return torch.tanh(x @ torch.from_numpy(_W) + torch.from_numpy(_B)) * 2.0
 
     action = tl.when(tl.func("tanh"), tl.scale(0.25))
     jax_trace = _trace(_model, jnp.asarray(_X), action)
-    torch_trace = tl.trace(torch_model, torch.from_numpy(_X), intervene=action)
+    torch_trace = tl.trace(TorchModel(), torch.from_numpy(_X), intervene=action)
     torch_out = torch_trace[torch_trace.output_layers[0]].out.detach().numpy()
     np.testing.assert_allclose(_out(jax_trace), torch_out, rtol=1e-5, atol=1e-6)
     assert len(_edited(jax_trace)) == len(_edited(torch_trace)) == 1
@@ -236,7 +239,8 @@ def _refusal_code(model: Any, intervene: Any, **kwargs: Any) -> str | None:
 
     with pytest.raises((BackendUnsupportedError, tl.errors.PredicateError)) as excinfo:
         _trace(model, jnp.asarray(_X), intervene, **kwargs)
-    return cast(Any, excinfo.value).code
+    error = cast(Any, excinfo.value)
+    return getattr(error, "code", None) or error.fields.get("code")
 
 
 def test_jax_intervene_typed_refusals() -> None:
