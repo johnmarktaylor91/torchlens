@@ -302,20 +302,25 @@ class NeutralSearch:
         self,
         priors: ShapePriors,
         model: Any,
-        request: SearchRequest,
-        ledger: SearchLedger,
-        *,
-        seed: int,
-        return_trace: bool,
         tracer: Callable[[Any, Any], Any],
+        settings: SearchSettings,
     ) -> None:
         self.priors = priors
         self.model = model
-        self.request = request
-        self.ledger = ledger
-        self.seed = seed
-        self.return_trace = return_trace
         self.tracer = tracer
+        self.request = SearchRequest(
+            settings.batch_size,
+            settings.input_dtype,
+            settings.channels,
+            settings.spatial_rank,
+            settings.seq_len,
+            settings.min_size,
+            settings.max_size,
+            tuple(settings.preferred_sizes),
+        )
+        self.ledger = SearchLedger(attempts=[], max_probes=settings.max_probes)
+        self.seed = settings.seed
+        self.return_trace = settings._return_trace
         self.tried: set[tuple[tuple[int, ...], str]] = set()
 
     def run(self) -> GuessInputShapeReport:
@@ -458,8 +463,7 @@ class NeutralSearch:
             constraint,
             flexible,
             self._determination(win, flexible, rest),
-            trace_obj if self.return_trace else None,
-            self.ledger.attempts,
+            (trace_obj if self.return_trace else None, self.ledger.attempts),
         )
 
     def _confirmed_flexible(self, win: _Win) -> tuple[int, ...]:
@@ -622,10 +626,11 @@ def build_success(
     constraint: ExecutedConstraint | None,
     flexible: tuple[int, ...],
     determination: str,
-    trace_obj: Any,
-    attempts: Sequence[Attempt],
+    trace_and_attempts: tuple[Any, Sequence[Attempt]],
 ) -> GuessInputShapeReport:
-    """Build the verified report for a winning probe."""
+    """Build the verified report for a winning probe (the trace is ``None`` unless asked)."""
+
+    trace_obj, attempts = trace_and_attempts
 
     module = (
         constraint.module if constraint is not None else None
@@ -688,61 +693,62 @@ def dispatch_non_torch(
     return result
 
 
+@dataclass(frozen=True)
+class SearchSettings:
+    """The keyword arguments of :func:`torchlens.debug.guess_input_shape`, with its defaults.
+
+    Constructing it from the caller's keywords rejects an unknown keyword with
+    the usual ``TypeError``, as the torch path's signature does.
+    """
+
+    batch_size: int = 1
+    input_dtype: Any = None
+    channels: int | None = None
+    spatial_rank: int | Literal["auto"] = "auto"
+    seq_len: int | None = None
+    square: bool = True
+    min_size: int = 1
+    max_size: int = 512
+    preferred_sizes: Sequence[int] = (224, 256, 384, 299, 128, 96, 64, 32, 28)
+    max_probes: int = 64
+    device: Any = None
+    seed: int = 0
+    _return_trace: bool = False
+    on_failure: Literal["return", "raise"] = "return"
+    input_specs: Any = None
+
+
 def guess_with_priors(
-    priors: ShapePriors,
-    model: Any,
-    tracer: Callable[[Any, Any], Any],
-    *,
-    batch_size: int = 1,
-    input_dtype: Any = None,
-    channels: int | None = None,
-    spatial_rank: int | Literal["auto"] = "auto",
-    seq_len: int | None = None,
-    square: bool = True,
-    min_size: int = 1,
-    max_size: int = 512,
-    preferred_sizes: Sequence[int] = (224, 256, 384, 299, 128, 96, 64, 32, 28),
-    max_probes: int = 64,
-    device: Any = None,
-    seed: int = 0,
-    _return_trace: bool = False,
-    on_failure: Literal["return", "raise"] = "return",
-    input_specs: Any = None,
+    priors: ShapePriors, model: Any, tracer: Callable[[Any, Any], Any], **options: Any
 ) -> GuessInputShapeReport:
     """Run the neutral search for a non-torch model with the same contract as torch.
 
-    Arguments mean what they mean for :func:`torchlens.debug.guess_input_shape`;
-    ``device`` is torch-only. ``tracer(model, example)`` runs the verification
-    ``tl.trace`` (injected to keep this module out of the package import cycle).
+    ``options`` are :class:`SearchSettings` fields and mean what they mean for
+    :func:`torchlens.debug.guess_input_shape`; ``device`` is torch-only.
+    ``tracer(model, example)`` runs the verification ``tl.trace`` (injected to
+    keep this module out of the package import cycle).
     """
 
+    settings = SearchSettings(**options)
     validate_search_arguments(
-        batch_size=batch_size,
-        channels=channels,
-        spatial_rank=spatial_rank,
-        seq_len=seq_len,
-        min_size=min_size,
-        max_size=max_size,
-        max_probes=max_probes,
+        batch_size=settings.batch_size,
+        channels=settings.channels,
+        spatial_rank=settings.spatial_rank,
+        seq_len=settings.seq_len,
+        min_size=settings.min_size,
+        max_size=settings.max_size,
+        max_probes=settings.max_probes,
     )
-    if device is not None:
-        raise ShapeInferenceError("device= applies to torch modules only; leave it None.")
-    sizes = tuple(preferred_sizes)
-    request = SearchRequest(
-        batch_size, input_dtype, channels, spatial_rank, seq_len, min_size, max_size, sizes
-    )
-    ledger = SearchLedger(attempts=[], max_probes=max_probes)
-    search = NeutralSearch(
-        priors, model, request, ledger, seed=seed, return_trace=_return_trace, tracer=tracer
-    )
-    result = _guarded_search(search, input_specs, square, on_failure)
-    maybe_raise(result, on_failure)
+    if settings.device is not None:  # An argument error raises whatever on_failure says.
+        refusal = "device= applies to torch modules only; leave it None."
+        maybe_raise(failure_result("unknown_entry", [], refusal), "raise")
+    search = NeutralSearch(priors, model, tracer, settings)
+    result = _guarded_search(search, settings.input_specs, settings.square)
+    maybe_raise(result, settings.on_failure)
     return result
 
 
-def _guarded_search(
-    search: NeutralSearch, input_specs: Any, square: bool, on_failure: Literal["return", "raise"]
-) -> GuessInputShapeReport:
+def _guarded_search(search: NeutralSearch, input_specs: Any, square: bool) -> GuessInputShapeReport:
     """Prechecks, then the search inside the prior's state scope and the error net."""
 
     reason = entry_precheck(input_specs=input_specs, square=square)
@@ -756,6 +762,4 @@ def _guarded_search(
             return search.run()
     except Exception as exc:  # noqa: BLE001 - the on_failure contract admits no raw escape.
         message = f"Shape inference aborted on an unexpected internal error: {exc!r}"
-        if on_failure == "raise":
-            raise ShapeInferenceError(message) from exc
         return failure_result("non_shape_blocker", search.ledger.attempts, message)

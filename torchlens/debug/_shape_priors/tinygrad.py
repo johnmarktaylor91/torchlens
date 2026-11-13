@@ -103,7 +103,7 @@ def _layer_candidate(
             strategy="tinygrad_layer_prior",
         )
     if isinstance(layer, nn.Conv2d) and len(shape) >= 3:
-        return _conv_candidate(layer, shape, request, dtype, address, op)
+        return _conv_candidate(layer, request, dtype, address, op)
     if isinstance(layer, nn.Embedding) and len(shape) == 2:
         return ShapeCandidate(
             "embedding",
@@ -121,15 +121,11 @@ def _layer_candidate(
 
 
 def _conv_candidate(
-    layer: Any,
-    weight_shape: tuple[int, ...],
-    request: SearchRequest,
-    dtype: Any,
-    address: str | None,
-    op: str,
+    layer: Any, request: SearchRequest, dtype: Any, address: str | None, op: str
 ) -> ShapeCandidate:
     """A channel-first convolution candidate."""
 
+    weight_shape = tuple(int(dim) for dim in layer.weight.shape)
     rank = len(weight_shape) - 2
     groups = int(getattr(layer, "groups", 1) or 1)
     channels = request.channels or weight_shape[1] * groups
