@@ -161,6 +161,10 @@ def _scratch_session(model: Any) -> Trace:
     return session
 
 
+_NO_LINEAGE: tuple[tuple[str, ...], tuple[Any, ...]] = ((), ())
+"""The (parent labels, module frames) of an input or source leaf: neither."""
+
+
 class _RecordingPaddleBackend(PaddleBackend):
     """A Paddle backend whose wrapper events go to a record sink, not a trace."""
 
@@ -179,7 +183,7 @@ class _RecordingPaddleBackend(PaddleBackend):
         events.raw_layer_counter += 1
         index = events.raw_layer_counter
         site = ReservedLabel(label, label, index, index, "input", label)
-        self._emit(site, "input", tensor, (), (), kind="input")
+        self._emit(site, "input", tensor, _NO_LINEAGE, kind="input")
 
     def emit_paddle_operation(
         self,
@@ -229,7 +233,7 @@ class _RecordingPaddleBackend(PaddleBackend):
             event.label_raw,
         )
         kind = "buffer" if event.layer_type == PADDLE_BUFFER_OP else "op"
-        self._emit(site, event.layer_type, tensor, ((), ()), kind=kind)
+        self._emit(site, event.layer_type, tensor, _NO_LINEAGE, kind=kind)
 
     def _emit(
         self,
