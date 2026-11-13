@@ -96,7 +96,11 @@ def _capture_refusal(capture: Any) -> str | None:
     name = identity.partition(".")[2]
     if name in _RANDOM_LAYERS and getattr(module, "training", False):
         return f"random op: {name} in training mode draws from mx.random (needs the rng lane)"
-    if name == "BatchNorm" and getattr(module, "training", False) and "running_mean" in module:
+    if (
+        name == "BatchNorm"
+        and getattr(module, "training", False)
+        and "running_mean" in (module or {})
+    ):
         return "stateful op: BatchNorm in training mode updates its running statistics per call"
     module_labels = capture.arg_leaf_labels[0] if capture.arg_leaf_labels else ()
     if module is not None and any(label is not None for label in module_labels):
