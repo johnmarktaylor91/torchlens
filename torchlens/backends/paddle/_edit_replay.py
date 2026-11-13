@@ -16,6 +16,10 @@ check that the replay output equals the captured output (for a halted
 capture, the captured frontier) then confirms the replay ran the same
 program; a hook that does not reproduce its value fails that check.
 
+Armed ``tl.grad(site)`` edits are registered as Paddle gradient hooks on the
+replayed site outputs, so ``paddle.grad`` returns the input and parameter
+gradients with each edit applied to the gradient arriving at its site.
+
 Call ordinals count top-level wrapped calls that return at least one tensor,
 the same rule the capture uses when it numbers op calls; nested calls (inside
 a wrapped call or a hook) are not counted, as during capture.

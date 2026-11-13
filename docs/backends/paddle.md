@@ -107,6 +107,86 @@ A tensor created *during* the forward by an operation TorchLens does not wrap is
 constant: it stays an untraced input, and validation fails naming the op that read it
 (reason `parent_payload_missing`).
 
+## Edits and gradients
+
+Live edits (`intervene=`) and finished-trace edits (`trace.fork().do(site, edit)`) take
+the six built-in helpers `tl.zero_ablate()`, `tl.scale(factor)`, `tl.add(delta)`,
+`tl.clamp(low=, high=)`, `tl.mean_ablate(dim=)` (the self form; a `source=` argument is
+refused) and `tl.replace_with(value)`, or a callable on Paddle tensors. A live callable
+is called with the op output, `fn(out)`; a fork callable gets `fn(out, *, ctx)`. A fork
+edit re-runs every downstream op once through the replay adapter. An op the adapter
+cannot replay (a training-mode dropout, for example) refuses the edit and names the op;
+nothing is half-applied.
+
+```python
+class Mlp(paddle.nn.Layer):
+    def __init__(self):
+        super().__init__()
+        self.first = paddle.nn.Linear(3, 4)
+        self.second = paddle.nn.Linear(4, 2)
+
+    def forward(self, x):
+        return self.second(paddle.nn.functional.relu(self.first(x)))
+
+
+paddle.seed(0)
+mlp = Mlp()
+x = paddle.to_tensor([[1.0, -2.0, 0.5]], dtype="float32")
+grads = tl.options.CaptureOptions(
+    grad_options=tl.backends.paddle.GradOptions(loss_fn=lambda y: paddle.sum(y * y))
+)
+
+clean = tl.trace(mlp, x, backend="paddle")
+relu = next(op for op in clean if op.type == "relu")
+edited = clean.fork().do(relu.label, tl.scale(2.0))
+
+live = tl.trace(
+    mlp, x, backend="paddle", intervene=tl.when(tl.func("functional.relu"), tl.scale(2.0)),
+    capture=grads,
+)
+assert np.allclose(edited[-1].out.numpy(), live[-1].out.numpy())
+weight_grad = live.autograd.derived_grads["params.first.weight"].grad
+
+gradient_edit = tl.trace(
+    mlp, x, backend="paddle",
+    intervene=tl.when(tl.grad(tl.func("functional.relu")), tl.scale(0.5)),
+    capture=grads,
+)
+```
+
+Derived gradients (`GradOptions`) are gradients of the program the capture ran. With
+`intervene=` they differentiate through the edits as applied, so `tl.scale(2.0)` doubles
+the gradient flowing back through the edited op and `tl.zero_ablate()` cuts it. With
+`stop_after=` they differentiate the loss of the halted frontier. TorchLens re-runs the
+forward with each edit at the call where it fired and checks that the re-run reproduces
+the captured output before it publishes any gradient.
+
+A `tl.grad(site)` clause edits the gradient arriving at the site's output, as on
+PyTorch, and may sit in the same spec as activation edits. Paddle records no backward
+pass during capture, so the clause is armed on the finished trace and applied when
+derived gradients are computed. Input and parameter gradients come from `paddle.grad`
+with the edit registered as a gradient hook on the site output. The edited gradient at
+each op (`trace.autograd.intermediate_derived_grads`, with
+`GradOptions(intermediate_grads=True)`) comes from a reverse pass over the replay
+adapter's per-op derivatives. TorchLens refuses if the two passes disagree on an input
+gradient, and refuses, naming the op, if the reverse pass reaches an op it cannot
+replay. A gradient-edit callable is called `fn(grad)`. Selectors that address autograd
+nodes (`tl.grad_fn`, `tl.grad_input`, ...) are refused with
+`backward_capture_unsupported`.
+
+Gradient influence probes (`probe_grad`, `.of(method="gradient")`, both directions)
+replay the captured operations between the two units and differentiate them with
+`paddle.grad`; the projective direction runs one reverse probe per target element (limit
+4096).
+
+A trace saved with `level="executable_with_callables"` also stores one replay recipe per
+op, so after `tl.load` it validates by real replay, also in a fresh process without the
+model. An op saved without a recipe makes the status `unverified`, naming it. A
+different framework version, an unreadable recipe section or a bundle saved without one
+keeps `unavailable` with reason `"loaded_trace_runtime_capture_stripped"`.
+
+Guessing a model's input shape works on Paddle as on PyTorch.
+
 ## Can and cannot
 
 The rows follow the backend's capability summary in its scorecard: **supported** means
@@ -119,8 +199,9 @@ conformance cell yet.
 | Forward capture (eager dygraph) | supported | |
 | Replay validation (`has_validation_replay`) | supported | |
 | Payload materialization after load (`payload_materialization`) | supported | |
-| Live forward interventions and `stop_after=` (`can_intervene`) | supported | |
-| Derived gradients, including intermediates (`intermediate_derived_grads`) | supported | |
+| Live forward interventions, `stop_after=` and finished-trace edits (`can_intervene`) | supported | |
+| Gradient edits at `tl.grad(...)` sites, applied to derived gradients | supported | |
+| Derived gradients, including intermediates and edited or halted captures (`intermediate_derived_grads`) | supported | |
 | True backward capture (`backward_capture`) | unsupported | `backward_capture_unsupported` |
 | Fast logging (`fastlog`) | unsupported | `fastlog_unsupported` |
 | RNG replay (`rng_replay`) | unsupported | `rng_replay_unsupported` |
@@ -128,8 +209,7 @@ conformance cell yet.
 | Structure-only capture (`structure_only_capture`) | unsupported | `structure_only_capture_unsupported` |
 
 Other refusals the backend raises: `explicit_seed_unsupported` (`random_seed=`),
-`trace_option_unsupported` (an option outside the backend's list, or `grad_options=`
-combined with `intervene=`/`stop_after=`), `module_identity_mode_unsupported`,
+`trace_option_unsupported` (an option outside the backend's list), `module_identity_mode_unsupported`,
 `value_dependent_branch_unsupported` (a tensor turned into a Python scalar inside the
 forward), `rng_replay_unsupported` (a stochastic Paddle op inside the forward),
 `inplace_op_unsupported` (an in-place or global-state Paddle op inside the forward),

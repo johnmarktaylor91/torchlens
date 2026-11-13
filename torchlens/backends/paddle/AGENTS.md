@@ -9,8 +9,8 @@ Paddle backend: eager dygraph wrapper capture. It fills the backend protocol (no
   (re-exported from `__init__.py`) drives derived gradients including
   intermediates (`intermediate_derived_grads=True`).
 - Live forward `intervene=` AND `stop_after=` both ship (the wrapper holds each
-  concrete output before the caller sees it); combining `grad_options=` with
-  either refuses typed. Halted traces set `is_stopped` / `stop_reason` /
+  concrete output before the caller sees it). With `grad_options=`, derived
+  gradients replay the edited or halted program (`_edit_replay.py`). Halted traces set `is_stopped` / `stop_reason` /
   `halt_frontier`. A `stop_after` that never fires follows torch's policy
   (`PaddleInterventionRuntime.settle_unfired`, shared
   `torchlens/_capture/_stop_after_policy.py`): a selector refuses typed
@@ -36,9 +36,28 @@ Paddle backend: eager dygraph wrapper capture. It fills the backend protocol (no
 ## interventions.py
 - `PaddleInterventionRuntime` validates and evaluates the intervene/halt
   predicates per wrapped call; hooks must return a `paddle.Tensor`.
-- Builtin helper adapters (`_PADDLE_SUPPORTED_HELPER_NAMES`): `add`,
-  `replace_with`, `scale`, `zero_ablate`; others refuse typed.
-- Decisions are forward-only; the module imports without Paddle installed.
+- Builtin helper adapters (`_PADDLE_SUPPORTED_HELPER_NAMES`, applied in
+  `_edit_helpers.py`, which the replay adapter's `apply_helper` also uses for
+  fork edits): `add`, `clamp`, `mean_ablate` (self form), `replace_with`,
+  `scale`, `zero_ablate`; others refuse typed. The literal tuple stays in
+  `interventions.py` (read by AST in tests).
+- Records each replacing hook by wrapped-call ordinal and output path
+  (`fired_edits`) and the halting call (`halt_call_id`) for the derived-grad replay.
+- `tl.grad(site)` clauses are split off the live predicate at init and armed on
+  the finished trace (`arm_gradient_sites`) through
+  `intervention/_grad_site_neutral.py`; the caller passes
+  `hooks._target_operands` so that module stays out of the import cycle.
+  Gradient-edit callables are `fn(grad)`. Autograd-node selectors refuse.
+- The module imports without Paddle installed.
+
+## _edit_replay.py, _grad_sites.py
+- `_edit_replay.run_derived_grad_forward` re-runs the model through a tap that
+  re-applies fired hooks by call ordinal, stops at the halt call, and registers
+  armed `tl.grad` edits as Paddle gradient hooks on the site outputs.
+- `_grad_sites.paddle_grad_site_records` recomputes an armed pass with the
+  reverse engine, refuses if its input-leaf gradients disagree with
+  `paddle.grad`, and returns the intermediate records. Keep both modules free of
+  imports from the selector/hook cycle (layering largest_scc ratchet).
 
 ## model_prep.py
 - `discover_paddle_module_tree()` builds `PaddleModuleTree`;
