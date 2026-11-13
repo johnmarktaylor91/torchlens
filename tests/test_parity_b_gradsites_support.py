@@ -67,14 +67,18 @@ def _labels(op: Any) -> tuple[str, ...]:
 def _replay_values(
     trace: Any, adapter: Any, x_value: Any
 ) -> tuple[dict[str, Any], list[Any], tuple[str, ...]]:
-    """Values of every label from the input through ``adapter.forward``; the graph ops."""
+    """Values of every label from the input through ``adapter.forward``; the graph ops.
+
+    The input is the op with no recipe (JAX, TF, Paddle, tinygrad) or an
+    ``"input"`` recipe (MLX); it is left out of the graph ops, so it is a leaf.
+    """
 
     values: dict[str, Any] = {}
     graph_ops: list[Any] = []
     sources: list[tuple[str, ...]] = []
     for op in trace._layer_list:
         recipe = adapter.recipe(trace, op)
-        if recipe is None:
+        if recipe is None or recipe.op_identity == "input":
             sources.append(_labels(op))
             values.update(dict.fromkeys(_labels(op), x_value))
             continue

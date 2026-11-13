@@ -34,17 +34,25 @@ def _edits() -> list[tuple[str, Any]]:
     ]
 
 
+def _leaf(values: Any) -> Any:
+    """A tinygrad leaf that collects ``.grad`` (set by attribute: works across versions)."""
+
+    leaf = Tensor(values)
+    leaf.requires_grad = True
+    return leaf
+
+
 def _oracle(edits: list[tuple[str, Any]]) -> Any:
     """``backward`` of each half, the edits applied to the site gradient in between."""
 
-    s_leaf = Tensor(_f1(Tensor(support.x_np())).numpy(), requires_grad=True)
-    x_loss = Tensor(support.x_np(), requires_grad=True)
+    s_leaf = _leaf(_f1(Tensor(support.x_np())).numpy())
+    x_loss = _leaf(support.x_np())
     _f2(s_leaf, x_loss).backward()
     grad_s = s_leaf.grad
     for _name, fn in edits:
         grad_s = fn(grad_s)
     grad_s = Tensor(grad_s.numpy())
-    x_s = Tensor(support.x_np(), requires_grad=True)
+    x_s = _leaf(support.x_np())
     (_f1(x_s) * grad_s).sum().backward()
     return x_s.grad.numpy() + x_loss.grad.numpy()
 
