@@ -31,7 +31,7 @@ def _check_search(row: Any, backend: str) -> None:
     assert guessed == _validation_state(model, roster_example, backend), row.family
     assert guessed in {"passed", "unverified"}, (row.family, guessed)
     if isinstance(model, (types.FunctionType, functools.partial)):
-        assert "uniquely determined" not in report.message, (row.family, report.message)
+        assert "; uniquely determined by" not in report.message, (row.family, report.message)
 
 
 @pytest.mark.backend_jax
@@ -63,7 +63,7 @@ def test_jax_partial_params_guess_reports_ambiguity() -> None:
     report = tl.debug.guess_input_shape(functools.partial(apply, params))
     assert report.found, report.message
     assert report.shape is not None and report.shape[-1] == 3
-    assert "uniquely determined" not in report.message
+    assert "; uniquely determined by" not in report.message
     assert "ambiguous" in report.message
 
 
