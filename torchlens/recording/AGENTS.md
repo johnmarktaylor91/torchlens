@@ -26,6 +26,9 @@ predicate (plus `default_op=`/`default_module=` defaults).
 | `options.py` | Fastlog-specific recording options |
 | `_record_one_shot.py` | Public `record()` implementation |
 | `_recorder.py` | Public `Recorder` context manager and repeated rollout orchestration |
+| `_backend_events.py` | Lean event interface (`BackendRecordProducer`, event sink) a non-torch backend's `tl.record` producer emits |
+| `_backend_options.py` | `tl.record` option resolution for a backend that binds a record producer |
+| `_backend_recorder.py` | `BackendRecorder`: the recorder `tl.record` runs for a backend that binds a record producer |
 | `_storage_resolver.py` | Tensor copy/detach/RAM/disk routing |
 | `_halt.py` | The public `halt()` entry point + `StopSignal`, plus halt outcome helpers shared by one-shot and repeated recording |
 | `_indexes.py` | Recording index helpers |
