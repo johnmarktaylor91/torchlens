@@ -52,7 +52,7 @@ from ..paddle.wrappers import (
     _TOP_LEVEL_CORE_OPS,
     _classify_candidate,
 )
-from ._contract import InputOccurrence, OpRecipe, ReplayRecipeError
+from ._contract import InputOccurrence, OpRecipe, ReplayRefusal
 
 BACKEND = "paddle"
 
@@ -303,7 +303,7 @@ def _require(trace: Any, op: Any) -> _Site:
     reason = can_replay(trace, op)
     site = _site(trace, op)
     if reason is not None or site is None:
-        raise ValueError(f"Paddle op {_raw_label(op)!r} cannot be replayed: {reason}")
+        raise ReplayRefusal("cannot_replay", f"{reason}", op_label=_raw_label(op))
     return site
 
 
@@ -318,14 +318,15 @@ def forward(trace: Any, op: Any, parent_values: Sequence[Any]) -> tuple[Any, ...
     capture = site.capture
     if is_constant_capture(capture):
         if parent_values:
-            raise ValueError("a Paddle closure constant takes no parent values")
+            raise ReplayRefusal("arity", "a Paddle closure constant takes no parent values")
         label = site.slot_labels[0]
         return (next(o for o in _ops(trace) if getattr(o, "_label_raw", None) == label).out,)
     occurrences = _occurrences(capture)
     if len(parent_values) != len(occurrences):
-        raise ValueError(
+        raise ReplayRefusal(
+            "arity",
             f"Paddle op {site.slot_labels[0]!r} takes {len(occurrences)} parent values, "
-            f"got {len(parent_values)}"
+            f"got {len(parent_values)}",
         )
     replacements = {
         path: value for (_label, path), value in zip(occurrences, parent_values, strict=True)
@@ -369,7 +370,9 @@ def vjp(
         )
         outputs = forward(trace, op, leaves)
         if len(cotangents) != len(outputs):
-            raise ValueError(f"expected {len(outputs)} cotangents, got {len(cotangents)}")
+            raise ReplayRefusal(
+                "arity", f"expected {len(outputs)} cotangents, got {len(cotangents)}"
+            )
         pairs = [
             (out, cot)
             for out, cot in zip(outputs, cotangents, strict=True)
@@ -428,7 +431,7 @@ def _encode_literal(value: Any) -> Any:
         return tuple(items) if isinstance(value, tuple) else items
     if type(value) is dict:
         if any(type(key) is not str or key in _TAGS for key in value):
-            raise TypeError("literal mapping with a non-str or reserved key")
+            raise ReplayRefusal("type", "literal mapping with a non-str or reserved key")
         return {key: _encode_literal(item) for key, item in value.items()}
     if value is Ellipsis:
         return {_TAG_ELLIPSIS: True}
@@ -441,7 +444,7 @@ def _encode_literal(value: Any) -> Any:
     dtype_name = _paddle_dtype_name(value)
     if dtype_name is not None:
         return {_TAG_DTYPE: dtype_name}
-    raise TypeError(f"literal of type {type(value).__name__}")
+    raise ReplayRefusal("type", f"literal of type {type(value).__name__}")
 
 
 def _paddle_dtype_name(value: Any) -> str | None:
@@ -483,7 +486,7 @@ def _decode_paddle_dtype(name: Any) -> Any:
 
     value = getattr(paddle, str(name), None) if isinstance(name, str) else None
     if value is None or _paddle_dtype_name(value) != name:
-        raise ReplayRecipeError("type", f"unknown Paddle dtype {name!r}")
+        raise ReplayRefusal("type", f"unknown Paddle dtype {name!r}")
     return value
 
 
@@ -506,7 +509,7 @@ def _skeleton(capture: Any, value: Any, path: tuple[Any, ...], parts: dict[str, 
         return {"tuple" if isinstance(value, tuple) else "list": items}
     if isinstance(value, dict) and has_tensor:
         if any(type(key) is not str for key in value):
-            raise TypeError("tensor container with a non-str key")
+            raise ReplayRefusal("type", "tensor container with a non-str key")
         return {"dict": {k: _skeleton(capture, v, (*path, k), parts) for k, v in value.items()}}
     parts["literals"].append((_arg_path(path), _encode_literal(value)))
     return _NODE_LITERAL
@@ -563,7 +566,7 @@ def _recipe_or_reason(trace: Any, op: Any) -> tuple[OpRecipe | None, str | None]
             "output_paths": tuple(tuple(path) for path in capture.output_leaf_paths),
             "aliases": tuple(_encode_literal(dict(n)) for n in capture.alias_annotations),
         }
-    except TypeError as exc:
+    except (TypeError, ReplayRefusal) as exc:
         return None, f"argument not data-encodable: {exc}"
     return (
         OpRecipe(
@@ -587,7 +590,7 @@ def _recipe_or_reason(trace: Any, op: Any) -> tuple[OpRecipe | None, str | None]
 def _resolve_callable(op_identity: str) -> Any:
     """The original unwrapped Paddle callable for an allowlisted op identity."""
     if op_identity not in ALLOWLIST:
-        raise ReplayRecipeError("unknown_op", f"{op_identity!r} is not in the paddle allowlist")
+        raise ReplayRefusal("unknown_op", f"{op_identity!r} is not in the paddle allowlist")
     if op_identity == PADDLE_CONSTANT_OP:
         return None
     if op_identity in PADDLE_CONV_LAYER_OPS.values():
@@ -620,7 +623,7 @@ def _rebuild_node(
             return tuple(items) if kind == "tuple" else items
         if kind == "dict":
             return {key: _rebuild_node(item, (*path, key), refs) for key, item in body.items()}
-    raise ReplayRecipeError("shape", f"bad call skeleton node at {path!r}")
+    raise ReplayRefusal("shape", f"bad call skeleton node at {path!r}")
 
 
 def _param_value(trace: Any, address: str) -> Any | None:
@@ -637,7 +640,7 @@ def _bind_one(trace: Any, item: OpRecipe) -> Any:
     """Rebuild one ``PaddleOpCapture`` from a recipe (fail-closed on missing params)."""
     label = item.output_slots[0] if item.output_slots else None
     if item.backend != BACKEND:
-        raise ReplayRecipeError("backend", f"recipe is for {item.backend!r}", op_label=label)
+        raise ReplayRefusal("backend", f"recipe is for {item.backend!r}", op_label=label)
     func = _resolve_callable(item.op_identity)
     refs = {
         "literals": {tuple(path): value for path, value in item.literals},
@@ -699,7 +702,7 @@ def bind_recipes(trace: Any, recipes: Mapping[str, OpRecipe]) -> None:
     by_first: dict[str, OpRecipe] = {}
     for key, item in recipes.items():
         if not item.output_slots or item.output_slots[0] != key:
-            raise ReplayRecipeError("slots", f"recipe keyed {key!r} starts elsewhere", op_label=key)
+            raise ReplayRefusal("slots", f"recipe keyed {key!r} starts elsewhere", op_label=key)
         by_first[key] = item
     covered = {slot for item in by_first.values() for slot in item.output_slots}
     captures: list[Any] = []

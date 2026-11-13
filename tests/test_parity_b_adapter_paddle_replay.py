@@ -21,7 +21,7 @@ paddle = pytest.importorskip("paddle")
 import torchlens as tl  # noqa: E402
 from tests.conformance._rosters import paddle as paddle_roster  # noqa: E402
 from torchlens._utils._record_group_table import record_member  # noqa: E402
-from torchlens.backends._replay_adapters import get_adapter  # noqa: E402
+from torchlens.backends._replay_adapters import ReplayRefusal, get_adapter  # noqa: E402
 from torchlens.backends._validation_shared import ops_by_label  # noqa: E402
 
 pytestmark = [pytest.mark.backend_paddle, pytest.mark.rare]
@@ -248,3 +248,18 @@ def test_array_helpers_use_paddle_and_the_validator_comparison() -> None:
     assert adapter.close(x, x + 0.0)
     assert not adapter.close(x, x + 1.0)
     assert not adapter.close(x, paddle.cast(x, "float64"))
+
+
+def test_contract_misuse_raises_the_internal_replay_refusal() -> None:
+    """Wrong arity and refused ops raise ``ReplayRefusal``, never a coded error."""
+
+    x = paddle.to_tensor(np.array([1.0, 2.0], dtype="float32"))
+    trace = tl.trace(lambda v: paddle.nn.functional.relu(v), (x,), backend="paddle")
+    relu = next(op for op in trace._layer_list if not op.is_input)
+    source = next(op for op in trace._layer_list if op.is_input)
+    with pytest.raises(ReplayRefusal, match="arity"):
+        adapter.forward(trace, relu, [])
+    with pytest.raises(ReplayRefusal, match="arity"):
+        adapter.vjp(trace, relu, [x], [])
+    with pytest.raises(ReplayRefusal, match="cannot_replay"):
+        adapter.forward(trace, source, [])

@@ -20,7 +20,7 @@ paddle = pytest.importorskip("paddle")
 import torchlens as tl  # noqa: E402
 from tests.conformance._rosters import paddle as paddle_roster  # noqa: E402
 from torchlens.backends._replay_adapters import (  # noqa: E402
-    ReplayRecipeError,
+    ReplayRefusal,
     decode_recipe,
     encode_recipe,
     get_adapter,
@@ -174,13 +174,13 @@ def test_unlisted_op_identity_and_corrupt_literals_are_refused() -> None:
     recipes, _refused = _recipes(trace)
     key, item = next(iter(recipes.items()))
     tree = encode_recipe(replace(item, op_identity="os.system"))
-    with pytest.raises(ReplayRecipeError, match="unknown_op"):
+    with pytest.raises(ReplayRefusal, match="unknown_op"):
         decode_recipe(tree, backend="paddle", allowlist=adapter.ALLOWLIST)
-    with pytest.raises(ReplayRecipeError):
+    with pytest.raises(ReplayRefusal):
         adapter.bind_recipes(trace, {key: replace(item, op_identity="os.system")})
-    with pytest.raises(ReplayRecipeError, match="slots"):
+    with pytest.raises(ReplayRefusal, match="slots"):
         adapter.bind_recipes(trace, {"not-the-first-slot": item})
-    with pytest.raises(ReplayRecipeError):
+    with pytest.raises(ReplayRefusal):
         adapter._decode_literal({"__paddle_dtype__": "not_a_dtype"})
 
 
