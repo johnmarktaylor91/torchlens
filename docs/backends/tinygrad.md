@@ -50,9 +50,10 @@ print(status.state)          # "passed"
 print(status.message)        # names the first offending op when it fails
 ```
 
-Inputs may be positional or keyword tensors (`input_kwargs=` or plain keyword arguments to
-`tl.trace`). Each op records the user source lines it ran from in `op.source.frames`,
-outermost first, as the torch backend does:
+Inputs may be positional tensors, keyword tensors passed through `input_kwargs=`, or both;
+`tl.trace(fn, (), input_kwargs={"x": x})` traces a call with keyword tensors only. Each op
+records the user source lines it ran from in `op.source.frames`, outermost first, as the
+torch backend does:
 
 ```python
 frames = trace.output_ops[0].source.frames
@@ -121,7 +122,7 @@ and its refusal cell has not yet passed on the pinned CI leg (not yet proven, no
 | Mid-capture `Tensor.realize()` or TinyJit execution | unsupported | refusal `mid_capture_execution_unsupported` |
 | Input mutation (`Tensor.assign()`, `Tensor.replace()`, setitem on an input) | unsupported | refusal `input_mutation_unsupported` |
 | A callable that returns no tinygrad Tensor | unsupported | refusal `tensor_output_required` |
-| Keyword tensor inputs (`input_kwargs=` or keyword arguments) | supported | each keyword leaf is a trace input |
+| Keyword tensor inputs (`input_kwargs=`) | supported | each keyword leaf is a trace input |
 | User source lines (`op.source.frames`, `save_source_context=`) | supported | user frames from the `tl.trace` call site to the op's line; TorchLens and tinygrad frames are skipped |
 | No tinygrad Tensor input (positional or keyword) | unsupported | refusal `tinygrad_input_required` |
 | Replay validation or derived gradients on an audit-only trace | unsupported | refusal `live_payloads_required` |
