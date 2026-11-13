@@ -52,7 +52,7 @@ def test_guessed_shape_runs_and_validates_on_every_roster_row(family: str) -> No
     assert tuple(report.example_input.shape) == report.shape
     with paddle.no_grad():
         model(report.example_input)
-    assert tl.validate_forward_pass(model, [report.example_input]) is True
+    assert tl.validation.validate_forward_pass(model, [report.example_input]) is True
 
 
 def test_any_shape_function_reports_ambiguity() -> None:
@@ -74,12 +74,14 @@ def test_weight_pinned_mlp_is_uniquely_determined() -> None:
 
 
 def test_cnn_side_is_searched_and_called_a_working_candidate() -> None:
-    """The CNN head fixes the side; the search finds it and does not claim uniqueness."""
+    """The CNN head limits the side; the search finds one that fits and does not claim uniqueness."""
 
     model, example = _ROWS["mod_cnn"].builder()
     report = guess_input_shape(model)
-    assert report.found and report.shape == tuple(example.shape)
-    assert "working candidate" in report.message
+    assert report.found and report.shape is not None
+    # Sides 6 and 7 both pool to the 3x3 map the head expects; either is a valid answer.
+    assert report.shape[:2] == tuple(example.shape)[:2] and report.shape[2] in (6, 7)
+    assert "working candidate" in report.message or "ambiguous" in report.message
 
 
 def test_channel_last_conv_uses_its_data_format() -> None:

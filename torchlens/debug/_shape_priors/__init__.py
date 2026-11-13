@@ -219,7 +219,7 @@ def resolve_priors(model: Any) -> tuple[str, ShapePriors] | None:
             if exc.name == qualified:
                 continue
             raise
-        priors: ShapePriors = module  # type: ignore[assignment]
+        priors: ShapePriors = module
         if priors.handles(model):
             return backend_name, priors
     return None
@@ -239,7 +239,7 @@ def imported_priors() -> list[tuple[str, ShapePriors]]:
             raise
         framework = getattr(module, "FRAMEWORK", None)
         if isinstance(framework, str) and framework in sys.modules:
-            found.append((backend_name, module))  # type: ignore[arg-type]
+            found.append((backend_name, module))
     return found
 
 
@@ -297,18 +297,24 @@ def _children(obj: Any) -> list[tuple[str, Any]]:
         return [(str(index), item) for index, item in enumerate(obj)]
     if isinstance(obj, dict):
         return [(str(key), value) for key, value in obj.items() if isinstance(key, str)]
-    code = getattr(obj, "__code__", None)
-    if code is not None:
-        cells = zip(code.co_freevars, getattr(obj, "__closure__", None) or (), strict=False)
-        closure = [(name, _cell_value(cell)) for name, cell in cells]
-        globals_ = getattr(obj, "__globals__", {})
-        named = [(name, globals_[name]) for name in code.co_names if name in globals_]
-        return [(name, value) for name, value in closure + named if value is not None]
+    if getattr(obj, "__code__", None) is not None:
+        return _function_items(obj)
     for attribute in ("__self__", "func"):
         target = getattr(obj, attribute, None)
         if target is not None and callable(target) and not isinstance(obj, ModuleType):
             return [(attribute, target), *_instance_items(obj)]
     return _instance_items(obj)
+
+
+def _function_items(function: Any) -> list[tuple[str, Any]]:
+    """A function's non-empty closure cells and the module globals its code names."""
+
+    code = function.__code__
+    cells = zip(code.co_freevars, getattr(function, "__closure__", None) or (), strict=False)
+    closure = [(name, _cell_value(cell)) for name, cell in cells]
+    globals_ = getattr(function, "__globals__", {})
+    named = [(name, globals_[name]) for name in code.co_names if name in globals_]
+    return [(name, value) for name, value in closure + named if value is not None]
 
 
 def _instance_items(obj: Any) -> list[tuple[str, Any]]:

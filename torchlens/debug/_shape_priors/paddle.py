@@ -75,26 +75,40 @@ def candidates(model: Any, request: SearchRequest) -> Sequence[ShapeCandidate]:
     import paddle
 
     dtype = _float_dtype(request.input_dtype)
-    found: list[ShapeCandidate] = []
-    if isinstance(model, paddle.nn.Layer):
-        layers = [(name, layer) for name, layer in model.named_sublayers(include_self=True)]
+    is_layer = isinstance(model, paddle.nn.Layer)
+    references = walk_references(model)
+    if is_layer:
+        layers = list(model.named_sublayers(include_self=True))
     else:
-        layers = [
-            (path, obj) for path, obj in walk_references(model) if isinstance(obj, paddle.nn.Layer)
+        layers = [(path, obj) for path, obj in references if isinstance(obj, paddle.nn.Layer)]
+    found = _layer_candidates(layers, request, dtype)
+    # A layer's own weights are not closure weights; only plain functions read them.
+    tensors = (
+        []
+        if is_layer
+        else [
+            (path, tuple(int(dim) for dim in obj.shape))
+            for path, obj in references
+            if isinstance(obj, paddle.Tensor)
         ]
+    )
+    found.extend(closure_matrix_candidates(tensors, request, dtype))
+    found.extend(generic_ladder(request, dtype))
+    return found
+
+
+def _layer_candidates(
+    layers: Sequence[tuple[str, Any]], request: SearchRequest, dtype: Any
+) -> list[ShapeCandidate]:
+    """Candidates from the first constraining layers, in definition order."""
+
+    found: list[ShapeCandidate] = []
     for name, layer in layers:
         candidate = _layer_candidate(name, layer, request, dtype)
         if candidate is not None:
             found.append(candidate)
         if len(found) >= _MAX_LAYER_CANDIDATES:
             break
-    tensors = [
-        (path, tuple(int(dim) for dim in obj.shape))
-        for path, obj in walk_references(model)
-        if isinstance(obj, paddle.Tensor) and not isinstance(model, paddle.nn.Layer)
-    ]
-    found.extend(closure_matrix_candidates(tensors, request, dtype))
-    found.extend(generic_ladder(request, dtype))
     return found
 
 
