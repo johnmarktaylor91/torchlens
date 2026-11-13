@@ -36,7 +36,12 @@ from ..tinygrad._captures import TinygradUOpCapture
 from ..tinygrad._raw_labels import _final_to_raw_labels
 from ..tinygrad._rules import CONSTANT_KIND_ANNOTATION, RNG_UOP_NAMES
 from ..tinygrad._uop_graph import _uop_name
-from ..tinygrad.backend import _payloads_close, _saved_single_output, _source_matches_payload
+from ..tinygrad.backend import (
+    _host_tensor,
+    _payloads_close,
+    _saved_single_output,
+    _source_matches_payload,
+)
 from ._contract import InputOccurrence, OpRecipe, ReplayRefusal
 
 __tl_layer__ = "L2"
@@ -47,6 +52,7 @@ SAVED_VALUE_IDENTITY = "tinygrad.saved_value"
 """Recipe identity of an op the validator replays to its saved payload."""
 
 _UOP_IDENTITY_PREFIX = "tinygrad.uop."
+_VALUE_NODE = "VALUE"
 
 #: UOp ops a recorded op may be replayed as. Closed: anything else is refused.
 REPLAY_UOP_OPS: frozenset[str] = frozenset(
@@ -170,13 +176,13 @@ def _uop_refusal(capture: Any, op: Any, index: _TraceIndex) -> str | None:
         return "the op's parent positions no longer match its capture"
     try:
         _encode_attrs(uop)
-        _literal_sources(capture, index)
+        fixed = [uop.src[pos] for pos in _fixed_positions(capture, index)]
     except _NotData as error:
-        if "THREEFRY" in str(error):
-            return _RNG_REASON
-        return f"tinygrad UOp {name} has a source or field with no data encoding: {error}"
+        return f"tinygrad UOp {name} has a field with no data encoding: {error}"
     except ValueError as error:
         return f"a parent payload is not available for replay: {error}"
+    if any(_uop_name(node) in RNG_UOP_NAMES for source in fixed for node in source.toposort()):
+        return _RNG_REASON
     return None
 
 
@@ -347,18 +353,27 @@ def recipe(trace: Any, op: Any) -> OpRecipe | None:
     )
 
 
-def _literal_sources(capture: Any, index: _TraceIndex) -> dict[int, Any]:
-    """Encoded trees for every source the validator does not swap for a parent value."""
+def _fixed_positions(capture: Any, index: _TraceIndex) -> list[int]:
+    """Source positions the validator keeps as captured (not swapped for a parent value)."""
 
     swapped = {
         position
         for position, raw in _occurrences(capture)
         if _matches(capture.uop.src[position], _saved(index.ops_by_raw[raw]))
     }
+    return [position for position in range(len(capture.uop.src)) if position not in swapped]
+
+
+def _literal_sources(capture: Any, index: _TraceIndex) -> dict[int, Any]:
+    """Encoded trees for every source the validator keeps as captured.
+
+    A source built only from constants is stored as its UOp structure; any
+    other fixed source (a realized constant buffer) is stored by value.
+    """
+
     return {
-        position: _encode_uop(source)
-        for position, source in enumerate(capture.uop.src)
-        if position not in swapped
+        position: _encode_source(capture.uop.src[position])
+        for position in _fixed_positions(capture, index)
     }
 
 
@@ -478,7 +493,7 @@ def _rebuild_uop(
         for path, tree in item.literals:
             if len(path) != 1 or type(path[0]) is not int or not 0 <= path[0] < n_src:
                 raise _NotData(f"bad literal position {path!r}")
-            src[path[0]] = _decode_uop(tree)
+            src[path[0]] = _decode_source(tree)
         for position, parent_raw in occurrences:
             if not 0 <= position < n_src:
                 raise _NotData(f"bad parent position {position}")
@@ -507,6 +522,41 @@ def _encode_attrs(uop: Any) -> dict[str, Any]:
         "arg": _encode_arg(uop.arg),
         "n_src": len(uop.src),
     }
+
+
+def _encode_source(source: Any) -> dict[str, Any]:
+    """A fixed source as its literal UOp structure, else as its captured value."""
+
+    try:
+        return _encode_uop(source)
+    except _NotData:
+        pass
+    from tinygrad import Tensor
+
+    value = Tensor(source)
+    if not isinstance(value.device, str):
+        raise _NotData("fixed source on a multi-device tensor")
+    return {
+        "uop_op": _VALUE_NODE,
+        "dtype": _encode_dtype(value.dtype),
+        "shape": tuple(int(n) for n in value.shape),
+        "device": value.device,
+        "data": value.tolist(),
+    }
+
+
+def _decode_source(tree: Any) -> Any:
+    """Inverse of :func:`_encode_source`."""
+
+    if not isinstance(tree, Mapping) or tree.get("uop_op") != _VALUE_NODE:
+        return _decode_uop(tree)
+    shape, device = tree.get("shape"), tree.get("device")
+    if not isinstance(shape, (tuple, list)) or not isinstance(device, str):
+        raise _NotData("malformed fixed source value")
+    value = _host_tensor(tree.get("data"), _decode_dtype(tree.get("dtype")), device)
+    if tuple(value.shape) != tuple(shape):
+        raise _NotData("fixed source value does not have its recorded shape")
+    return value.uop
 
 
 def _encode_uop(uop: Any, depth: int = 0) -> dict[str, Any]:
