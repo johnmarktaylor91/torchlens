@@ -3174,7 +3174,7 @@ alphabetical order.
 | `Trace.backend_runtime_config` | Backend runtime configuration recorded at capture, or `None` |
 | `Trace.backend_runtime_device_summary` | Summary of the backend devices in use at trace time, or `None` |
 | `Trace.backend_runtime_version` | Version string of the backend runtime that ran the capture, or `None` |
-| `Trace.backward` | Run backward from `loss` and populate this Trace with backward metadata (accepts `save_grads`; other keywords pass to `torch.Tensor.backward`); returns the Trace |
+| `Trace.backward` | Run backward from `loss` (a scalar, or a callable mapping `Trace.output` to one, as `loss_fn` does, on every backend that supports backward) and populate this Trace with backward metadata (accepts `save_grads`; other keywords pass to the framework's backward call); returns the Trace |
 | `Trace.batch_render` | Policy for rendering a batch of raw input in visualizations; defaults to `"auto"`. A trace captured from one photo (a file path or PIL image) draws a thumbnail of it on the input node; `"shape_only"` turns that off |
 | `Trace.buffer_layers` | Labels of the Layers that represent buffers as graph boundary values |
 | `Trace.buffer_read_ops` | Labels of buffer Ops that read registered-buffer values into the graph |
