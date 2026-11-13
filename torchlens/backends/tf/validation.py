@@ -76,7 +76,6 @@ _PURE_REPLAY_ALLOWLIST = frozenset(
         "Tanh",
         "Tile",
         "Transpose",
-        "ZerosLike",
     }
 )
 
