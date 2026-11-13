@@ -114,3 +114,44 @@ def test_bind_refuses_missing_foreign_and_corrupt_recipes() -> None:
             backend="tinygrad",
             allowlist=adapter.ALLOWLIST,
         )
+
+
+def _saved_value_op(trace: Any, recipes: dict[str, Any]) -> Any:
+    """An op whose recipe is a saved value (no parents), with a float payload."""
+
+    return next(
+        op
+        for op in trace._layer_list
+        if op.label in recipes
+        and recipes[op.label].op_identity == adapter.SAVED_VALUE_IDENTITY
+        and "float" in str(op.out.dtype)
+    )
+
+
+@pytest.mark.parametrize("row", ROWS[:3], ids=lambda row: row.family)
+def test_rebound_saved_value_is_checked_against_the_recipe_not_the_payload(row: Any) -> None:
+    """A payload tampered before binding fails validation: the snapshot is recipe data."""
+
+    trace = _trace(row)
+    recipes = _round_tripped_recipes(trace)
+    target = _saved_value_op(trace, recipes)
+    target.out = (target.out + 99.0).realize()
+    trace.tinygrad_uop_captures = ()
+    adapter.bind_recipes(trace, recipes)
+    assert TinygradBackend().validate_trace(trace) is False
+
+
+def test_large_saved_values_bind_by_digest(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Over the size limit a saved value is a digest: the same payload binds, another is refused."""
+
+    monkeypatch.setattr(adapter, "_MAX_VALUE_ITEMS", 0)
+    trace = _trace(ROWS[0])
+    recipes = _round_tripped_recipes(trace)
+    target = _saved_value_op(trace, recipes)
+    assert "sha256" in recipes[target.label].attrs["value"]
+    trace.tinygrad_uop_captures = ()
+    adapter.bind_recipes(trace, recipes)
+    assert TinygradBackend().validate_trace(trace) is True
+    target.out = (target.out + 99.0).realize()
+    with pytest.raises(ReplayRefusal):
+        adapter.bind_recipes(trace, recipes)
