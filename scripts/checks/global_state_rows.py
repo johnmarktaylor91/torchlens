@@ -622,6 +622,10 @@ _WEAK_SUBJECT_TABLES = frozenset(
         # Backward-ready rerun results -> the rerun capture whose tensor grad
         # hooks route to them; weak on the result, dies with it.
         ("torchlens/intervention/_rerun.py", "_RERUN_GRAPH_SOURCES"),
+        # Neutral tl.grad edit sites armed per non-torch trace: keyed by the
+        # trace's id with a weak reference whose death callback evicts the
+        # entry, so it dies with the trace.
+        ("torchlens/intervention/_grad_site_neutral.py", "_ARMED"),
         ("torchlens/backends/torch/backward.py", "_CHECKPOINT_TOKEN_STATE"),
         ("torchlens/backends/torch/_fire_timing.py", "_FIRE_TIMING_STAMPS"),
         # F27 FLIP-2 open-marker LIFO + session-time Kineto join results:
@@ -1028,6 +1032,7 @@ _WEAKLY_HELD = frozenset(
         ("torchlens/backends/torch/_held_refs.py", "_RELEASED_MODELS"),
         ("torchlens/backends/torch/backward.py", "_BACKWARD_TRACE_SLOTS"),
         ("torchlens/intervention/_rerun.py", "_RERUN_GRAPH_SOURCES"),
+        ("torchlens/intervention/_grad_site_neutral.py", "_ARMED"),
         ("torchlens/backends/torch/backward.py", "_CHECKPOINT_TOKEN_STATE"),
         ("torchlens/backends/torch/_fire_timing.py", "_FIRE_TIMING_STAMPS"),
         # Executed-backward dispatch census: per-trace recorded ops by pass,
