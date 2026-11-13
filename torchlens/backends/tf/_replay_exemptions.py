@@ -8,9 +8,13 @@ Two cases bypass the replay-and-perturb check, each on recorded evidence only:
   the user's ``save=`` selector declined it. The op is ``exempted`` with reason
   ``not_saved_by_user``, the same rule the PyTorch validator applies to a
   predicate-save omission. The proof is the capture's ``payload_declined`` flag
-  (the selector's decision at capture), so a payload dropped for any other
-  reason (the snapshot size cap, an unsupported dtype, a release) keeps the
-  ordinary replay check and its failure.
+  (the selector's decision at capture); for a constant source parent of an eager
+  trace it is the source op's ``has_saved_activation``, which the eager capture
+  sets to the selector's decision (not to payload presence). A payload dropped for
+  any other reason (the snapshot size cap, an unsupported dtype, a release) keeps
+  the ordinary replay check and its failure. A FuncGraph (static) trace sets
+  ``has_saved_activation`` from payload presence, so its constant parents are
+  never read as declined.
 
 Every other op goes to the validator's ordinary path unchanged.
 """
@@ -37,42 +41,60 @@ def _declined(capture: Any, op: Any) -> bool:
     )
 
 
+def _declined_constant(source: Any, eager: bool) -> bool:
+    """Whether an eager trace's constant source has no payload because the selector declined it."""
+
+    return (
+        eager
+        and source is not None
+        and str(getattr(source, "func_name", "")) == "constant"
+        and not bool(getattr(source, "has_saved_activation", True))
+        and replay_payload(source) is None
+    )
+
+
 def _declined_labels(
+    trace: Any,
     op: Any,
     capture: Any,
-    ops_by_label: Mapping[str, Any],
-    captures_by_label: Mapping[str, Any],
+    lookups: tuple[Mapping[str, Any], Mapping[str, Any]],
 ) -> list[str]:
-    """Raw labels of ``op`` and its producer parents whose payload the selector declined."""
+    """Raw labels of ``op`` and its parents whose payload the selector declined."""
 
+    ops_by_label, captures_by_label = lookups
+    eager = not hasattr(trace, "_tf_static_region_labels")
     labels = [capture.label_raw] if _declined(capture, op) else []
     for item in sorted(capture.inputs, key=lambda entry: entry.input_index):
-        parent_raw = item.producer_label_raw
-        if parent_raw is None or parent_raw in labels:
-            continue
-        if _declined(captures_by_label.get(parent_raw), ops_by_label.get(parent_raw)):
-            labels.append(parent_raw)
+        producer, source = item.producer_label_raw, getattr(item, "source_label_raw", None)
+        if producer is not None:
+            declined = _declined(captures_by_label.get(producer), ops_by_label.get(producer))
+        else:
+            declined = source is not None and _declined_constant(ops_by_label.get(source), eager)
+        parent = producer or source
+        if declined and parent not in labels:
+            labels.append(str(parent))
     return labels
 
 
 def not_saved_decision(
+    trace: Any,
     op: Any,
     capture: Any,
-    ops_by_label: Mapping[str, Any],
-    captures_by_label: Mapping[str, Any],
+    lookups: tuple[Mapping[str, Any], Mapping[str, Any]],
 ) -> Mapping[str, Any] | None:
     """The ``not_saved_by_user`` exemption for ``op``, or ``None`` to replay it.
 
     Parameters
     ----------
+    trace
+        TensorFlow trace being validated.
     op
         Materialized TensorFlow op the validator would replay.
     capture
         Its callback capture record.
-    ops_by_label
-        Materialized ops keyed by raw and public labels.
-    captures_by_label
-        Callback captures keyed by raw label.
+    lookups
+        Materialized ops keyed by raw and public labels, and callback captures
+        keyed by raw label.
 
     Returns
     -------
@@ -84,7 +106,7 @@ def not_saved_decision(
 
     if capture is None:
         return None
-    declined = _declined_labels(op, capture, ops_by_label, captures_by_label)
+    declined = _declined_labels(trace, op, capture, lookups)
     if not declined:
         return None
     return {
@@ -95,7 +117,7 @@ def not_saved_decision(
         "reason": _REASON_NOT_SAVED,
         "justification": (
             "save selector declined the replay payload of "
-            f"{', '.join(declined)} (payload_declined at capture, payload absent)"
+            f"{', '.join(declined)} (declined at capture, payload absent)"
         ),
     }
 
@@ -137,7 +159,7 @@ def early_decision(
         return parameter_read_decision(trace, op, capture)
     if str(getattr(op, "func_name", "")) not in replayable:
         return None
-    return not_saved_decision(op, capture, ops_by_label, captures_by_label)
+    return not_saved_decision(trace, op, capture, (ops_by_label, captures_by_label))
 
 
 def tally_early(

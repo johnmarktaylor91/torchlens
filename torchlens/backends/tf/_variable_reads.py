@@ -21,7 +21,13 @@ perturbation in the validator.
 The capture enters :func:`variable_read_scope` around the forward and hands the
 ledger to :func:`attach_variable_reads`; the validator asks
 :func:`parameter_read_decision`. A trace without a ledger (static FuncGraph
-capture, a loaded trace, a capture made without the scope) verifies no read.
+capture, a capture made without the scope) verifies no read.
+
+A saved trace keeps, per verifiable read, the snapshot it binds to
+(:func:`persisted_read`, stored in the read's replay recipe); after load
+:func:`restore_variable_reads` rebuilds a ledger keyed by read label, so the
+loaded payload is compared with the same snapshot and the verdict equals the
+live one. A loaded trace without that record verifies no read.
 """
 
 from __future__ import annotations
@@ -78,11 +84,15 @@ class VariableReadLedger:
         First non-read op type that consumed each handle, by reference key.
     opaque
         The first graph-mode or function-call op seen, or ``None``.
+    by_label
+        For a loaded trace: the snapshot each read was verifiable against at
+        capture, by the read's raw label (written by :func:`restore_variable_reads`).
     """
 
     snapshots: dict[object, VariableSnapshot] = field(default_factory=dict)
     touched: dict[object, str] = field(default_factory=dict)
     opaque: str | None = None
+    by_label: dict[str, VariableSnapshot] = field(default_factory=dict)
 
 
 _LEDGERS: weakref.WeakKeyDictionary[Any, VariableReadLedger] = weakref.WeakKeyDictionary()
@@ -231,6 +241,8 @@ def _verifiable_snapshot(
         return None
     if getattr(capture, "op_type", None) != _READ_OP:
         return None
+    if ledger.by_label:
+        return ledger.by_label.get(str(getattr(capture, "label_raw", "")))
     handles = [item for item in getattr(capture, "inputs", ()) if item.input_index == 0]
     if len(handles) != 1:
         return None
@@ -302,3 +314,68 @@ def read_failures(label: str, decision: Mapping[str, Any]) -> list[str]:
     if decision.get("decision") != "failed":
         return []
     return [f"replay_or_perturbation_failed:{label}:{_READ_OP}:{decision.get('reason')}"]
+
+
+def persisted_read(trace: Any, capture: Any) -> dict[str, Any] | None:
+    """The snapshot a verifiable read binds to, as data for its replay recipe.
+
+    Parameters
+    ----------
+    trace
+        Live TensorFlow trace being saved.
+    capture
+        The read's callback capture record.
+
+    Returns
+    -------
+    dict[str, Any] | None
+        ``address``, ``dtype``, ``shape`` and ``digest`` of the pre-forward
+        snapshot, or ``None`` when the read is not verifiable (then nothing is
+        stored and the loaded read stays ``effectful_region`` unverified).
+    """
+
+    snapshot = _verifiable_snapshot(_ledger_for(trace), capture)
+    if snapshot is None:
+        return None
+    return {
+        "address": snapshot.address,
+        "dtype": snapshot.dtype,
+        "shape": list(snapshot.shape),
+        "digest": snapshot.digest,
+    }
+
+
+def _snapshot_from_record(record: Any) -> VariableSnapshot | None:
+    """A snapshot from one persisted record, or ``None`` when it is malformed."""
+
+    if not isinstance(record, Mapping):
+        return None
+    address, dtype, shape, digest = (record.get(k) for k in ("address", "dtype", "shape", "digest"))
+    text_fields_ok = all(isinstance(value, str) for value in (address, dtype, digest))
+    shape_ok = isinstance(shape, list | tuple) and all(
+        isinstance(dim, int) and not isinstance(dim, bool) for dim in shape
+    )
+    if not (text_fields_ok and shape_ok):
+        return None
+    return VariableSnapshot(address=address, dtype=dtype, shape=tuple(shape), digest=digest)
+
+
+def restore_variable_reads(trace: Any, records: Mapping[str, Any]) -> None:
+    """Rebuild a loaded trace's ledger from the reads' persisted snapshots.
+
+    Parameters
+    ----------
+    trace
+        Loaded TensorFlow trace.
+    records
+        :func:`persisted_read` records by read raw label. A malformed record is
+        skipped, so that read stays unverified; no records attach no ledger.
+    """
+
+    by_label = {
+        str(label): snapshot
+        for label, record in records.items()
+        if (snapshot := _snapshot_from_record(record)) is not None
+    }
+    if by_label:
+        attach_variable_reads(trace, VariableReadLedger(by_label=by_label))

@@ -125,11 +125,16 @@ def test_an_op_with_every_payload_saved_still_replays() -> None:
 
 @_needs_tf
 @pytest.mark.tf_backend
-def test_absent_payload_without_the_declined_flag_still_fails() -> None:
-    """A payload missing for a reason other than the selector keeps the replay failure."""
+def test_absent_payload_without_selector_proof_still_fails() -> None:
+    """With no declined flag and no eager constant proof, a missing payload still fails.
+
+    The flags are cleared and the trace is marked as a FuncGraph capture, whose
+    ``has_saved_activation`` records payload presence rather than the selector.
+    """
 
     trace = tl.trace(_chain, _input(), backend="tf", save=tl.func("Mul"))
     _set_flags(trace, lambda op: False)
+    trace._tf_static_region_labels = ()
     status = _status(trace)
 
     failed = _by_decision(status, "failed")
@@ -151,11 +156,19 @@ def test_fully_saved_trace_has_no_exemption() -> None:
 # Framework-free checks of the rule on hand-built records.
 
 
+class _EagerTrace:
+    """A trace stand-in without the FuncGraph marker."""
+
+
+class _StaticTrace:
+    _tf_static_region_labels = ()
+
+
 class _Op:
-    def __init__(self, label: str, out: Any) -> None:
+    def __init__(self, label: str, out: Any, func_name: str = "Mul") -> None:
         self.label = label
         self._label_raw = label
-        self.func_name = "Mul"
+        self.func_name = func_name
         self.out = out
         self.has_saved_activation = out is not None
 
@@ -185,7 +198,9 @@ def test_not_saved_rule(own: tuple[Any, bool], parent: tuple[Any, bool], expecte
     captures = {"child": child, "parent": _capture("parent", (), parent[1])}
     ops = {"child": child_op, "parent": parent_op}
 
-    decision = _replay_exemptions.not_saved_decision(child_op, child, ops, captures)
+    decision = _replay_exemptions.not_saved_decision(
+        _EagerTrace(), child_op, child, (ops, captures)
+    )
 
     if expected is None:
         assert decision is None
@@ -206,3 +221,41 @@ def test_unreplayable_op_is_never_exempted() -> None:
     )
 
     assert decision is None
+
+
+def _constant_case(trace: Any, saved_flag: bool) -> Any:
+    """A child with a saved producer and a payload-less constant source parent."""
+
+    child_op, producer, constant = (
+        _Op("child", np.ones(2)),
+        _Op("parent", np.ones(2)),
+        _Op("const", None, func_name="constant"),
+    )
+    constant.has_saved_activation = saved_flag
+    child = _capture("child", ("parent",), False)
+    child.inputs += (
+        SimpleNamespace(input_index=1, producer_label_raw=None, source_label_raw="const"),
+    )
+    captures = {"child": child, "parent": _capture("parent", (), False)}
+    ops = {"child": child_op, "parent": producer, "const": constant}
+    return _replay_exemptions.not_saved_decision(trace, child_op, child, (ops, captures))
+
+
+def test_eager_declined_constant_parent_is_exempted() -> None:
+    decision = _constant_case(_EagerTrace(), saved_flag=False)
+
+    assert decision is not None
+    assert "declined the replay payload of const " in decision["justification"]
+
+
+@pytest.mark.parametrize(
+    ("trace", "saved_flag"),
+    [
+        pytest.param(_StaticTrace(), False, id="static-trace"),
+        pytest.param(_EagerTrace(), True, id="selected-but-absent"),
+    ],
+)
+def test_constant_parent_without_selector_proof_is_not_exempted(
+    trace: Any, saved_flag: bool
+) -> None:
+    assert _constant_case(trace, saved_flag) is None

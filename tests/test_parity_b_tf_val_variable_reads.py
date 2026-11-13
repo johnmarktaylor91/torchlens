@@ -373,3 +373,73 @@ def test_bit_for_bit_comparison(payload: np.ndarray, decision: str) -> None:
     assert [item.split(":", 1)[0] for item in _variable_reads.read_failures("x", result)] == (
         expected
     )
+
+
+def _saved_record(ledger_kwargs: dict[str, Any]) -> Any:
+    """What a save stores for the read under a ledger built from ``ledger_kwargs``."""
+
+    live = _FakeTrace()
+    _variable_reads.attach_variable_reads(
+        live, _variable_reads.VariableReadLedger(snapshots={"h": _snapshot()}, **ledger_kwargs)
+    )
+    return _variable_reads.persisted_read(live, _fake_capture("h"))
+
+
+@pytest.mark.parametrize(
+    ("payload", "decision"),
+    [
+        pytest.param(np.zeros((2,), np.float32), "validated", id="equal"),
+        pytest.param(np.array([0.0, 1e-30], np.float32), "failed", id="tampered-after-load"),
+    ],
+)
+def test_loaded_read_binds_to_the_persisted_snapshot(payload: np.ndarray, decision: str) -> None:
+    """After load the read compares with the snapshot saved with it, as live."""
+
+    record = _saved_record({})
+    assert record == {
+        "address": "dense.kernel",
+        "dtype": "float32",
+        "shape": [2],
+        "digest": _snapshot().digest,
+    }
+    loaded = _FakeTrace()
+    _variable_reads.restore_variable_reads(loaded, {"readvariableop_1": record})
+    op = SimpleNamespace(label="readvariableop_1", has_saved_activation=True, out=payload)
+    result = _variable_reads.parameter_read_decision(loaded, op, _fake_capture(None))
+    assert result is not None and result["decision"] == decision
+
+
+@pytest.mark.parametrize(
+    "ledger_kwargs",
+    [
+        pytest.param({"touched": {"h": "AssignVariableOp"}}, id="written"),
+        pytest.param({"opaque": "StatefulPartitionedCall"}, id="opaque"),
+    ],
+)
+def test_unverifiable_read_persists_nothing(ledger_kwargs: dict[str, Any]) -> None:
+    assert _saved_record(ledger_kwargs) is None
+
+
+@pytest.mark.parametrize(
+    "record",
+    [
+        pytest.param(None, id="none"),
+        pytest.param({"address": "a", "dtype": "float32", "shape": [2]}, id="no-digest"),
+        pytest.param(
+            {"address": "a", "dtype": "float32", "shape": [True], "digest": "d"}, id="bool"
+        ),
+        pytest.param({"address": "a", "dtype": "float32", "shape": "2", "digest": "d"}, id="text"),
+    ],
+)
+def test_malformed_persisted_record_verifies_nothing(record: Any) -> None:
+    loaded = _FakeTrace()
+    _variable_reads.restore_variable_reads(loaded, {"readvariableop_1": record})
+    op = SimpleNamespace(label="readvariableop_1", has_saved_activation=True, out=np.zeros(2))
+    assert _variable_reads.parameter_read_decision(loaded, op, _fake_capture(None)) is None
+
+
+def test_loaded_read_without_a_record_stays_unverified() -> None:
+    loaded = _FakeTrace()
+    _variable_reads.restore_variable_reads(loaded, {"readvariableop_9": _saved_record({})})
+    op = SimpleNamespace(label="readvariableop_1", has_saved_activation=True, out=np.zeros(2))
+    assert _variable_reads.parameter_read_decision(loaded, op, _fake_capture(None)) is None
