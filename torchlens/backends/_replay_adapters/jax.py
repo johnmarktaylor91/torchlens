@@ -21,12 +21,28 @@ from __future__ import annotations
 
 import dataclasses
 import enum
-import weakref
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Any
 
+from ..._utils._record_group_table import record_member
+from ..jax._trace_graph_helpers import (
+    _data_parent_arg_positions,
+    _data_parent_labels,
+    _saved_single_output,
+    _values_close,
+)
+from ..jax.backend import _jax_equation_ops, _jax_ops_by_label, _jax_region_ops
+from ..jax.jaxpr import (
+    EFFECT_PRIMITIVES,
+    JAX_REPLAY_HANDLERS,
+    JaxEquationCapture,
+    JaxRegionCapture,
+    replay_equation,
+)
 from ._contract import InputOccurrence, OpRecipe, ReplayRefusal
+from ._session import ReplayStep
 
 BACKEND = "jax"
 
@@ -60,6 +76,8 @@ has no recipe; the runtime capture still replays it live."""
 _STATEFUL_RANDOM_PRIMITIVES = frozenset({"rng_uniform"})
 _ENUM_TYPE_NAMES = ("Precision", "GatherScatterMode", "RoundingMethod", "FftType")
 _STRUCT_TYPE_NAMES = ("ConvDimensionNumbers", "GatherDimensionNumbers", "ScatterDimensionNumbers")
+_TYPED_LITERALS = MappingProxyType({"TypedInt": int, "TypedFloat": float, "TypedComplex": complex})
+_LITERALS_MODULE = "jax._src.literals"  # jaxpr literals that carry their dtype
 _TAG = "$jax"
 _MAP_TAG = "$map"
 
@@ -73,7 +91,6 @@ class _Unencodable(ValueError):
 
 @dataclass(frozen=True)
 class _TraceIndex:
-    source: Any
     ops_by_label: Mapping[str, Any]
     capture_by_op: Mapping[int, Any]
     op_by_capture_index: Mapping[int, Any]
@@ -91,35 +108,21 @@ class _Plan:
     element_index: tuple[int | None, ...] = ()
 
 
-_INDEX_CACHE: weakref.WeakKeyDictionary[Any, _TraceIndex] = weakref.WeakKeyDictionary()
-
-
 def _trace_index(trace: Any) -> _TraceIndex:
-    """Pair captures with equation ops the way the validator does (cached)."""
+    """Pair captures with equation ops the way the validator does.
 
-    from ..jax.backend import _jax_equation_ops, _jax_ops_by_label
+    Rebuilt per call (linear in the op count): a module-level cache keyed by
+    trace would be new weakly held module state, which needs a ledger row.
+    """
 
-    raw = getattr(trace, "jax_equation_captures", None)
-    try:
-        cached = _INDEX_CACHE.get(trace)
-    except TypeError:
-        cached = None
-    if cached is not None and cached.source is raw:
-        return cached
-    captures = tuple(raw or ())
+    captures = tuple(getattr(trace, "jax_equation_captures", None) or ())
     ops = _jax_equation_ops(trace)
     pairs = tuple(zip(captures, ops, strict=False)) if len(captures) == len(ops) else ()
-    index = _TraceIndex(
-        source=raw,
+    return _TraceIndex(
         ops_by_label=_jax_ops_by_label(trace),
         capture_by_op={id(op): capture for capture, op in pairs},
         op_by_capture_index={capture.index: op for capture, op in pairs},
     )
-    try:
-        _INDEX_CACHE[trace] = index
-    except TypeError:
-        pass
-    return index
 
 
 def _kind_annotation(op: Any) -> str | None:
@@ -128,12 +131,9 @@ def _kind_annotation(op: Any) -> str | None:
     return kind if isinstance(kind, str) else None
 
 
-def _resolve(trace: Any, op: Any) -> tuple[Any, Any]:
+def _resolve(index: _TraceIndex, op: Any) -> tuple[Any, Any]:
     """Return ``(capture or None, materialized op or None)`` for an op or capture."""
 
-    from ..jax.jaxpr import JaxEquationCapture, JaxRegionCapture
-
-    index = _trace_index(trace)
     if isinstance(op, JaxEquationCapture | JaxRegionCapture):
         return op, index.op_by_capture_index.get(op.index)
     return index.capture_by_op.get(id(op)), op
@@ -143,12 +143,9 @@ def _parent_label(op: Any) -> str:
     return str(getattr(op, "label", None) or getattr(op, "_label_raw", ""))
 
 
-def _equation_plan(trace: Any, capture: Any, op: Any) -> _Plan:
+def _equation_plan(index: _TraceIndex, capture: Any, op: Any) -> _Plan:
     """Occurrences in argument order with the validator's parent consistency check."""
 
-    from ..jax._trace_graph_helpers import _data_parent_arg_positions, _data_parent_labels
-
-    index = _trace_index(trace)
     graph_positions = _data_parent_arg_positions(op)
     if set(graph_positions.values()) != _data_parent_labels(op):
         raise ValueError("JAX trace data parent labels and parent_arg_positions disagree.")
@@ -181,7 +178,8 @@ def _plan_or_reason(trace: Any, op: Any) -> _Plan | str:
 
     if getattr(trace, "backend", BACKEND) not in (BACKEND, None):
         return f"not a JAX trace (backend {getattr(trace, 'backend', None)!r})"
-    capture, materialized = _resolve(trace, op)
+    index = _trace_index(trace)
+    capture, materialized = _resolve(index, op)
     if materialized is None:
         return "no recorded op matches this JAX capture"
     kind = _kind_annotation(materialized)
@@ -189,15 +187,13 @@ def _plan_or_reason(trace: Any, op: Any) -> _Plan | str:
         reason = getattr(capture, "unverified_reason", "jax_region_not_per_op_replayable")
         return f"opaque region ({reason}): JAX replays it only as a whole"
     if kind is None:
-        return _leaf_plan_or_reason(trace, materialized)
+        return _leaf_plan_or_reason(index, materialized)
     if capture is None:
         return "no runtime capture for this op (stripped at save; bind recipes first)"
-    return _equation_plan_or_reason(trace, capture, materialized)
+    return _equation_plan_or_reason(index, capture, materialized)
 
 
-def _equation_plan_or_reason(trace: Any, capture: Any, op: Any) -> _Plan | str:
-    from ..jax.jaxpr import EFFECT_PRIMITIVES, JAX_REPLAY_HANDLERS
-
+def _equation_plan_or_reason(index: _TraceIndex, capture: Any, op: Any) -> _Plan | str:
     if capture.kind not in JAX_REPLAY_HANDLERS:
         return f"unlisted JAX replay kind {capture.kind!r}"
     if capture.kind != _kind_annotation(op):
@@ -207,22 +203,20 @@ def _equation_plan_or_reason(trace: Any, capture: Any, op: Any) -> _Plan | str:
     if capture.primitive in EFFECT_PRIMITIVES:
         return f"effectful callback {capture.primitive}"
     try:
-        return _equation_plan(trace, capture, op)
+        return _equation_plan(index, capture, op)
     except (KeyError, ValueError) as exc:
         return f"parent wiring cannot be resolved: {exc}"
 
 
-def _leaf_plan_or_reason(trace: Any, op: Any) -> _Plan | str:
+def _leaf_plan_or_reason(index: _TraceIndex, op: Any) -> _Plan | str:
     """Sources replay their saved payload; an output node passes its parent through."""
-
-    from ..._utils._record_group_table import record_member
 
     parents = tuple(record_member(op, "parents", None) or ())
     if not parents:
         if not getattr(op, "has_saved_activation", False):
             return "source op has no saved payload"
         return _Plan("source", op)
-    parent = _trace_index(trace).ops_by_label.get(parents[0])
+    parent = index.ops_by_label.get(parents[0])
     if record_member(op, "is_output", False) and len(parents) == 1 and parent is not None:
         return _Plan("passthrough", op, None, (0,), (parent,), (None,))
     return "not a recorded JAX equation"
@@ -231,7 +225,8 @@ def _leaf_plan_or_reason(trace: Any, op: Any) -> _Plan | str:
 def _plan(trace: Any, op: Any) -> _Plan:
     plan = _plan_or_reason(trace, op)
     if isinstance(plan, str):
-        raise ValueError(f"JAX replay refused for {_parent_label(_resolve(trace, op)[1])}: {plan}")
+        where = f"capture {op.index}" if isinstance(op, JaxEquationCapture) else _parent_label(op)
+        raise ValueError(f"JAX replay refused for {where}: {plan}")
     return plan
 
 
@@ -250,8 +245,6 @@ def step(trace: Any, op: Any) -> Any:
 
     Available for every replayable op, including those without a recipe.
     """
-
-    from ._session import ReplayStep
 
     plan = _plan(trace, op)
     pairs = zip(plan.positions, plan.parents, strict=True)
@@ -284,8 +277,6 @@ def _to_slots(outputs: Sequence[Any]) -> tuple[Any, ...]:
 
 def forward(trace: Any, op: Any, parent_values: Sequence[Any]) -> tuple[Any, ...]:
     """Re-run one op through the validator's replay; one value per output slot."""
-
-    from ..jax.jaxpr import replay_equation
 
     plan = _plan(trace, op)
     if plan.kind == "source":
@@ -326,8 +317,6 @@ def vjp(
     """
 
     import jax
-
-    from ..jax.jaxpr import replay_equation
 
     plan = _plan(trace, op)
     if plan.kind == "source":
@@ -401,8 +390,6 @@ def close(expected: Any, actual: Any) -> bool:
     """The validator's comparison: ``jax.tree.all(jax.tree.map(_values_close, ...))``."""
 
     import jax
-
-    from ..jax._trace_graph_helpers import _values_close
 
     try:
         return bool(jax.tree.all(jax.tree.map(_values_close, actual, expected)))
@@ -505,20 +492,28 @@ def _refs(plan: _Plan, read: Any) -> tuple[tuple[tuple[str | int, ...], str], ..
 
 
 def _encode(value: Any) -> Any:
-    """Encode one capture value as recipe data, or raise :class:`_Unencodable`.
-
-    One branch per JAX param kind (an essential type switch).
-    """
-
-    import jax
-    import jax.extend.core
-    import numpy as np
+    """Encode one capture value as recipe data, or raise :class:`_Unencodable`."""
 
     if value is None or type(value) in (bool, int, float, complex, str):
         return value
     if type(value) is tuple or type(value) is list:
         encoded = [_encode(v) for v in value]
         return tuple(encoded) if type(value) is tuple else encoded
+    if type(value).__name__ in _TYPED_LITERALS and type(value).__module__ == _LITERALS_MODULE:
+        plain = _TYPED_LITERALS[type(value).__name__](value)
+        return {_TAG: ("typed", type(value).__name__, _dtype_name(value.dtype), plain)}
+    if isinstance(value, Mapping) and all(type(k) is str for k in value):
+        return {_MAP_TAG: {k: _encode(v) for k, v in value.items()}}
+    return _encode_framework_value(value)
+
+
+def _encode_framework_value(value: Any) -> Any:
+    """One branch per JAX/NumPy param type (an essential type switch)."""
+
+    import jax
+    import jax.extend.core
+    import numpy as np
+
     if isinstance(value, np.dtype):
         return {_TAG: ("dtype", _dtype_name(value))}
     if isinstance(value, np.generic | np.ndarray | jax.Array):
@@ -527,8 +522,6 @@ def _encode(value: Any) -> Any:
         return {_TAG: ("enum", _lax_type_name(value, _ENUM_TYPE_NAMES), value.name)}
     if isinstance(value, jax.extend.core.ClosedJaxpr):
         return {_TAG: ("closed_jaxpr", _encode_closed_jaxpr(value))}
-    if isinstance(value, Mapping) and all(type(k) is str for k in value):
-        return {_MAP_TAG: {k: _encode(v) for k, v in value.items()}}
     name = _lax_type_name(value, _STRUCT_TYPE_NAMES)
     return {_TAG: ("struct", name, {f: _encode(v) for f, v in _struct_fields(value)})}
 
@@ -570,49 +563,52 @@ def _aval(var: Any) -> tuple[Any, ...]:
     return (tuple(aval.shape), _dtype_name(aval.dtype), bool(getattr(aval, "weak_type", False)))
 
 
+class _VarTable:
+    """Numbers a nested program's variables in definition order."""
+
+    def __init__(self) -> None:
+        self.ids: dict[Any, int] = {}
+
+    def define(self, var: Any) -> tuple[Any, ...]:
+        self.ids[var] = len(self.ids)
+        return _aval(var)
+
+    def ref(self, atom: Any) -> Any:
+        if hasattr(atom, "val"):  # a Literal (unhashable), never a Var
+            return ("lit", _encode(atom.val))
+        if atom in self.ids:
+            return ("var", self.ids[atom])
+        raise _Unencodable("nested program reads an undefined variable")
+
+
 def _encode_closed_jaxpr(closed: Any) -> dict[str, Any]:
     """Nested program as data: avals, consts, equations (params recursively)."""
 
     jaxpr = closed.jaxpr
     if jaxpr.effects:
         raise _Unencodable("nested program has effects")
-    var_ids: dict[Any, int] = {}
-
-    def define(var: Any) -> tuple[Any, ...]:
-        var_ids[var] = len(var_ids)
-        return _aval(var)
-
-    def ref(atom: Any) -> Any:
-        if atom in var_ids:
-            return ("var", var_ids[atom])
-        if hasattr(atom, "val"):
-            return ("lit", _encode(atom.val))
-        raise _Unencodable("nested program reads an undefined variable")
-
-    constvars = tuple(define(v) for v in jaxpr.constvars)
-    invars = tuple(define(v) for v in jaxpr.invars)
+    table = _VarTable()
+    constvars = tuple(table.define(v) for v in jaxpr.constvars)
+    invars = tuple(table.define(v) for v in jaxpr.invars)
     eqns = []
     for eqn in jaxpr.eqns:
         name = eqn.primitive.name
         if f"jax.primitive.{name}" not in ALLOWLIST:
             raise _Unencodable(f"nested primitive {name!r} is outside the closed allowlist")
-        reads = tuple(ref(a) for a in eqn.invars)
+        reads = tuple(table.ref(a) for a in eqn.invars)
         params = {_MAP_TAG: {str(k): _encode(v) for k, v in eqn.params.items()}}
-        eqns.append((name, reads, params, tuple(define(v) for v in eqn.outvars)))
+        eqns.append((name, reads, params, tuple(table.define(v) for v in eqn.outvars)))
     return {
         "constvars": constvars,
         "consts": tuple(_encode(c) for c in closed.consts),
         "invars": invars,
         "eqns": tuple(eqns),
-        "outvars": tuple(ref(a) for a in jaxpr.outvars),
+        "outvars": tuple(table.ref(a) for a in jaxpr.outvars),
     }
 
 
 def _decode(node: Any) -> Any:
     """Inverse of :func:`_encode` (lists from a JSON round trip become tuples)."""
-
-    import jax.numpy as jnp
-    import numpy as np
 
     if node is None or type(node) in (bool, int, float, complex, str):
         return node
@@ -623,17 +619,25 @@ def _decode(node: Any) -> Any:
     if not (isinstance(node, Mapping) and set(node) == {_TAG}):
         raise ReplayRefusal("type", f"bad JAX recipe value {type(node).__name__}")
     kind, *body = node[_TAG]
-    if kind == "dtype":
-        return jnp.dtype(body[0])
-    if kind in ("np_scalar", "array"):
-        array = np.asarray(body[2], dtype=jnp.dtype(body[0])).reshape(tuple(body[1]))
-        return array.reshape(())[()] if kind == "np_scalar" else array
-    return _decode_typed(kind, body)
+    return _decode_typed(str(kind), body)
 
 
 def _decode_typed(kind: str, body: Sequence[Any]) -> Any:
-    import jax
+    """One branch per tagged kind (an essential type switch)."""
 
+    import importlib
+
+    import jax
+    import numpy as np
+
+    if kind == "dtype":
+        return np.dtype(body[0])
+    if kind in ("np_scalar", "array"):
+        array = np.asarray(body[2], dtype=np.dtype(body[0])).reshape(tuple(body[1]))
+        return array.reshape(())[()] if kind == "np_scalar" else array
+    if kind == "typed" and body[0] in _TYPED_LITERALS:
+        cls = getattr(importlib.import_module(_LITERALS_MODULE), body[0])
+        return cls(_TYPED_LITERALS[body[0]](body[2]), np.dtype(body[1]))
     if kind == "enum" and body[0] in _ENUM_TYPE_NAMES:
         return getattr(jax.lax, body[0])[body[1]]
     if kind == "struct" and body[0] in _STRUCT_TYPE_NAMES:
@@ -643,60 +647,52 @@ def _decode_typed(kind: str, body: Sequence[Any]) -> Any:
     raise ReplayRefusal("type", f"unknown JAX recipe value kind {kind!r}")
 
 
+def _run_nested(data: Mapping[str, Any], values: Sequence[Any]) -> tuple[Any, ...]:
+    """Bind a decoded nested program's equations on ``values`` (consts, then args)."""
+
+    env: dict[int, Any] = dict(enumerate(values))
+
+    def read(ref: Sequence[Any]) -> Any:
+        return env[int(ref[1])] if ref[0] == "var" else _decode(ref[1])
+
+    for name, reads, params, outs in data["eqns"]:
+        primitive = _resolve_primitive(str(name))
+        result = primitive.bind(*(read(r) for r in reads), **_decode(params))
+        results = tuple(result) if primitive.multiple_results else (result,)
+        if len(results) != len(outs):
+            raise ReplayRefusal("slots", f"nested {name} output count changed")
+        env.update((len(env) + i, value) for i, value in enumerate(results))
+    return tuple(read(r) for r in data["outvars"])
+
+
 def _decode_closed_jaxpr(data: Mapping[str, Any]) -> Any:
     """Rebuild a nested program by binding its equations under ``jax.make_jaxpr``."""
 
     import jax
 
     consts = tuple(_decode(c) for c in data["consts"])
-
-    def program(*args: Any) -> tuple[Any, ...]:
-        env: dict[int, Any] = dict(enumerate((*consts, *args)))
-
-        def read(ref: Sequence[Any]) -> Any:
-            return env[int(ref[1])] if ref[0] == "var" else _decode(ref[1])
-
-        for name, reads, params, outs in data["eqns"]:
-            primitive = _resolve_primitive(str(name))
-            result = primitive.bind(*(read(r) for r in reads), **_decode(params))
-            results = result if primitive.multiple_results else (result,)
-            for value in results:
-                env[len(env)] = value
-            if len(results) != len(outs):
-                raise ReplayRefusal("slots", f"nested {name} output count changed")
-        return tuple(read(r) for r in data["outvars"])
-
     specs = [
         jax.ShapeDtypeStruct(tuple(shape), jax.numpy.dtype(dtype), weak_type=bool(weak))
         for shape, dtype, weak in data["invars"]
     ]
-    return jax.make_jaxpr(program)(*specs)
-
-
-_PRIMITIVES: dict[str, Any] = {}
+    return jax.make_jaxpr(lambda *args: _run_nested(data, (*consts, *args)))(*specs)
 
 
 def _resolve_primitive(name: str) -> Any:
-    """Allowlisted primitive name to the framework's primitive object."""
+    """Allowlisted primitive name to the framework's primitive object (uncached)."""
+
+    import jax
+    import jax.extend.core
+    import jax.extend.core.primitives as public
 
     if f"jax.primitive.{name}" not in ALLOWLIST:
         raise ReplayRefusal("unknown_op", f"JAX primitive {name!r} is not allowlisted")
-    if not _PRIMITIVES:
-        import jax
-        import jax.extend.core
-        import jax.extend.core.primitives as public
-
-        for module in (public, jax.lax):
-            for attr in dir(module):
-                obj = getattr(module, attr)
-                if isinstance(obj, jax.extend.core.Primitive):
-                    _PRIMITIVES.setdefault(obj.name, obj)
-    try:
-        return _PRIMITIVES[name]
-    except KeyError:
-        raise ReplayRefusal(
-            "unknown_op", f"JAX primitive {name!r} is not exposed by this JAX version"
-        ) from None
+    for module in (public, jax.lax):
+        for attr in dir(module):
+            obj = getattr(module, attr)
+            if isinstance(obj, jax.extend.core.Primitive) and obj.name == name:
+                return obj
+    raise ReplayRefusal("unknown_op", f"JAX primitive {name!r} is not exposed by this JAX version")
 
 
 # --- binding recipes back onto a trace ------------------------------------------
@@ -711,10 +707,8 @@ def bind_recipes(trace: Any, recipes: Mapping[str, OpRecipe]) -> None:
     region check pass vacuously).
     """
 
-    from ..jax.backend import _jax_equation_ops, _jax_ops_by_label, _jax_region_ops
-
     if _jax_region_ops(trace) and not getattr(trace, "jax_region_captures", ()):
-        raise ReplayRefusal("unbindable", "JAX region ops cannot be rebuilt from recipes")
+        raise ReplayRefusal("cannot_replay", "JAX region ops cannot be rebuilt from recipes")
     ops_by_label = _jax_ops_by_label(trace)
     hidden = {
         label: value if isinstance(value, tuple) else (value,)
@@ -727,7 +721,6 @@ def bind_recipes(trace: Any, recipes: Mapping[str, OpRecipe]) -> None:
     regions = tuple(getattr(trace, "jax_region_captures", ()) or ())
     trace.jax_equation_captures = captures
     trace.jax_ordered_captures = tuple(sorted((*captures, *regions), key=lambda c: c.index))
-    _INDEX_CACHE.pop(trace, None)
 
 
 def _recipe_for(recipes: Mapping[str, OpRecipe], op: Any) -> OpRecipe:
@@ -735,7 +728,9 @@ def _recipe_for(recipes: Mapping[str, OpRecipe], op: Any) -> OpRecipe:
     found = recipes.get(label)
     if found is None:
         raise ReplayRefusal("slots", "no recipe for this JAX equation op", op_label=label)
-    if found.backend != BACKEND or found.op_identity not in ALLOWLIST:
+    if found.backend != BACKEND:
+        raise ReplayRefusal("backend", f"{found.backend!r} recipe", op_label=label)
+    if found.op_identity not in ALLOWLIST:
         raise ReplayRefusal("unknown_op", f"{found.op_identity!r} not allowed", op_label=label)
     if found.output_slots != (label,) or found.attrs.get("kind") != _kind_annotation(op):
         raise ReplayRefusal("slots", "recipe does not describe this op", op_label=label)
@@ -745,8 +740,6 @@ def _recipe_for(recipes: Mapping[str, OpRecipe], op: Any) -> OpRecipe:
 def _capture_from_recipe(
     rec: OpRecipe, op: Any, ops_by_label: Mapping[str, Any], hidden: Mapping[str, Any]
 ) -> Any:
-    from ..jax._trace_graph_helpers import _saved_single_output
-    from ..jax.jaxpr import JaxEquationCapture
 
     attrs = rec.attrs
     label = rec.output_slots[0]
