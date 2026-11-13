@@ -72,8 +72,9 @@ from .._finalize import (
 from .._finalize_totals import _stamp_param_totals
 from .._invariants import run_metadata_invariants
 from .._options import MLX_PREVIEW_TRACE_OPTION_POLICY, reject_unsupported_trace_options
-from . import capabilities
+from . import capabilities, wrappers
 from ._capture_disclosures import _disclose_compiled_attributes, _disclose_unfired_selectors
+from ._edit_replay import check_edit_grad_options, edited_replay_model
 from ._grad_oracle import (
     _eval_mlx_tree,
     _has_mlx_array_leaf,
@@ -972,14 +973,7 @@ class MLXBackend:
             # but-unregistered or in-place-flipped table refuses typed.
             resolve = cast(Any, require_capability_implementation(spec, "can_intervene"))
             intervention_plan, halt_selector = resolve(intervene, halt, self.mx)
-            if grad_options is not None:
-                raise BackendUnsupportedError(
-                    "MLX backend cannot combine grad_options with intervene=/stop_after=: the "
-                    "derived-gradient replay re-runs the model without the intervention "
-                    "surface, so its output-divergence oracle would always refuse. Capture "
-                    "the intervened trace and the derived gradients in separate calls.",
-                    code="intervention_with_derived_grads_unsupported",
-                )
+            check_edit_grad_options(intervention_plan, grad_options)
         transform_type = _mlx_traced_transform_type(self.mx)
         if transform_type is not None and type(model) is transform_type:
             raise BackendUnsupportedError(
@@ -1103,7 +1097,7 @@ class MLXBackend:
             if grad_options is not None:
                 self._attach_derived_grads(
                     trace=trace,
-                    model=cast(Callable[..., Any], model),
+                    model=edited_replay_model(self, trace, model, intervention_plan, wrappers),
                     args=args,
                     kwargs=kwargs,
                     captured_output=output,
