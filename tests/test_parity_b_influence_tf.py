@@ -6,6 +6,7 @@ the checks live in ``tests/test_parity_b_influence_support.py``.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any
 
 import numpy as np
@@ -69,9 +70,14 @@ def _two_input_trace(a: np.ndarray, b: np.ndarray) -> Any:
 
 
 @pytest.fixture
-def kit() -> support.Kit:
-    # No trace.cleanup(): it raises on TF, MLX and tinygrad traces that hold parameters.
-    return _kit()
+def kit() -> Iterator[support.Kit]:
+    built = _kit()
+    yield built
+    built.trace.cleanup()
+
+
+def test_cleanup_releases_the_parameters(kit: support.Kit) -> None:
+    support.check_cleanup_releases_parameters(kit.trace)
 
 
 def test_receptive_probe_equals_the_framework_gradient(kit: support.Kit) -> None:

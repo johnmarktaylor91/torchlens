@@ -90,6 +90,17 @@ def _close(actual: np.ndarray, expected: np.ndarray, what: str) -> None:
     np.testing.assert_allclose(actual, expected, rtol=1e-4, atol=1e-5, err_msg=what)
 
 
+def check_cleanup_releases_parameters(trace: Any) -> None:
+    """``Trace.cleanup()`` on a trace holding parameters releases each one without error."""
+
+    params = list(trace.params.values())
+    assert params, "the subject trace holds no parameters"
+    trace.cleanup()
+    for param in params:
+        assert param._param_ref is None and param._param_ref_released, param.address
+        assert param.grad is None and not param.has_grad, param.address
+
+
 def check_receptive_matches_framework(kit: Kit) -> None:
     """Receptive probe values and support equal the framework's own unit gradient."""
 
