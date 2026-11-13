@@ -18,6 +18,7 @@ from ..._data_classes.derived_grad import (
     DerivedGradAccessor,
     IntermediateDerivedGradAccessor,
     IntermediateDerivedGradRecord,
+    set_intermediate_derived_grads,
 )
 from ..._data_classes.param import Param, ParamAccessor
 from ..._data_classes.trace import Trace
@@ -46,7 +47,11 @@ from ..._postprocess._selective_save import (
 from ..._postprocess.finalization import _finalize_streamed_bundle
 from ..._quantities import Duration
 from ..._trace_core.relation_views import freeze_trace_relation_views
-from ..._validation_status import ValidationReplaySource, ValidationStatus
+from ..._validation_status import (
+    ValidationReplaySource,
+    ValidationStatus,
+    count_importer_region_annotations,
+)
 from ...backends.registry import BackendName, BackendUnsupportedError, get_backend_spec
 from ...options import CaptureOptions, merge_capture_options
 from ...recording._halt import StopSignal
@@ -93,6 +98,7 @@ from ._capture_helpers import (
 from ._capture_scopes import PaddleCaptureHooks
 from ._edit_replay import run_derived_grad_forward as _replay_forward
 from ._grad_sites import paddle_grad_site_records
+from ._op_call import PaddleOpCall
 from ._param_writes import PARAMETER_WRITE_MARKER, ParameterWriteGuard
 from .constants_rule import constant_labels, is_constant_capture, is_literal_producer_capture
 from .derived_grads import (
@@ -751,8 +757,6 @@ class PaddleBackend:
                 module_tree.forward_args_by_call.update(previous_forward_args)
         trace._autograd_derived_grads = DerivedGradAccessor(records)
         if grad_options.intermediate_grads:
-            from ..._data_classes.derived_grad import set_intermediate_derived_grads
-
             set_intermediate_derived_grads(trace, intermediate_accessor)
         mirror_param_derived_grads(trace, records)
 
@@ -878,8 +882,6 @@ class PaddleBackend:
             return status_result
         source = _validation_source(trace)
         try:
-            from ..._validation_status import count_importer_region_annotations
-
             outcome = self._paddle_replay_outcome(
                 trace, validate_metadata=bool(kwargs.get("validate_metadata", True))
             )
@@ -1087,10 +1089,7 @@ class PaddleBackend:
         self,
         trace: Trace,
         op_name: str,
-        func: object,
-        args: tuple[Any, ...],
-        kwargs: dict[str, Any],
-        output: object,
+        call: PaddleOpCall,
         *,
         module_stack: tuple[ModuleFrame, ...] | None = None,
     ) -> object:
@@ -1099,11 +1098,12 @@ class PaddleBackend:
         Returns
         -------
         object
-            Output object the wrapper must return to the caller: the original
-            output, or a rebuilt container carrying live-intervention
+            Output object the wrapper must return to the caller: the call's
+            original output, or a rebuilt container carrying live-intervention
             replacement tensors.
         """
 
+        func, args, kwargs, output = call
         outputs = tuple(self._iter_tensors_with_paths(output))
         if not outputs:
             return output
@@ -1459,7 +1459,7 @@ class PaddleBackend:
     ) -> OpEvent:
         """Build one topology-complete Paddle operation event."""
 
-        tensor_ref = _retention.saved_ref(self, session, reserved, func_event_input, output, policy)
+        tensor_ref = _retention.saved_ref(self, session, reserved, func_event_input, output)
         input_ancestors = frozenset(
             edge.parent_label_raw for edge in parents if edge.parent_label_raw.startswith("input.")
         )

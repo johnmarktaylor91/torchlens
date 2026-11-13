@@ -202,7 +202,7 @@ def test_unreplayable_op_is_never_exempted() -> None:
     capture = _capture("child", (), True)
 
     decision = _replay_exemptions.early_decision(
-        SimpleNamespace(), op, "value", frozenset({"Relu"}), {"child": capture}, {"child": op}
+        SimpleNamespace(), op, "value", frozenset({"Relu"}), ({"child": op}, {"child": capture})
     )
 
     assert decision is None

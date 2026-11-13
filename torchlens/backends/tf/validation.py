@@ -268,7 +268,7 @@ def validate_tf_trace_detailed(trace: Any) -> TFValidationResult:
             if op_type == "constant":
                 _record_constant_leaf(op_label, decisions_list, exempted_reasons)
             continue
-        args = (op_class, _PURE_REPLAY_ALLOWLIST, captures_by_label, ops_by_label)
+        args = (op_class, _PURE_REPLAY_ALLOWLIST, (ops_by_label, captures_by_label))
         if early := early_decision(trace, op, *args):
             decisions_list.append(early)
             tally_early(label, early, failures, exempted_reasons)

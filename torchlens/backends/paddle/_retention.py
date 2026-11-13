@@ -238,15 +238,18 @@ def retained_payload(backend: Any, session: Any, site: Any, call: Any, output: A
     return None
 
 
-def saved_ref(backend: Any, session: Any, site: Any, call: Any, output: Any, policy: Any) -> Any:
+def saved_ref(backend: Any, session: Any, site: Any, call: Any, output: Any) -> Any:
     """Build the output's tensor reference with the payload :func:`retained_payload` keeps.
 
-    When the capture streams (``storage=``), the kept payload is handed to the
-    stream here, the one point every emitted output passes once its edges are
-    recorded; the reference then names the bundle blob and drops the payload
-    unless ``retain_in_memory``.
+    The reference carries the session's capture policy
+    (``backend._capture_policy(session)``), the policy every emitted event of
+    the session is built with. When the capture streams (``storage=``), the kept
+    payload is handed to the stream here, the one point every emitted output
+    passes once its edges are recorded; the reference then names the bundle blob
+    and drops the payload unless ``retain_in_memory``.
     """
 
+    policy = backend._capture_policy(session)
     saving = policy.save_payload
     payload = retained_payload(backend, session, site, call, output) if saving else None
     ref = backend.tensor_ref(session, output, payload, policy)

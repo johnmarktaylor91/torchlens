@@ -18,6 +18,7 @@ from .._protocols.paddle import (
     PADDLE_REFUSAL_SCALAR_ESCAPE,
     PADDLE_REFUSAL_STOCHASTIC,
 )
+from ._op_call import PaddleOpCall
 from .conv_layers import (
     PADDLE_CONV_LAYER_OPS,
     conv_layer_call,
@@ -465,9 +466,9 @@ class _PaddleWrapperRegistry:
                 output = original(*args, **kwargs)
             finally:
                 trace._paddle_capture_depth = depth
-            module_stack = tuple(trace._paddle_module_stack)
             emit = cast(Any, backend).emit_paddle_operation
-            return emit(trace, op_name, original, args, kwargs, output, module_stack=module_stack)
+            call = PaddleOpCall(original, args, kwargs, output)
+            return emit(trace, op_name, call, module_stack=tuple(trace._paddle_module_stack))
 
         setattr(owner, name, wrapper)
         self._wrapper_by_original.setdefault(id(original), (original, wrapper))
@@ -516,15 +517,8 @@ def _conv_layer_wrapper(original: Any, op_name: str, backend: object) -> Any:
         call_args, call_kwargs = conv_layer_call(layer, op_name, x)
         module_stack = tuple(trace._paddle_module_stack)
         emit = cast(Any, backend).emit_paddle_operation
-        return emit(
-            trace,
-            op_name,
-            paddle_conv_layer_replay,
-            call_args,
-            call_kwargs,
-            output,
-            module_stack=module_stack,
-        )
+        call = PaddleOpCall(paddle_conv_layer_replay, call_args, call_kwargs, output)
+        return emit(trace, op_name, call, module_stack=module_stack)
 
     return forward
 

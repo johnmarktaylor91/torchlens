@@ -19,6 +19,7 @@ from ..._data_classes.derived_grad import (
     DerivedGradRecord,
     IntermediateDerivedGradAccessor,
     IntermediateDerivedGradRecord,
+    set_intermediate_derived_grads,
 )
 from ..._data_classes.layer import Layer
 from ..._data_classes.param import Param, ParamAccessor
@@ -1895,8 +1896,6 @@ class JAXBackend:
         mirror_param_derived_grads(trace, records)
         if grad_options.intermediate_grads:
             try:
-                from ..._data_classes.derived_grad import set_intermediate_derived_grads
-
                 set_intermediate_derived_grads(
                     trace,
                     (
@@ -1916,8 +1915,6 @@ class JAXBackend:
             except BackendUnsupportedError:
                 raise
             except Exception as exc:
-                from ..._data_classes.derived_grad import set_intermediate_derived_grads
-
                 set_intermediate_derived_grads(trace, IntermediateDerivedGradAccessor())
                 trace.jax_intermediate_derived_grad_status = {
                     "status": "degraded",

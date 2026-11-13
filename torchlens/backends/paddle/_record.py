@@ -31,6 +31,7 @@ from ..._ir.events import ModuleFrame
 from ..._ir.predicate import ModuleStackFrame
 from ..._ir.refs import DtypeRef, ReservedLabel
 from ._capture_helpers import paddle_layer_type
+from ._op_call import PaddleOpCall
 from .backend import PaddleBackend, PaddleOpCapture, _device_ref_from_paddle_place
 from .model_prep import cleanup_model_session, discover_paddle_module_tree, prepare_model_session
 from .source_leaves import PADDLE_BUFFER_OP, PaddleSourceLeaves, record_source_leaves
@@ -189,16 +190,13 @@ class _RecordingPaddleBackend(PaddleBackend):
         self,
         trace: Trace,
         op_name: str,
-        func: object,
-        args: tuple[Any, ...],
-        kwargs: dict[str, Any],
-        output: object,
+        call: PaddleOpCall,
         *,
         module_stack: tuple[ModuleFrame, ...] | None = None,
     ) -> object:
-        """Emit one event per non-alias tensor output of a wrapped call; return ``output``."""
+        """Emit one event per non-alias tensor output of a wrapped call; return its output."""
 
-        del func
+        _func, args, kwargs, output = call
         outputs = tuple(self._iter_tensors_with_paths(output))
         if not outputs:
             return output

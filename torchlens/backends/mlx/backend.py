@@ -25,6 +25,7 @@ from ..._data_classes.derived_grad import (
     DerivedGradRecord,
     IntermediateDerivedGradAccessor,
     IntermediateDerivedGradRecord,
+    set_intermediate_derived_grads,
 )
 from ..._data_classes.param import Param, ParamAccessor
 from ..._data_classes.trace import Trace
@@ -49,7 +50,7 @@ from ..._postprocess._selective_save import apply_save_keep_set
 from ..._quantities import Duration
 from ..._selection.errors import LiveModeLabelError
 from ..._trace_core.relation_views import freeze_trace_relation_views
-from ..._validation_status import ValidationStatus  # noqa: TC001
+from ..._validation_status import ValidationStatus, count_importer_region_annotations  # noqa: TC001
 from ...backends.registry import (
     BackendName,
     get_backend_spec,
@@ -1198,8 +1199,6 @@ class MLXBackend:
                     )
                 )
             if grad_options.intermediate_grads and tap_observer is not None:
-                from ..._data_classes.derived_grad import set_intermediate_derived_grads
-
                 set_intermediate_derived_grads(
                     trace,
                     (
@@ -1362,7 +1361,6 @@ class MLXBackend:
         failed_count = 0
         decisions: tuple[dict[str, Any], ...] = ()
         try:
-            from ..._validation_status import count_importer_region_annotations
             from .validation import MLX_VALIDATION_REASONS, validate_mlx_captures_detailed
 
             exempted: dict[str, int] = {}

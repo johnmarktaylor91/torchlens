@@ -127,8 +127,7 @@ def early_decision(
     op: Any,
     op_class: str,
     replayable: Collection[str],
-    captures_by_label: Mapping[str, Any],
-    ops_by_label: Mapping[str, Any],
+    lookups: tuple[Mapping[str, Any], Mapping[str, Any]],
 ) -> Mapping[str, Any] | None:
     """The decision taken before replay for ``op``, or ``None`` for the ordinary path.
 
@@ -142,10 +141,9 @@ def early_decision(
         The validator's class for ``op`` (``value`` ops may be replayed).
     replayable
         Op types the validator replays.
-    captures_by_label
-        Callback captures keyed by raw label.
-    ops_by_label
-        Materialized ops keyed by raw and public labels.
+    lookups
+        Materialized ops keyed by raw and public labels, and callback captures
+        keyed by raw label (as :func:`not_saved_decision` takes them).
 
     Returns
     -------
@@ -154,12 +152,13 @@ def early_decision(
         ``not_saved_by_user`` exemption for a replayable value op, else ``None``.
     """
 
+    _ops_by_label, captures_by_label = lookups
     capture = captures_by_label.get(str(getattr(op, "_label_raw", "")))
     if op_class != "value":
         return parameter_read_decision(trace, op, capture)
     if str(getattr(op, "func_name", "")) not in replayable:
         return None
-    return not_saved_decision(trace, op, capture, (ops_by_label, captures_by_label))
+    return not_saved_decision(trace, op, capture, lookups)
 
 
 def tally_early(

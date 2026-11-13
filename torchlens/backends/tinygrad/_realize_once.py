@@ -23,7 +23,7 @@ change if anything evaluated it again, so the capture refuses
 
 from __future__ import annotations
 
-from collections.abc import Callable, Collection, Iterable, Iterator, Mapping, Sequence
+from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, cast
 
@@ -313,10 +313,9 @@ def realized_value_uops(realized_tensor: Any) -> tuple[Any, ...]:
 
 
 def realize_capture(
-    call_leaves: Iterable[tuple[Any, Any]],
+    tensor_leaves: Iterable[tuple[Any, Any]],
     outputs: Sequence[Any],
     preexisting_uops: Iterable[Any],
-    is_tensor: Callable[[Any], bool],
     *,
     edit_sites: Mapping[int, Any] | None = None,
     session: TinygradCaptureSession | None = None,
@@ -328,15 +327,13 @@ def realize_capture(
 
     Parameters
     ----------
-    call_leaves
-        ``(path, value)`` leaves of the call's positional and keyword
-        arguments (:func:`call_input_leaves`).
+    tensor_leaves
+        ``(path, tensor)`` tinygrad tensor leaves of the call's positional and
+        keyword arguments (:func:`call_input_leaves`, filtered to tensors).
     outputs
         Flat tinygrad output tensors of the forward.
     preexisting_uops
         UOps live tensors held before the forward ran (:func:`live_tensor_uops`).
-    is_tensor
-        Predicate selecting the tinygrad tensor leaves of ``call_leaves``.
     edit_sites
         ``id(replacement UOp) -> replaced result UOp`` of an edited capture.
     session
@@ -351,9 +348,7 @@ def realize_capture(
         The plan, the realized values and the pre-realization UOps.
     """
 
-    input_leaves = tuple(
-        (path, value, cast(Any, value).uop) for path, value in call_leaves if is_tensor(value)
-    )
+    input_leaves = tuple((path, value, cast(Any, value).uop) for path, value in tensor_leaves)
     source_uops = tuple(uop for _path, _value, uop in input_leaves)
     output_uops = tuple(cast(Any, output).uop for output in outputs)
     plan = plan_capture(outputs, source_uops, preexisting_uops, edit_sites)

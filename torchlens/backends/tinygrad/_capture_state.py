@@ -88,11 +88,11 @@ def realize_with_state(
     """
 
     session = backend._edit_session
+    leaves = call_input_leaves(args, backend._call_kwargs)
     realized = realize_capture(
-        call_input_leaves(args, backend._call_kwargs),
+        [(path, value) for path, value in leaves if backend.is_tensor(value)],
         outputs,
         preexisting_uops,
-        backend.is_tensor,
         edit_sites=session.replaced if session is not None else None,
         session=backend._capture_session,
     )

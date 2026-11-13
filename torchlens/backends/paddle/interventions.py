@@ -41,6 +41,7 @@ from .._protocols.paddle import (
 from ..registry import BackendUnsupportedError
 from ._edit_helpers import _replace_leaves, resolve_paddle_helper
 from ._grad_sites import grad_site_neutral
+from ._op_call import PaddleOpCall
 
 if TYPE_CHECKING:
     from ...intervention._grad_site_neutral import GradSiteCall
@@ -487,10 +488,7 @@ def _emit_module_leaf(trace: Any, runtime: Any, tensor: Any) -> Any:
             replacement = backend.emit_paddle_operation(
                 trace,
                 "interventionreplacement",
-                _copy_leaf,
-                (tensor,),
-                {},
-                raw,
+                PaddleOpCall(_copy_leaf, (tensor,), {}, raw),
                 module_stack=tuple(trace._paddle_module_stack),
             )
     finally:
