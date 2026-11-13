@@ -1,7 +1,7 @@
 """Structural argument hash for the equivalence class of a parameter-free op.
 
 Moved out of ``tensor_tracking`` unchanged, then split into an observation and a
-resolver (lane FQ). :func:`observe_arg_inputs` records each top-level argument at the
+resolver. :func:`observe_arg_inputs` records each top-level argument at the
 call: an immutable value (an exact tensor's shape, an exact ``int``, ``float``,
 ``bool``, ``None``, ``str``, dtype or device) by reference, and anything else as
 today's tokens computed at the call, so a mutable argument changed after the call

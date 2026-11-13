@@ -80,7 +80,7 @@ def log_current_autocast_state(trace: Any = None) -> dict[str, dict[str, Any]]:
             elif table is False:
                 table = None
     if table is not None:
-        # Subscripts, not calls (C1 counts calls): reuse the snapshot THIS trace's table holds.
+        # Subscripts, not calls (counters count calls): reuse the snapshot THIS trace's table holds.
         try:
             kept, kept_id = _KEPT_SNAPSHOTS[token]
         except KeyError:

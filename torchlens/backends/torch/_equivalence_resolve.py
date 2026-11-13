@@ -1,4 +1,4 @@
-"""Equivalence class and call-site class as resolvers over recorded inputs (lane FQ).
+"""Equivalence class and call-site class as resolvers over recorded inputs.
 
 Each class is split into what must be observed at the call and a resolver that turns
 those observations into the class string:
