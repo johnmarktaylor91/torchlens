@@ -22,6 +22,7 @@ import time
 from collections import Counter
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, fields, replace
+from types import SimpleNamespace
 from typing import Any
 
 from ..._ir.events import InterventionAppliedEvent
@@ -43,6 +44,25 @@ from .jaxpr import JaxEquationCapture
 _OPTION = "trace_option_unsupported"
 _ALIAS_RETRY_KINDS = ("label", "contains", "regex")
 _REGION_LAYER_TYPES = {"region": "jax_region", "region_output": "jax_region_out"}
+
+
+def _intervention_api() -> SimpleNamespace:
+    """Return the intervention-layer (L4) names the edit runtime calls.
+
+    This L2 module's one door to the intervention layer: a single deferred
+    import keeps eager upward imports out of the backend.
+    """
+
+    from ...intervention import _predicates, _types, _zero_fire, hooks
+
+    return SimpleNamespace(
+        as_intervention_decision=_predicates.as_intervention_decision,
+        make_hook_context=hooks.make_hook_context,
+        normalize_hook=hooks.normalize_hook,
+        FireRecord=_types.FireRecord,
+        TargetSpec=_types.TargetSpec,
+        settle_capture_zero_fire=_zero_fire.settle_capture_zero_fire,
+    )
 
 
 def _jax_edit_refusal(message: str, *, code: str, option: str = "intervene") -> Exception:
@@ -142,11 +162,9 @@ class JaxEditRuntime:
     def _evaluate(self, ctx: Any) -> InterventionDecision | None:
         """Call the predicate once and normalize its result."""
 
-        from ...intervention._predicates import as_intervention_decision
-
         result = self.intervene(ctx)
         try:
-            decision = as_intervention_decision(result)
+            decision = _intervention_api().as_intervention_decision(result)
         except TypeError as exc:
             raise PredicateError(
                 "intervene predicate must return InterventionDecision, Edit, callable, "
@@ -195,8 +213,7 @@ def _resolve_applier(decision: InterventionDecision) -> JaxEditApplier:
             "supported actions are hook helpers and callable hooks.",
             code=_OPTION,
         )
-    from ...intervention.hooks import make_hook_context, normalize_hook
-
+    api = _intervention_api()
     hook = decision.hook
     if isinstance(hook, Edit):
         return JaxEditApplier(f"helper:{hook.name}", resolve_helper_applier(hook))
@@ -206,13 +223,13 @@ def _resolve_applier(decision: InterventionDecision) -> JaxEditApplier:
             f"callable hook; got {type(hook).__name__}.",
             code=_OPTION,
         )
-    normalized = normalize_hook(hook)
+    normalized = api.normalize_hook(hook)
     identity = f"callable:{getattr(hook, '__qualname__', type(hook).__name__)}"
 
     def _apply(out: Any) -> Any:
         """Invoke the user hook with a post-forward hook context."""
 
-        return normalized(out, ctx=make_hook_context(name=identity))
+        return normalized(out, ctx=api.make_hook_context(name=identity))
 
     return JaxEditApplier(identity, _apply)
 
@@ -222,11 +239,9 @@ def _fire_result(
 ) -> FireResult:
     """Build the fire record and fire result of one applied edit."""
 
-    from ...intervention._types import FireRecord
-
     helper = decision.hook if isinstance(decision.hook, Edit) else None
     replaced = replacement is not original
-    record = FireRecord(
+    record = _intervention_api().FireRecord(
         target_label=ctx.label_raw,
         call_label=ctx.label_raw,
         func_call_id=ctx.func_call_id,
@@ -383,10 +398,8 @@ def _edited_capture(capture: Any, applier: JaxEditApplier) -> JaxEditedEquationC
 def _record_fired_spec(trace: Any, target_label: str, decision: InterventionDecision) -> None:
     """Persist a fired decision on the trace-owned intervention spec (torch parity)."""
 
-    from ...intervention._types import TargetSpec
-
     spec = trace._ensure_intervention_spec()
-    target = TargetSpec("label", target_label)
+    target = _intervention_api().TargetSpec("label", target_label)
     frozen = target.freeze()
     if all(existing.freeze() != frozen for existing in spec.targets):
         spec.targets.append(target)
@@ -401,11 +414,9 @@ def _record_fired_spec(trace: Any, target_label: str, decision: InterventionDeci
 def _warn_zero_matches(intervene: Any) -> None:
     """Settle a selector-conditioned predicate that never fired (code ``trace_zero_fire``)."""
 
-    from ...intervention._zero_fire import settle_capture_zero_fire
-
     selector = getattr(intervene, "selector", None)
     if isinstance(selector, BaseSelector):
-        settle_capture_zero_fire(
+        _intervention_api().settle_capture_zero_fire(
             f"Capture-time intervention selector {selector!r} matched zero sites; "
             "no intervention fired.",
             selector=repr(selector),
