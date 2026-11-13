@@ -479,6 +479,11 @@ def recipe(trace: Any, op: Any) -> OpRecipe | None:
         "init_op": capture.label_raw in init_labels,
         "input_sources": tuple(sources),
     }
+    if capture.op_type == "ReadVariableOp":
+        from ..tf._variable_reads import persisted_read
+
+        if (read := persisted_read(trace, capture)) is not None:
+            attrs["variable_read"] = read
     built = OpRecipe(
         backend=BACKEND,
         op_identity=identity,
@@ -510,6 +515,7 @@ def bind_recipes(trace: Any, recipes: Mapping[str, OpRecipe]) -> None:
     rebuilt: list[tuple[int, Any]] = []
     init_labels: list[str] = []
     unresolved: list[Any] = []
+    reads: dict[str, Any] = {}
     for label, item in recipes.items():
         record, op_type = _checked_record(ops, label, item)
         capture = TFOpCapture(
@@ -523,6 +529,8 @@ def bind_recipes(trace: Any, recipes: Mapping[str, OpRecipe]) -> None:
         rebuilt.append((order.get(id(record), len(order)), capture))
         if item.attrs.get("init_op"):
             init_labels.append(capture.label_raw)
+        if "variable_read" in item.attrs:
+            reads[capture.label_raw] = item.attrs["variable_read"]
         unresolved.extend(
             TFUnresolvedProducer(f"{op_type.lower()}_pending", op_type, entry.input_index, None)
             for entry in capture.inputs
@@ -531,6 +539,9 @@ def bind_recipes(trace: Any, recipes: Mapping[str, OpRecipe]) -> None:
             and entry.source_kind is None
         )
     rebuilt.sort(key=lambda pair: pair[0])
+    from ..tf._variable_reads import restore_variable_reads
+
+    restore_variable_reads(trace, reads)
     trace._tf_op_captures = tuple(capture for _, capture in rebuilt)
     trace._tf_init_op_labels = tuple(init_labels)
     trace._tf_unresolved_producers = tuple(unresolved)
