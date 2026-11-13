@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1776 modules, 709703 lines, 0 modules without a docstring.
+85 packages, 1776 modules, 709673 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -56,7 +56,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.attribution._onebackward` | One-backward attribution reads: one backward pass seeded at gradient edges resolved from existing op fields, returned as a :class:'ReadTa... | 11 | 3881 |
 | `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 24 | 7542 |
 | `torchlens.backends._protocols` | Per-backend ''BackendProtocol'' objects, kept import-light. | 8 | 931 |
-| `torchlens.backends.jax` | JAX backend preview exports. | 24 | 10836 |
+| `torchlens.backends.jax` | JAX backend preview exports. | 24 | 10806 |
 | `torchlens.backends.mlx` | Technical-preview MLX backend for TorchLens. | 17 | 6951 |
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6595 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8577 |
@@ -1378,15 +1378,15 @@ Per-backend ''BackendProtocol'' objects, kept import-light. (8 modules, 931 line
 
 ### `torchlens.backends.jax`
 
-JAX backend preview exports. (24 modules, 10836 lines)
+JAX backend preview exports. (24 modules, 10806 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | JAX backend preview exports. | 7 |
 | `_closure_consts` | Closure-constant readability check for a JAX function-root capture. | 49 |
-| `_converted_grads` | Derived gradients for module roots and closure constants, over the captured jaxpr. | 245 |
-| `_edit_helpers` | JAX-native application of capture-time intervention helpers and hook results. | 194 |
-| `_edits` | Capture-time ''trace(intervene=...)'' for the JAX backend. | 474 |
+| `_converted_grads` | Derived gradients for module roots and closure constants, over the captured jaxpr. | 238 |
+| `_edit_helpers` | JAX-native application of capture-time intervention helpers and hook results. | 187 |
+| `_edits` | Capture-time ''trace(intervene=...)'' for the JAX backend. | 463 |
 | `_equinox_children` | Equinox child discovery: module fields, list and tuple fields, and their containers. | 153 |
 | `_host_state` | Closed-over host-state check for JAX derived gradients. | 40 |
 | `_input_kwargs` | Keyword inputs for JAX capture: array kwargs trace as pytree leaves. | 85 |
@@ -1397,12 +1397,12 @@ JAX backend preview exports. (24 modules, 10836 lines)
 | `_raw_relabel` | Raw-label helpers for finishing a JAX trace: lineage relabel, equivalence members, sources. | 79 |
 | `_return_ledger` | Trace-time ledger for JAX module returns (the leaf half of ''_module_return_probe''). | 69 |
 | `_site_dialect` | THE JAX SITE DIALECT for ''site_key_v1'' minting. | 72 |
-| `_source_lines` | Source lines for JAX equations: ''source_info'' tracebacks as torch-style frames. | 166 |
+| `_source_lines` | Source lines for JAX equations: ''source_info'' tracebacks as torch-style frames. | 163 |
 | `_source_path_components` | Source-path component normalization for JAX equation captures. | 44 |
 | `_trace_graph_helpers` | Trace-graph helpers for the JAX preview backend's validation oracles. | 535 |
 | `_validation_log` | Per-run validation decision log for the JAX backend. | 153 |
 | `_zero_annihilator` | Zero-annihilator value proof for the JAX preview backend's perturbation oracle. | 88 |
-| `backend` | Jaxpr-first JAX backend preview. | 4218 |
+| `backend` | Jaxpr-first JAX backend preview. | 4215 |
 | `capabilities` | Registry-backed capability exports for the JAX backend preview. | 38 |
 | `jaxpr` | Closed-jaxpr derivation and interpretation for the JAX backend. | 2490 |
 | `modules` | JAX module helpers for Equinox and Flax NNX roots. | 932 |
