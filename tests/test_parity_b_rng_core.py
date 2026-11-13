@@ -19,8 +19,6 @@ from torchlens.backends._rng_capture import (
     rng_module,
 )
 
-pytestmark = [pytest.mark.smoke]
-
 
 def _is_array(value: object) -> bool:
     """NumPy arrays stand in for framework arrays."""
