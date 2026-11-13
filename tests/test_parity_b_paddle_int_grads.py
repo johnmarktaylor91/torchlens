@@ -199,22 +199,16 @@ def test_grad_site_edit_derived_grads_equal_the_edit_by_hand() -> None:
     _close(trace.autograd.intermediate_derived_grads[relu.label].grad, edited)
 
 
-def test_grad_site_and_activation_edit_in_one_spec() -> None:
-    """An activation edit downstream of a gradient site: both act on the gradients."""
+def test_grad_site_with_an_activation_edit_on_the_gradient_path_refuses_by_name() -> None:
+    """An activation edit the gradient passes through has no replay recipe: refuse, never drop."""
+
+    from torchlens.errors import RunCapabilityUnavailableError
 
     spec = tl.when(tl.grad(tl.func("functional.relu")), tl.scale(0.5)) & tl.when(
         tl.module("second"), tl.scale(2.0)
     )
-    trace = tl.trace(_Net(), _x(), backend="paddle", intervene=spec, capture=_options())
-    net = _Net()
-    x = _x().detach()
-    x.stop_gradient = False
-    hidden = paddle.nn.functional.relu(net.first(x))
-    leaf = hidden.detach()
-    leaf.stop_gradient = False
-    (grad_hidden,) = paddle.grad(_loss(net.second(leaf) * 2.0), [leaf])
-    (grad_x,) = paddle.grad([hidden], [x], grad_outputs=[grad_hidden * 0.5])
-    _close(_derived(trace, "inputs.0"), grad_x)
+    with pytest.raises(RunCapabilityUnavailableError, match="cannot be replayed"):
+        tl.trace(_Net(), _x(), backend="paddle", intervene=spec, capture=_options())
 
 
 def test_autograd_node_selector_refuses_typed() -> None:
@@ -227,19 +221,17 @@ def test_autograd_node_selector_refuses_typed() -> None:
         )
 
 
-def _with_dropout(net: Any) -> Callable[[Any], Any]:
+class _WithDropout(_Net):
     """A training-mode dropout the replay adapter refuses, whose output is still reproducible.
 
     The dropout acts on zeros, so the derived-gradient re-run reproduces the captured
     output whatever mask it draws; the gradient pass still reaches the dropout op.
     """
 
-    def run(x: Any) -> Any:
-        hidden = paddle.nn.functional.relu(net.first(x))
+    def forward(self, x: Any) -> Any:
+        hidden = paddle.nn.functional.relu(self.first(x))
         dropped = paddle.nn.functional.dropout(hidden * 0.0, p=0.5, training=True)
-        return net.second(hidden + dropped)
-
-    return run
+        return self.second(hidden + dropped)
 
 
 def test_grad_site_reaching_an_unreplayable_op_refuses_by_name() -> None:
@@ -248,7 +240,7 @@ def test_grad_site_reaching_an_unreplayable_op_refuses_by_name() -> None:
     paddle.seed(0)
     with pytest.raises(RunCapabilityUnavailableError, match="cannot be replayed") as caught:
         tl.trace(
-            _with_dropout(_Net()),
+            _WithDropout(),
             _x(),
             backend="paddle",
             intervene=tl.when(tl.grad(tl.func("functional.relu")), tl.scale(0.5)),

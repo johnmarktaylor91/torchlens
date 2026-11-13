@@ -201,6 +201,7 @@ conformance cell yet.
 | Payload materialization after load (`payload_materialization`) | supported | |
 | Live forward interventions, `stop_after=` and finished-trace edits (`can_intervene`) | supported | |
 | Gradient edits at `tl.grad(...)` sites, applied to derived gradients | supported | |
+| A `tl.grad(...)` site whose gradient passes through an op the replay adapter cannot replay (a live activation edit, a training-mode dropout, an untracked tensor) | refuses, naming the op | `run_capability_unavailable` |
 | Derived gradients, including intermediates and edited or halted captures (`intermediate_derived_grads`) | supported | |
 | True backward capture (`backward_capture`) | unsupported | `backward_capture_unsupported` |
 | Fast logging (`fastlog`) | unsupported | `fastlog_unsupported` |
