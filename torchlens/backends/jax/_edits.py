@@ -29,11 +29,10 @@ from ..._ir.intervention import FireResult
 from ..._ir.refs import ReservedLabel
 from ..._ir.selector_eval import selector_contains_kind
 from ..._selection.selectors import BaseSelector
-from ...intervention._predicates import as_intervention_decision
-from ...intervention._types import Edit, FireRecord, InterventionDecision, TargetSpec
-from ...intervention._zero_fire import settle_capture_zero_fire
-from ...intervention.hooks import make_hook_context, normalize_hook, split_site_branches
+from ...intervention._types import Edit, InterventionDecision
+from ...intervention.hooks import split_site_branches
 from ...recording._exceptions import PredicateError
+from .._options import pop_stop_directive
 from ..registry import BackendUnsupportedError
 from ._edit_helpers import checked_replacement, resolve_helper_applier
 from ._module_frames import jax_event_module_frames
@@ -141,6 +140,8 @@ class JaxEditRuntime:
     def _evaluate(self, ctx: Any) -> InterventionDecision | None:
         """Call the predicate once and normalize its result."""
 
+        from ...intervention._predicates import as_intervention_decision
+
         result = self.intervene(ctx)
         try:
             decision = as_intervention_decision(result)
@@ -192,6 +193,8 @@ def _resolve_applier(decision: InterventionDecision) -> JaxEditApplier:
             "supported actions are hook helpers and callable hooks.",
             code=_OPTION,
         )
+    from ...intervention.hooks import make_hook_context, normalize_hook
+
     hook = decision.hook
     if isinstance(hook, Edit):
         return JaxEditApplier(f"helper:{hook.name}", resolve_helper_applier(hook))
@@ -216,6 +219,8 @@ def _fire_result(
     ctx: Any, decision: InterventionDecision, original: Any, replacement: Any, runtime: Any
 ) -> FireResult:
     """Build the fire record and fire result of one applied edit."""
+
+    from ...intervention._types import FireRecord
 
     helper = decision.hook if isinstance(decision.hook, Edit) else None
     replaced = replacement is not original
@@ -370,6 +375,8 @@ def _edited_capture(capture: Any, applier: JaxEditApplier) -> JaxEditedEquationC
 def _record_fired_spec(trace: Any, target_label: str, decision: InterventionDecision) -> None:
     """Persist a fired decision on the trace-owned intervention spec (torch parity)."""
 
+    from ...intervention._types import TargetSpec
+
     spec = trace._ensure_intervention_spec()
     target = TargetSpec("label", target_label)
     frozen = target.freeze()
@@ -386,6 +393,8 @@ def _record_fired_spec(trace: Any, target_label: str, decision: InterventionDeci
 def _warn_zero_matches(intervene: Any) -> None:
     """Settle a selector-conditioned predicate that never fired (code ``trace_zero_fire``)."""
 
+    from ...intervention._zero_fire import settle_capture_zero_fire
+
     selector = getattr(intervene, "selector", None)
     if isinstance(selector, BaseSelector):
         settle_capture_zero_fire(
@@ -393,6 +402,38 @@ def _warn_zero_matches(intervene: Any) -> None:
             "no intervention fired.",
             selector=repr(selector),
         )
+
+
+def pop_edit_kwargs(kwargs: dict[str, Any]) -> Any:
+    """Pop ``intervene`` and the stop directive from the backend kwargs.
+
+    Parameters
+    ----------
+    kwargs
+        Extra public trace kwargs reaching the JAX backend; mutated in place.
+
+    Returns
+    -------
+    Any
+        The ``intervene`` predicate, or ``None``.
+
+    Raises
+    ------
+    BackendUnsupportedError
+        ``interventions_unsupported`` for ``stop_after=``: the JAX capture path
+        interprets the whole jaxpr and has no partial-capture finalization yet.
+    """
+
+    intervene = kwargs.pop("intervene", None)
+    if pop_stop_directive(kwargs) is not None:
+        raise BackendUnsupportedError(
+            "JAX backend trace(stop_after=...) is not supported: the capture interprets "
+            "the whole jaxpr and has no partial-capture finalization. Capture the full "
+            "forward (trace(intervene=...) edits are supported), or use the PyTorch backend.",
+            code="interventions_unsupported",
+            option="stop_after",
+        )
+    return intervene
 
 
 def open_equation_session(
