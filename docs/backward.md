@@ -25,6 +25,17 @@ relu_trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads=tl.
 relu_trace.backward(relu_trace[relu_trace.output_layers[0]].out.sum())
 ```
 
+`loss` can also be a callable that maps the model's return value to the scalar, with the
+meaning `loss_fn=` has in validation. Every backend that supports backward accepts it:
+
+```python
+trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads=True))
+trace.backward(lambda out: out.sum())
+```
+
+PyTorch calls it once on `trace.output`, so a forked or converted trace without a live forward
+return refuses it with `output_not_stored`; pass the loss tensor there instead.
+
 `save_grads=True` saves all observed op gradients. `False` or `None` observes backward structure
 without retaining gradient tensors. Predicate expressions use the same forward selector language,
 plus backward selectors such as `tl.grad_fn(...)` (by class name, or `label=` for a label substring),
@@ -314,6 +325,15 @@ capture. TensorFlow currently defers true backward capture and T1/intermediate d
 TF traces are forward eager-capture records only. `trace.backward(...)`,
 `trace.autograd.backward_passes`, `trace.saved_grad_ops`, and `op.autograd.grads` raise on JAX, MLX, tinygrad,
 Paddle, and TensorFlow traces.
+A backend with a native backward module records its passes into the same records. There,
+`trace.backward(...)` on a forked trace, `trace.capture_backward()` when the backend cannot observe
+backward calls the user drives, and backward capture on a trace whose capture event stream was
+released refuse with `run_capability_unavailable` at detection stage `native_backward_capture`.
+The reverse gradient engine, which computes gradient values from a backend's replay adapter
+without a backward pass, refuses with `run_capability_unavailable` at detection stage
+`reverse_engine` when a gradient reaches an op the adapter cannot describe or replay, when the
+adapter's derivative returns the wrong number of cotangents, or when the graph is not in forward
+order.
 
 Real per-fire timing is measured on every hooked node (universal path): a lightweight timing
 prehook and the hook entry stamp pair one `time.perf_counter()` span per fire, served LIVE by
