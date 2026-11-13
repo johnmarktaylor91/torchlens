@@ -928,10 +928,6 @@ _PROCESS_CACHES = frozenset(
         # the trace id matches; a new capture mints a new fingerprint, so it never goes
         # stale. Holds no trace.
         ("torchlens/backends/torch/_wrapper_session.py", "FACTS"),
-        # The latest registered autocast snapshot per content token: handed out again
-        # only while the capturing trace's token table holds that very object, so an
-        # entry never crosses traces or goes stale. Small dicts, few tokens.
-        ("torchlens/_utils/rng/autocast.py", "_KEPT_SNAPSHOTS"),
         # Code objects of the unwrapped Function.apply frame (one per apply slot
         # shape), registered at install so the census can tell a dispatch made by the
         # C++ apply epilogue from one inside the user's forward; process-stable.
