@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1845 modules, 728382 lines, 0 modules without a docstring.
+85 packages, 1846 modules, 728505 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -31,7 +31,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._observe` | Observe kit: memory truth and diagnostics substrates. | 6 | 1520 |
 | `torchlens._partial` | Partial capture helpers for failed TorchLens forward ops. | 1 | 518 |
 | `torchlens._plots` | Pixel plotting helpers (PIL, numpy) shared by the reads packages and ''viz''. | 3 | 2102 |
-| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 64 | 23763 |
+| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 65 | 23886 |
 | `torchlens._quickstart` | TorchLens quickstart: one input ladder, one provenance record, one render door. | 9 | 1986 |
 | `torchlens._registry` | Private registry kernel package (never public API). | 3 | 556 |
 | `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 20 | 15068 |
@@ -751,11 +751,11 @@ Pixel plotting helpers (PIL, numpy) shared by the reads packages and ''viz''. (3
 
 ### `torchlens._postprocess`
 
-Postprocessing pipeline for cleaning up the model log after the forward pass. (64 modules, 23763 lines)
+Postprocessing pipeline for cleaning up the model log after the forward pass. (65 modules, 23886 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
-| `__init__` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 340 |
+| `__init__` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 353 |
 | `_ast_predicates` | Statement and expression predicates for the conditional AST indexer. | 162 |
 | `_branch_attribution` | Frame-level conditional branch attribution for one op's call stack. | 157 |
 | `_branch_source` | Source text readers and source-range predicates for the conditional AST indexer. | 187 |
@@ -770,10 +770,10 @@ Postprocessing pipeline for cleaning up the model log after the forward pass. (6
 | `_conditional_child_rename` | Conditional child-label renaming for ''labeling._replace_layer_names_for_layer_entry''. | 84 |
 | `_conditional_columns` | Step 5 as a column algorithm over the building op store's integer rows. | 484 |
 | `_conditional_records` | Leaf helpers of ''finalization._build_conditional_records''. | 277 |
-| `_executor` | Postprocess step adapters: ''StepContext'' and one function per pipeline step. | 477 |
+| `_executor` | Postprocess step adapters: ''StepContext'' and one function per pipeline step. | 489 |
 | `_final_info_columns` | Step 9 by column: the per-op part of final layer info over the building rows. | 391 |
 | `_final_info_rename` | Step 9 by column: raw-to-final label renaming over the building rows. | 267 |
-| `_finished_marks` | Step 17 body: mark every final op finished. | 79 |
+| `_finished_marks` | Step 17 body: mark every final op finished. | 120 |
 | `_grouping_stamp` | The grouping-policy stamp (''grouping_policy_v1''): writer, loader | 292 |
 | `_ingest_contract` | Frozen step-0 ingest seam contracts: ''IngestInputs'' v1 / ''Step0Result'' v1. | 152 |
 | `_join_parts` | Per-op join cells shared by step-0 ingest (''_materialize._apply_join_cells''). | 120 |
@@ -789,11 +789,12 @@ Postprocessing pipeline for cleaning up the model log after the forward pass. (6
 | `_module_containment` | Op containment facts: tally each op's module calls into the module build data. | 107 |
 | `_module_pending` | Module records built on first lookup: the facts step 16 seals and the deferred build. | 296 |
 | `_multipass_params` | Parameter fields of a layer whose passes consume different parameters. | 48 |
+| `_op_seal` | Post-pipeline fold of a sealed Op store's overlay into its object columns. | 50 |
 | `_orphan_predicates` | Predicates deciding whether a pruned orphan op's nondeterministic value mattered. | 132 |
 | `_orphan_seeds` | Seeds of the orphan-removal flood (postprocess Step 3). | 150 |
 | `_output_payload` | Whether a model-output row rides its producer's retained payload (HONESTY 13-R1). | 153 |
 | `_parent_params_clear` | Clear the Parameter tensor references ops hold once param finalization is done. | 59 |
-| `_pipeline` | Postprocess pipeline: the named ordered step table and ''run_pipeline''. | 637 |
+| `_pipeline` | Postprocess pipeline: the named ordered step table and ''run_pipeline''. | 644 |
 | `_pre_hook_provenance` | Pre-hook provenance of one module call, with raw producer labels finalized. | 70 |
 | `_primitive_profile` | Materialize and bind the private wave-0 primitive-operation profile. | 400 |
 | `_recurrence` | Shared preview-backend recurrence grouping feed. | 407 |

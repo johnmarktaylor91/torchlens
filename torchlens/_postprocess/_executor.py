@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .. import _postprocess as _package
 from .._data_classes._compaction import hand_off_container_tokens
 from .._utils import _cuda_probe, hashing as _hashing, tensor_utils as _tensor_utils
 from . import (
@@ -295,6 +296,17 @@ def _run_adopt_containers_and_drop_workspaces(ctx: StepContext) -> None:
         "_output_container_specs_by_raw_label",
     ):
         trace.__dict__.pop(field_name, None)
+
+
+def _run_seal_op_store(ctx: StepContext) -> None:
+    """Compact and seal the Op row store, ahead of the finished mark.
+
+    The body is the package-level ``_seal_op_store``, resolved at call time
+    (the package imports this module, so the name is read off the package).
+    Untimed.
+    """
+
+    _package._seal_op_store(ctx.trace)
 
 
 def _should_run_finalize_streamed_bundle(ctx: StepContext) -> bool:
