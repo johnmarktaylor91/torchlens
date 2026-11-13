@@ -96,7 +96,7 @@ from .._root_frames import refuse_rootless_stack, strip_op_root_frames
 from .._validation_shared import float_replay_tolerances
 from . import _module_return_probe as return_probe
 from ._closure_consts import _readable_closure_consts
-from ._converted_grads import attach_jax_derived_grads
+from ._converted_grads import DerivedGradCapture, attach_jax_derived_grads
 from ._edits import append_session_event, open_equation_session, replay_with_edits
 from ._host_state import _reject_closed_over_host_state
 from ._input_kwargs import bind_input_kwargs
@@ -754,15 +754,12 @@ class JAXBackend:
         _stamp_jaxpr_results(trace, closed_jaxpr, result, static_argnums)
         apply_static_label_save_policy(trace, save_predicate, backend_name="JAX")
         if grad_options is not None:
+            captured = (model, call_fn, args, static_argnums, closed_jaxpr, tree, output)
+            flow = (cast(str, jax_control_flow), cast(int, jax_max_control_flow_unroll))
             attach_jax_derived_grads(
                 self,
                 trace=trace,
-                call=(model, call_fn, args, static_argnums),
-                closed_jaxpr=closed_jaxpr,
-                module_tree=tree,
-                captured_output=output,
-                grad_options=grad_options,
-                control_flow=(cast(str, jax_control_flow), cast(int, jax_max_control_flow_unroll)),
+                capture=DerivedGradCapture(*captured, grad_options, flow),
                 derive=derive_closed_jaxpr,
             )
         attach_facet_recipes(trace, facet_recipes, backend_name="JAX")

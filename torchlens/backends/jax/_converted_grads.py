@@ -22,7 +22,7 @@ from __future__ import annotations
 import inspect
 from collections.abc import Callable, Sequence
 from dataclasses import replace
-from typing import Any
+from typing import Any, NamedTuple
 
 from ..._data_classes.derived_grad import (
     IntermediateDerivedGradAccessor,
@@ -30,6 +30,27 @@ from ..._data_classes.derived_grad import (
 )
 from ...backends.registry import BackendUnsupportedError
 from ._host_state import _reject_closed_over_host_state
+
+
+class DerivedGradCapture(NamedTuple):
+    """What a derived-gradient attach reads from one JAX capture.
+
+    ``traced`` is the callable the capture traced (``model`` itself, or the
+    keyword-bound wrapper); ``closed_jaxpr`` is the captured jaxpr with module
+    returns stripped, ``module_tree`` the attributed tree of a module root (else
+    ``None``), ``captured_output`` the raw output, and ``control_flow`` is
+    ``(jax_control_flow, jax_max_control_flow_unroll)``.
+    """
+
+    model: Any
+    traced: Callable[..., Any]
+    args: Sequence[Any]
+    static_argnums: tuple[int, ...]
+    closed_jaxpr: Any
+    module_tree: Any
+    captured_output: Any
+    grad_options: Any
+    control_flow: tuple[str, int]
 
 
 def _param_const_positions(closed_jaxpr: Any, module_tree: Any) -> dict[int, str]:
@@ -97,23 +118,16 @@ def _jaxpr_function(
 
 
 def converted_gradient_view(
-    *,
-    model: Any,
-    args: Sequence[Any],
-    closed_jaxpr: Any,
-    module_tree: Any,
-    grad_options: Any,
-    static_argnums: tuple[int, ...],
-    captured_output: Any,
+    capture: DerivedGradCapture,
 ) -> tuple[Callable[..., Any], list[Any], Any, tuple[int, ...]] | None:
     """Return the explicit-leaf gradient view, or ``None`` for the plain raw path.
 
-    ``closed_jaxpr`` is the captured jaxpr (module returns stripped), ``module_tree``
-    the attributed tree of a module root (else ``None``) and ``captured_output``
-    the raw output whose pytree structure the view returns. The result is
+    The view returns the pytree structure of ``capture.captured_output``. The result is
     ``(fn, [params, *inputs, other_consts], grad_options, fn_static_argnums)``.
     """
 
+    model, _, args, static_argnums, closed_jaxpr, module_tree, captured_output = capture[:7]
+    grad_options = capture.grad_options
     consts = tuple(getattr(closed_jaxpr, "consts", ()))
     if module_tree is None and not consts:
         return None
@@ -147,35 +161,21 @@ def attach_jax_derived_grads(
     backend: Any,
     *,
     trace: Any,
-    call: tuple[Any, Callable[..., Any], Sequence[Any], tuple[int, ...]],
-    closed_jaxpr: Any,
-    module_tree: Any,
-    captured_output: Any,
-    grad_options: Any,
-    control_flow: tuple[str, int],
+    capture: DerivedGradCapture,
     derive: Callable[..., Any],
 ) -> None:
     """Attach derived gradients, through the explicit-leaf view when it applies.
 
-    ``backend`` owns the raw-path gradient methods; ``call`` is
-    ``(model, traced_callable, args, static_argnums)`` of the capture and
-    ``control_flow`` its ``(jax_control_flow, jax_max_control_flow_unroll)``;
-    ``derive`` is ``jaxpr.derive_closed_jaxpr`` (passed in to keep this module
-    out of the backend import cycle). A
-    module root or a function root with closure constants takes the
-    explicit-leaf view; every other root takes the raw path unchanged.
+    ``backend`` owns the raw-path gradient methods; ``derive`` is
+    ``jaxpr.derive_closed_jaxpr`` (passed in to keep this module out of the
+    backend import cycle). A module root or a function root with closure
+    constants takes the explicit-leaf view; every other root takes the raw path
+    unchanged.
     """
 
-    model, traced, args, static_argnums = call
-    view = converted_gradient_view(
-        model=model,
-        args=args,
-        closed_jaxpr=closed_jaxpr,
-        module_tree=module_tree,
-        grad_options=grad_options,
-        static_argnums=static_argnums,
-        captured_output=captured_output,
-    )
+    model, traced, args, static_argnums = capture[:4]
+    grad_options, control_flow = capture.grad_options, capture.control_flow
+    view = converted_gradient_view(capture)
     if view is None and traced is not model and inspect.isfunction(model):
         # The raw path inspects ``traced``; also inspect the keyword-bound user callable.
         _reject_closed_over_host_state(model)
@@ -190,28 +190,21 @@ def attach_jax_derived_grads(
         model=fn,
         args=fn_args,
         static_argnums=fn_static,
-        closed_jaxpr=closed_jaxpr if view is None else derive(fn, fn_args, fn_static),
-        captured_output=captured_output,
+        closed_jaxpr=capture.closed_jaxpr if view is None else derive(fn, fn_args, fn_static),
+        captured_output=capture.captured_output,
         grad_options=view_options,
         jax_control_flow=control_flow[0],
         jax_max_control_flow_unroll=control_flow[1],
     )
     if view is not None and grad_options.intermediate_grads:
-        captured = (closed_jaxpr, args, static_argnums)
-        _attach_intermediate(backend, trace, captured, captured_output, grad_options, control_flow)
+        _attach_intermediate(backend, trace, capture)
 
 
-def _attach_intermediate(
-    backend: Any,
-    trace: Any,
-    capture: tuple[Any, Sequence[Any], tuple[int, ...]],
-    captured_output: Any,
-    grad_options: Any,
-    control_flow: tuple[str, int],
-) -> None:
+def _attach_intermediate(backend: Any, trace: Any, capture: DerivedGradCapture) -> None:
     """Attach zero-tap intermediate gradients over the captured jaxpr and inputs."""
 
-    closed_jaxpr, args, static_argnums = capture
+    _, _, args, static_argnums, closed_jaxpr, _, captured_output, grad_options = capture[:8]
+    control_flow = capture.control_flow
     records = getattr(trace, "_autograd_derived_grads", None)
     fingerprint = next(
         (

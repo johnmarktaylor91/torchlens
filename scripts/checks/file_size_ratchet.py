@@ -171,7 +171,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # merged tree; next 50-line step above it. Conscious raise, not drift;
     # the duplicate relabel/module-building code this same commit removed
     # already kept the net growth well under the commit's own diff size.
-    "torchlens/backends/jax/backend.py": 4400,
+    "torchlens/backends/jax/backend.py": 4250,
     # 4600 -> 4650: the L8 C2-recording settle above re-stepped bundle to 4600
     # but the merged file MEASURES 4603 -- the settle's own re-step was three
     # lines short, red on main since the merge. Reconciled to the next 50-line

@@ -724,7 +724,7 @@ torchlens/backends/_finalize.py::attach_object_module_logs	63
 torchlens/backends/_finalize.py::finalize_single_pass_trace	150
 torchlens/backends/_finalize.py::new_preview_function_trace	100
 torchlens/backends/_finalize.py::populate_object_module_build_data	72
-torchlens/backends/jax/backend.py	4218
+torchlens/backends/jax/backend.py	4215
 torchlens/backends/jax/backend.py::JAXBackend._append_event	168
 torchlens/backends/jax/backend.py::JAXBackend._attach_derived_grads	170
 torchlens/backends/jax/backend.py::JAXBackend._build_jax_recurrence_grouping_graph	71
@@ -735,7 +735,7 @@ torchlens/backends/jax/backend.py::JAXBackend._emit_region_capture	122
 torchlens/backends/jax/backend.py::JAXBackend._finish_trace	294
 torchlens/backends/jax/backend.py::JAXBackend._populate_pytree_module_build_data	79
 torchlens/backends/jax/backend.py::JAXBackend._validate_jax_regions	70
-torchlens/backends/jax/backend.py::JAXBackend.capture_trace	331
+torchlens/backends/jax/backend.py::JAXBackend.capture_trace	328
 torchlens/backends/jax/backend.py::_experimental_per_op_boundary_vjp_oracle	79
 torchlens/backends/jax/backend.py::_finite_difference_directional_check	83
 torchlens/backends/jax/backend.py::_jax_intermediate_oracle_passes	62
