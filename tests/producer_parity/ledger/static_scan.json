@@ -5728,6 +5728,30 @@
   "via_getattr": false
  },
  {
+  "ambiguous": false,
+  "field": "pass_index",
+  "file": "torchlens/backends/_backward_neutral.py",
+  "has_default": false,
+  "sites": 9,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "pass_index",
+  "file": "torchlens/backends/_backward_neutral.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "seq",
+  "file": "torchlens/backends/_backward_neutral.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
   "ambiguous": true,
   "field": "kind",
   "file": "torchlens/backends/_constants.py",
@@ -5837,6 +5861,14 @@
   "file": "torchlens/backends/_protocols/torch.py",
   "has_default": false,
   "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/backends/_reverse_engine.py",
+  "has_default": false,
+  "sites": 6,
   "via_getattr": false
  },
  {
@@ -7573,6 +7605,14 @@
   "file": "torchlens/backends/torch/_sources_lazy.py",
   "has_default": false,
   "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "output",
+  "file": "torchlens/backends/torch/_trace_backward.py",
+  "has_default": false,
+  "sites": 1,
   "via_getattr": false
  },
  {
@@ -10509,6 +10549,14 @@
   "file": "torchlens/validation/_autograd_grad_replay.py",
   "has_default": false,
   "sites": 3,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/validation/_backward_neutral.py",
+  "has_default": false,
+  "sites": 6,
   "via_getattr": false
  },
  {

@@ -3144,8 +3144,8 @@ class Trace(TraceOutputMixin, _trace_rerun_state.TraceAppendMixin, TraceLike):
             reservation_resume=reservation_resume,
         )
 
-    def backward(self, loss: torch.Tensor, **backward_kwargs: Any) -> "Trace":
-        """Run backward from ``loss`` and populate this Trace with backward metadata."""
+    def backward(self, loss: torch.Tensor | Callable[..., Any], **backward_kwargs: Any) -> "Trace":
+        """Run backward from ``loss`` (a scalar, or a callable of ``self.output``); record it."""
 
         return _doors.backends_torch()._trace_backward.backward(self, loss, **backward_kwargs)
 

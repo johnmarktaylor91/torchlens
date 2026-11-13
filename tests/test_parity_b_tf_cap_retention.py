@@ -54,8 +54,9 @@ def test_sparse_payloads_equal_full_capture(func_name: str) -> None:
     sparse_trace = tl.trace(_chain, x, save=tl.func(func_name))
     sparse = _payloads(sparse_trace)
     selected = {op.label for op in sparse_trace._layer_list if op.func_name == func_name}
+    inputs = {op.label for op in sparse_trace._layer_list if op.func_name == "input"}
     assert selected
-    assert set(sparse) == selected
+    assert set(sparse) == selected | inputs  # model inputs are always kept
     for label, value in sparse.items():
         np.testing.assert_array_equal(value, full[label])
 

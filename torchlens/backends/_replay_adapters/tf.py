@@ -27,6 +27,7 @@ import numpy as np
 
 from ... import _state
 from .._validation_shared import ops_by_label
+from ..tf._helper_hooks import tf_helper_hook
 from ..tf._raw_op_replay import _replay_raw_op
 from ..tf.op_callback_capture import TFInputCapture, TFOpCapture, TFUnresolvedProducer
 from ..tf.validation import (
@@ -340,6 +341,19 @@ def add(left: Any, right: Any) -> Any:
     import tensorflow as tf  # deferred: optional dependency
 
     return tf.math.add(tf.convert_to_tensor(left), tf.convert_to_tensor(right))
+
+
+def apply_helper(trace: Any, helper: Any, value: Any) -> Any:
+    """Apply a built-in edit helper to ``value`` with TensorFlow ops (finished-trace edits).
+
+    Delegates to the live-edit helper table, so ``fork().do`` and ``intervene=``
+    compute the same replacement; an unsupported helper refuses typed there.
+    """
+
+    import tensorflow as tf  # deferred: optional dependency
+
+    del trace
+    return tf_helper_hook(helper, tf)(tf.convert_to_tensor(value))
 
 
 def to_host(value: Any) -> np.ndarray:

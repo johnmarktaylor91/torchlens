@@ -223,13 +223,6 @@ class TFBackend:
         halt = pop_stop_directive(extra_kwargs)
         facet_recipes = pop_facet_recipes(extra_kwargs)
         _reject_extra_kwargs(extra_kwargs)
-        if (intervene is not None or halt is not None) and grad_options is not None:
-            raise BackendUnsupportedError(
-                "tf backend does not combine intervene= or stop_after= with grad_options=; "
-                "the derived-gradient replay reruns the full un-intervened forward and would "
-                "always refuse on output divergence. Capture the two surfaces in "
-                "separate traces."
-            )
         if random_seed is not None:
             raise BackendUnsupportedError(
                 "the tf backend does not support random_seed; use tf.random.set_seed(...) "
@@ -406,6 +399,8 @@ class TFBackend:
                 captured_output=result.output,
                 grad_options=grad_options,
                 module_tree=module_tree,
+                intervene=intervene,
+                halt=halt,
             )
         attach_facet_recipes(trace, facet_recipes, backend_name="tf")
         freeze_trace_relation_views(trace)

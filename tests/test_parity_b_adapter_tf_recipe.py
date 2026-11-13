@@ -81,7 +81,10 @@ def _verdict(result: Any) -> tuple[Any, ...]:
 
 
 def _input_key(item: Any) -> tuple[Any, ...]:
-    array = ADAPTER._literal_array(item.tensor)
+    # A parent-linked input's value is the parent's payload; a live capture
+    # without a backward pass releases its tensor, so only literals carry data.
+    linked = item.producer_label_raw is not None or item.source_label_raw is not None
+    array = None if linked else ADAPTER._literal_array(item.tensor)
     tensor = None if array is None else array.tolist()
     return (item.input_index, item.producer_label_raw, item.source_kind, item.source_label_raw,
             tensor)  # fmt: skip
