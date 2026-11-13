@@ -5,9 +5,11 @@ landed, a small branching function (a repeated parent ``a * a`` and a fan-out
 of ``a``) is captured once clean. Editing the rectifier's output on a fork must
 then equal a fresh capture of the same function with the edit written into its
 code, a no-op edit must reproduce every payload exactly, the edited trace must
-pass the replay check, and corrupting a downstream payload must fail it. On
-Paddle, which supports live ``intervene=``, the edited fork must also equal a
-live capture with the same edit.
+pass the replay check, and corrupting a downstream payload must fail it. A
+donor value from a second capture on the same backend patches in; a NumPy
+array (another framework) is refused. On Paddle, which supports live
+``intervene=``, the edited fork must also equal a live capture with the same
+edit.
 """
 
 from __future__ import annotations
@@ -21,6 +23,7 @@ import pytest
 import torchlens as tl
 from torchlens.backends._replay_adapters import has_adapter
 from torchlens.intervention._backend_replay import verify_backend_replay
+from torchlens.intervention.errors import HookValueError
 
 _X = np.asarray([[-1.5, -0.5, 0.25, 1.0], [0.5, 1.5, -2.0, 0.75]], dtype=np.float32)
 
@@ -200,6 +203,28 @@ def test_corrupted_downstream_payload_fails_the_replay_check(backend: str) -> No
     child = edited._layer_dict_all_keys[next(iter(site.children))]
     child._internal_set("out", child.out + 1.0)
     assert child.label in verify_backend_replay(edited)
+
+
+def test_donor_patch_from_a_trace_of_the_same_backend(backend: str) -> None:
+    build, value, adapter = _setup(backend)
+    clean = _capture(backend, build, value, _identity)
+    donor = _capture(backend, build, value * 2.0, _identity)
+    label = _rectifier(clean).label
+    donor_value = _rectifier(donor).out
+    edited = clean.fork().do(label, lambda out, *, ctx: donor_value)
+    site = edited._layer_dict_all_keys[label]
+    assert np.array_equal(_host(adapter, site.out), _host(adapter, donor_value))
+    assert verify_backend_replay(edited) == []
+
+
+def test_donor_from_another_framework_is_refused(backend: str) -> None:
+    build, value, adapter = _setup(backend)
+    clean = _capture(backend, build, value, _identity)
+    site = _rectifier(clean)
+    foreign = np.zeros_like(_host(adapter, site.out))
+    with pytest.raises(HookValueError) as caught:
+        clean.fork().do(site.label, lambda out, *, ctx: foreign)
+    assert caught.value.fields["code"] == "intervention_replacement_invalid"
 
 
 def test_live_intervene_matches_where_supported(backend: str) -> None:
