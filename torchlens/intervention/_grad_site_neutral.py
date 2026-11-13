@@ -388,8 +388,12 @@ def disagreeing_labels(
     )
 
 
-_ARMED: weakref.WeakKeyDictionary[Any, tuple[GradSiteEdit, ...]] = weakref.WeakKeyDictionary()
-"""Edits armed per trace object until a backward computation applies them."""
+_ARMED: dict[int, tuple[weakref.ref[Any], tuple[GradSiteEdit, ...]]] = {}
+"""Edits armed per trace object (keyed by identity, held weakly) until a backward applies them.
+
+Keyed by ``id`` with a weak reference rather than a ``WeakKeyDictionary``
+because a trace need not be hashable.
+"""
 
 
 def build_grad_site_edits(
@@ -436,19 +440,28 @@ def build_grad_site_edits(
 def arm_grad_sites(trace: Any, edits: Sequence[GradSiteEdit]) -> None:
     """Arm ``edits`` on ``trace`` after any already armed (declared order is kept)."""
 
-    _ARMED[trace] = (*_ARMED.get(trace, ()), *edits)
+    key = id(trace)
+    try:
+        ref = weakref.ref(trace, lambda _dead, key=key: _ARMED.pop(key, None))
+    except TypeError as exc:
+        raise _refuse(f"a {type(trace).__name__} cannot hold armed gradient edits") from exc
+    _ARMED[key] = (ref, (*armed_grad_sites(trace), *edits))
 
 
 def armed_grad_sites(trace: Any) -> tuple[GradSiteEdit, ...]:
     """The edits armed on ``trace``, in declared order."""
 
-    return _ARMED.get(trace, ())
+    entry = _ARMED.get(id(trace))
+    if entry is None or entry[0]() is not trace:
+        return ()
+    return entry[1]
 
 
 def clear_grad_sites(trace: Any) -> None:
     """Disarm every edit on ``trace``."""
 
-    _ARMED.pop(trace, None)
+    if armed_grad_sites(trace):
+        del _ARMED[id(trace)]
 
 
 def run_armed_grad_sites(
