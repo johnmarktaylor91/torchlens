@@ -76,11 +76,6 @@ KNOWN_FAILURES: tuple[KnownFailure, ...] = (
         tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
     ),
     KnownFailure(
-        nodeid="tests/test_real_world_models.py::test_fasterrcnn_mobilenet_train",
-        reason="assert False: validate_forward_pass(...) returned False",
-        tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
-    ),
-    KnownFailure(
         nodeid="tests/test_real_world_models.py::test_fcos_resnet50_train",
         reason="assert False: validate_forward_pass(...) returned False",
         tracking="round-2 (lane-L8-ci-fix / lane-L17-integrate)",
