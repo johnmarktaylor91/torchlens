@@ -444,7 +444,7 @@ class TinygradPayloadCodec:
             array = np.asarray(value.tolist())
         _raise_for_unsupported_array_dtype(array, backend_name=self.backend_name)
         return EncodedArray(
-            array=np.ascontiguousarray(array),
+            array=_contiguous_keeping_shape(array),
             logical_dtype=str(getattr(value, "dtype", array.dtype)),
             logical_device=str(getattr(value, "device", "unknown")),
             codec_metadata=_json_ready_mapping(
@@ -496,7 +496,7 @@ class TinygradPayloadCodec:
         kwargs: dict[str, Any] = {"dtype": dtype}
         if device not in (None, "", "unknown"):
             kwargs["device"] = device
-        return Tensor(array, **kwargs).reshape(array.shape).realize()  # Tensor(0-d) is (1,)
+        return Tensor(array, **kwargs).realize()
 
     def manifest_fields(self, value: Any, encoded: EncodedArray) -> dict[str, Any]:
         """Return v2 manifest vocabulary for a tinygrad payload."""

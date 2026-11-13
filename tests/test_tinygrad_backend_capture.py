@@ -172,6 +172,21 @@ def test_tinygrad_codec_fixture_loads_lazy_refs_as_tensors(tmp_path: Path) -> No
     np.testing.assert_allclose(materialized.numpy(), expected)
 
 
+def test_tinygrad_payload_codec_round_trips_a_scalar_as_0d() -> None:
+    """A 0-d tinygrad payload stays 0-d through encode and decode (``output_device``)."""
+
+    codec = get_payload_codec("tinygrad")
+    value = Tensor(2.0).realize()
+    encoded = codec.to_numpy(value)
+    rebuilt = codec.from_numpy(
+        encoded.array, codec.manifest_fields(value, encoded), map_location="cpu"
+    )
+
+    assert encoded.array.shape == ()
+    assert tuple(rebuilt.shape) == ()
+    assert float(rebuilt.numpy()) == 2.0
+
+
 def test_tinygrad_payload_codec_rejects_unresolved_load_dtype() -> None:
     """tinygrad load should fail closed for unresolvable dtype strings."""
 
