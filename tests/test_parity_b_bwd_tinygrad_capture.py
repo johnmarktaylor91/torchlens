@@ -226,6 +226,26 @@ def _check(trace: Any) -> Any:
     return graph, keyed
 
 
+def _node_differences(trace: Any, graph: Any, recorded: Any, result: Any) -> list[Any]:
+    """For each node finding: the replayed and recorded outgoing gradients compared."""
+
+    rows = []
+    nodes = {node.label: node for node in graph.nodes}
+    for finding in result.findings:
+        if finding.check != "node" or finding.op_label not in nodes:
+            continue
+        node = nodes[finding.op_label]
+        incoming, outgoing = recorded.calls[node.label]
+        parents = [graph.value(parent) for parent in node.parents]
+        expected = adapter.vjp(trace, node.op, parents, list(incoming))
+        for parent, want, got in zip(node.parents, expected, outgoing, strict=True):
+            if want is None or got is None:
+                rows.append((node.label, parent, want is None, got is None))
+            else:
+                rows.append((node.label, parent, _difference(want, got), str(want.dtype)))
+    return rows
+
+
 def _diag(name: str, payload: dict[str, Any]) -> None:
     if DIAG_DIR:
         path = Path(DIAG_DIR) / f"{name}.json"
@@ -252,6 +272,7 @@ def test_recorded_pass_passes_the_backward_validator(joint: _JointCapture, row: 
             "grads": sorted(recorded.grads),
             "graph": [(node.label, node.parents, node.blocked) for node in graph.nodes],
             "findings": [dataclasses.asdict(item) for item in result.findings],
+            "node_differences": _node_differences(trace, graph, recorded, result),
             "checked": (result.nodes_checked, result.sums_checked, result.leaves_checked),
             "unavailable": state.unavailable,
         },
