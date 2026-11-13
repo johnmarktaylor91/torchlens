@@ -1,4 +1,4 @@
-"""Static-selector edits applied during a tinygrad capture.
+"""Edits applied during a tinygrad capture.
 
 The observer sees every Tensor-API call result before the model does, so an
 edit (resolved by ``_edit_plan``) replaces a call's result with a lazy
@@ -27,6 +27,7 @@ from ..._ir.intervention import FireResult
 from ..._ir.op_record import OpAmendment, amend_module_exit_intervention
 from .._options import is_missing
 from ..registry import BackendUnsupportedError, get_backend_spec, require_capability_implementation
+from ._edited_grads import attach_edited_derived_grads
 from ._rules import RNG_STATE_IN_GRAPH_CODE
 
 if TYPE_CHECKING:
@@ -54,10 +55,20 @@ class TinygradEdit:
 
 @dataclass(frozen=True)
 class TinygradEditPlan:
-    """The selector and edit of one ``trace(intervene=tl.when(selector, edit))``."""
+    """The condition and edit of one ``trace(intervene=tl.when(condition, edit))``.
 
-    selector: BaseSelector
+    ``matcher(trace, condition)`` gives the raw labels a condition that reads
+    predicate contexts (a plain callable or a ``tl.where`` leaf) matches, else
+    it is ``None`` and the condition is called on each op. ``grad_site`` is
+    set when the condition is a ``tl.grad(...)`` site: it arms the edit on a
+    plain capture and attaches the derived gradients it edits
+    (``_grad_site_grads.attach_grad_site_derived_grads``).
+    """
+
+    selector: BaseSelector | Callable[[Any], bool]
     edit: TinygradEdit
+    matcher: Callable[[Any, Any], frozenset[str]] | None = None
+    grad_site: Callable[..., Any] | None = None
 
 
 def refuse_edit(message: str, *, code: str) -> BackendUnsupportedError:
@@ -77,14 +88,14 @@ class TinygradEditSession:
     edit
         The edit to apply, or ``None`` for the planning run.
     selector
-        The ``tl.when`` selector, recorded on each fire.
+        The ``tl.when`` condition, recorded on each fire.
     """
 
     def __init__(
         self,
         sites: Mapping[int, str],
         edit: TinygradEdit | None,
-        selector: BaseSelector | None = None,
+        selector: object = None,
     ) -> None:
         """Initialize a session before its forward runs."""
 
@@ -222,23 +233,26 @@ def fire_amendment(event: Any, edit: TinygradEdit, selector: object) -> OpAmendm
     )
 
 
-def _matched_labels(trace: Any, selector: BaseSelector) -> frozenset[str]:
-    """Raw labels of the finished ops ``selector`` matches (the ``save=`` matcher)."""
+def _matched_labels(trace: Any, plan: TinygradEditPlan) -> frozenset[str]:
+    """Raw labels of the finished ops the plan's condition matches (the ``save=`` matcher)."""
 
+    if plan.matcher is not None:
+        return plan.matcher(trace, plan.selector)
+    selector = plan.selector
     return frozenset(str(op._label_raw) for op in trace._layer_list if bool(selector(op)))
 
 
 def _planned_sites(
-    trace: Any, selector: BaseSelector, calls: list[tuple[Any, str]]
+    trace: Any, plan: TinygradEditPlan, calls: list[tuple[Any, str]]
 ) -> dict[int, str]:
-    """``call number -> name`` of the calls returning the ops ``selector`` matches."""
+    """``call number -> name`` of the calls returning the ops the plan's condition matches."""
 
     uop_by_label = {capture.label_raw: capture.uop for capture in trace.tinygrad_uop_captures}
     numbers: dict[int, list[int]] = {}
     for number, (uop, _name) in enumerate(calls):
         numbers.setdefault(id(uop), []).append(number)
     sites: dict[int, str] = {}
-    for label in sorted(_matched_labels(trace, selector)):
+    for label in sorted(_matched_labels(trace, plan)):
         uop = uop_by_label.get(label)
         found = numbers.get(id(uop), []) if uop is not None else []
         if not found:
@@ -282,35 +296,73 @@ def capture_with_edits(backend: Any, call: dict[str, Any], intervene: Any, halt:
         raise refuse_edit("the capability table declares can_intervene=False.", code=EDIT_REFUSAL)
     resolve = require_capability_implementation(spec, "can_intervene")
     plan = cast(TinygradEditPlan, cast(Any, resolve)(intervene, halt))
-    grad_options = call.get("grad_options")
-    if grad_options is not None and not is_missing(grad_options):
-        raise refuse_edit(
-            "grad_options cannot be combined with trace(intervene=...); capture derived "
-            "gradients in a separate plain trace.",
-            code="intervention_with_derived_grads_unsupported",
-        )
+    grad_options = _given_grad_options(call)
+    if plan.grad_site is not None:
+        return _capture_with_grad_site(backend, call, plan, grad_options)
+    original, call = call, {**call, "grad_options": None}
     planning = TinygradEditSession({}, None)
     planned = _run_session(backend, call, planning)
-    sites = _planned_sites(planned, plan.selector, planning.calls)
+    sites = _planned_sites(planned, plan, planning.calls)
     if not sites:
         backend._warn_zero_fire(
             f"Capture-time intervention selector {plan.selector!r} matched zero sites on "
             "the tinygrad forward; no intervention fired.",
             selector=repr(plan.selector),
         )
-        return planned
+        return planned if grad_options is None else backend.capture_trace(**original)
     _refuse_lazy_random_draws(planned)
-    expected = _matched_labels(planned, plan.selector)
+    expected = _matched_labels(planned, plan)
     del planned
-    edited = _run_session(backend, call, TinygradEditSession(sites, plan.edit, plan.selector))
+    session = TinygradEditSession(sites, plan.edit, plan.selector)
+    edited = _run_session(backend, call, session)
     edited_labels = {c.label_raw for c in edited.tinygrad_uop_captures if c.edit is not None}
-    if not expected == edited_labels == _matched_labels(edited, plan.selector):
+    if not expected == edited_labels == _matched_labels(edited, plan):
         raise refuse_edit(
             "the edited capture's matched ops differ from the planning capture's; the edit "
             "was not applied where the selector points.",
             code=EDIT_REFUSAL,
         )
+    if grad_options is not None:
+        replay = TinygradEditSession(fired_sites(session), plan.edit)
+        attach_edited_derived_grads(backend, edited, original, session, replay)
     return edited
+
+
+def _given_grad_options(call: Mapping[str, Any]) -> Any:
+    """The call's ``grad_options``, or ``None`` when absent."""
+
+    grad_options = call.get("grad_options")
+    return None if grad_options is None or is_missing(grad_options) else grad_options
+
+
+def _site_labels(trace: Any, selector: Any) -> list[str]:
+    """Raw labels of the finished ops a forward selector matches, in trace order."""
+
+    return [str(op._label_raw) for op in trace._layer_list if bool(selector(op))]
+
+
+def _capture_with_grad_site(
+    backend: Any, call: dict[str, Any], plan: TinygradEditPlan, grad_options: Any
+) -> Any:
+    """Capture the plain forward and attach derived gradients with the ``tl.grad`` edit armed."""
+
+    if grad_options is None:
+        raise refuse_edit(
+            f"the site {plan.selector!r} edits a gradient. tinygrad records no backward pass, "
+            "so a tl.grad(...) edit applies in derived gradients: pass grad_options=GradOptions(...).",
+            code="backward_capture_unsupported",
+        )
+    trace = backend.capture_trace(**{**call, "grad_options": None})
+    attach = cast(Any, plan.grad_site)
+    attach(backend, trace, call, plan, _site_labels)
+    return trace
+
+
+def fired_sites(session: TinygradEditSession) -> dict[int, str]:
+    """``call number -> callable name`` of the calls ``session`` edited."""
+
+    replaced = {id(site) for site in session.replaced.values()}
+    return {number: name for number, (uop, name) in enumerate(session.calls) if id(uop) in replaced}
 
 
 def _refuse_lazy_random_draws(planned: Any) -> None:
