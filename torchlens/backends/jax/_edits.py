@@ -35,6 +35,7 @@ from ...recording._exceptions import PredicateError
 from .._options import pop_stop_directive
 from ..registry import BackendUnsupportedError
 from ._edit_helpers import checked_replacement, resolve_helper_applier
+from ._edited_grads import EditedProgram
 from ._module_frames import jax_event_module_frames
 from ._source_lines import EquationFrames
 from .jaxpr import JaxEquationCapture
@@ -85,10 +86,11 @@ def _validate_intervene(intervene: Any, grad_options: Any) -> None:
             f"tl.when(condition, action); got {type(intervene).__name__}.",
             code=_OPTION,
         )
-    if grad_options is not None:
+    if grad_options is not None and grad_options.intermediate_grads:
         raise _jax_edit_refusal(
-            "JAX backend trace(intervene=...) cannot be combined with grad_options: "
-            "derived gradients differentiate the unedited jaxpr.",
+            "JAX backend trace(intervene=...) supports parameter and input derived "
+            "gradients of the edited program; GradOptions(intermediate_grads=True) "
+            "replays the jaxpr per boundary and is not edit-aware yet.",
             code="intervention_with_derived_grads_unsupported",
         )
     selector = getattr(intervene, "selector", None)
@@ -270,6 +272,8 @@ class JaxEquationSession:
         self._type_counts: Counter[str] = Counter()
         self._seen = 0
         self.fires_by_index: dict[int, _Fire] = {}
+        #: Fired edits by equation identity, kept only for derived gradients.
+        self.program: EditedProgram | None = None
         self.fires_by_label: dict[str, FireResult] = {}
         self.context_by_label: dict[str, tuple[Any, ...]] = {}
 
@@ -305,12 +309,16 @@ class JaxEquationSession:
             self.context_by_label[reserved.label_raw] = self.frames.locations(eqn)
         if self.runtime is None:
             return outputs
+        if self.program is not None:
+            self.program.note_bound(eqn)
         ctx = self._context(reserved, outputs, stacks)
         outputs, fire = self.runtime.fire(ctx, outputs)
         if fire is not None:
             self.fires_by_label[reserved.label_raw] = fire.result
             if fire.result.replaced:
                 self.fires_by_index[len(captures)] = fire
+                if self.program is not None:
+                    self.program.add(eqn, reserved.label_raw, fire.applier.apply)
         return outputs
 
     def _context(self, reserved: ReservedLabel, outputs: tuple[Any, ...], stacks: Any) -> Any:
@@ -455,6 +463,8 @@ def open_equation_session(
         if backend.is_tensor(value)
     )
     session = JaxEquationSession(backend, trace, runtime, frames, num_inputs + len(consts))
+    if runtime is not None and grad_options is not None:
+        session.program = EditedProgram()
     backend._equation_session = session
     return session
 
