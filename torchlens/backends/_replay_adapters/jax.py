@@ -67,26 +67,20 @@ _PRIMITIVE_NAMES_TEXT = (
 _PRIMITIVE_NAMES = tuple(_PRIMITIVE_NAMES_TEXT.split())
 
 ALLOWLIST: frozenset[str] = frozenset(
-    {f"jax.{kind}" for kind in _SYNTHETIC_KINDS}
-    | {f"jax.primitive.{name}" for name in _PRIMITIVE_NAMES}
+    {f"jax.{k}" for k in _SYNTHETIC_KINDS} | {f"jax.primitive.{n}" for n in _PRIMITIVE_NAMES}
 )
-"""Closed set of op identities a recipe may name. A primitive outside it
-(nested control flow bound whole, custom-derivative calls, jit calls, effects)
-has no recipe; the runtime capture still replays it live."""
+"""Closed set of op identities a recipe may name; a primitive outside it (control flow
+bound whole, custom derivatives, jit, effects) has no recipe but still replays live."""
 
 _STATEFUL_RANDOM_PRIMITIVES = frozenset({"rng_uniform"})
 _ENUM_TYPE_NAMES = ("Precision", "GatherScatterMode", "RoundingMethod", "FftType")
 _STRUCT_TYPE_NAMES = ("ConvDimensionNumbers", "GatherDimensionNumbers", "ScatterDimensionNumbers")
 _TYPED_LITERALS = MappingProxyType({"TypedInt": int, "TypedFloat": float, "TypedComplex": complex})
-_PRIMITIVE_MODULES = (  # public first; private homes of primitives JAX does not re-export
-    "jax.extend.core.primitives",
-    "jax.lax",
-    "jax.extend.random",
-    "jax._src.ad_util",
-    "jax._src.lax.lax",
-    "jax._src.random.prng",
-    "jax._src.prng",
+_PRIMITIVE_MODULES_TEXT = (  # public first, then private homes of primitives JAX hides
+    "jax.extend.core.primitives jax.lax jax.extend.random jax._src.ad_util jax._src.lax.lax "
+    "jax._src.random.prng jax._src.prng"
 )
+_PRIMITIVE_MODULES = tuple(_PRIMITIVE_MODULES_TEXT.split())
 _PRNG_MODULES = ("jax._src.random.prng", "jax._src.prng")  # where the impl registry lives
 _LITERALS_MODULE = "jax._src.literals"  # jaxpr literals that carry their dtype
 _TAG = "$jax"
@@ -262,25 +256,17 @@ def _replay_inputs(plan: _Plan, parent_values: Sequence[Any]) -> list[Any]:
     for position, element, value in zip(
         plan.positions, plan.element_index, parent_values, strict=True
     ):
-        inputs[position] = _select(value, element)
+        picked = element is not None and isinstance(value, tuple | list)
+        inputs[position] = value[element] if picked else value
     return inputs
-
-
-def _select(value: Any, element: int | None) -> Any:
-    if element is not None and isinstance(value, tuple | list):
-        return value[element]
-    return value
-
-
-def _to_slots(outputs: Sequence[Any]) -> tuple[Any, ...]:
-    return (outputs[0],) if len(outputs) == 1 else (tuple(outputs),)
 
 
 def forward(trace: Any, op: Any, parent_values: Sequence[Any]) -> tuple[Any, ...]:
     """Re-run one op through the validator's replay; one value per output slot."""
 
     plan = _plan(trace, op)
-    return _to_slots(replay_equation(plan.capture, _replay_inputs(plan, parent_values)))
+    outputs = replay_equation(plan.capture, _replay_inputs(plan, parent_values))
+    return (outputs[0],) if len(outputs) == 1 else (tuple(outputs),)
 
 
 def _is_inexact(value: Any) -> bool:
@@ -487,12 +473,9 @@ def _encode(value: Any) -> Any:
 
     if value is None or type(value) in (bool, int, float, complex, str):
         return value
-    if type(value) is tuple or type(value) is list:
+    if type(value) in (tuple, list):
         encoded = [_encode(v) for v in value]
         return tuple(encoded) if type(value) is tuple else encoded
-    if type(value).__name__ in _TYPED_LITERALS and type(value).__module__ == _LITERALS_MODULE:
-        plain = _TYPED_LITERALS[type(value).__name__](value)
-        return {_TAG: ("typed", type(value).__name__, _dtype_name(value.dtype), plain)}
     if isinstance(value, Mapping) and all(type(k) is str for k in value):
         return {_MAP_TAG: {k: _encode(v) for k, v in value.items()}}
     return _encode_framework_value(value)
@@ -505,6 +488,9 @@ def _encode_framework_value(value: Any) -> Any:
     import jax.extend.core
     import numpy as np
 
+    if type(value).__name__ in _TYPED_LITERALS and type(value).__module__ == _LITERALS_MODULE:
+        plain = _TYPED_LITERALS[type(value).__name__](value)
+        return {_TAG: ("typed", type(value).__name__, _dtype_name(value.dtype), plain)}
     if isinstance(value, np.dtype):
         return {_TAG: ("dtype", _dtype_name(value))}
     if isinstance(value, np.generic | np.ndarray | jax.Array):
@@ -574,6 +560,15 @@ class _VarTable:
         raise _Unencodable("nested program reads an undefined variable")
 
 
+def _encode_eqn(eqn: Any, table: _VarTable) -> tuple[Any, ...]:
+    name = eqn.primitive.name
+    if f"jax.primitive.{name}" not in ALLOWLIST:
+        raise _Unencodable(f"nested primitive {name!r} is outside the closed allowlist")
+    reads = tuple(table.ref(a) for a in eqn.invars)
+    params = {_MAP_TAG: {str(k): _encode(v) for k, v in eqn.params.items()}}
+    return (name, reads, params, tuple(table.define(v) for v in eqn.outvars))
+
+
 def _encode_closed_jaxpr(closed: Any) -> dict[str, Any]:
     """Nested program as data: avals, consts, equations (params recursively)."""
 
@@ -583,14 +578,7 @@ def _encode_closed_jaxpr(closed: Any) -> dict[str, Any]:
     table = _VarTable()
     constvars = tuple(table.define(v) for v in jaxpr.constvars)
     invars = tuple(table.define(v) for v in jaxpr.invars)
-    eqns = []
-    for eqn in jaxpr.eqns:
-        name = eqn.primitive.name
-        if f"jax.primitive.{name}" not in ALLOWLIST:
-            raise _Unencodable(f"nested primitive {name!r} is outside the closed allowlist")
-        reads = tuple(table.ref(a) for a in eqn.invars)
-        params = {_MAP_TAG: {str(k): _encode(v) for k, v in eqn.params.items()}}
-        eqns.append((name, reads, params, tuple(table.define(v) for v in eqn.outvars)))
+    eqns = [_encode_eqn(eqn, table) for eqn in jaxpr.eqns]
     return {
         "constvars": constvars,
         "consts": tuple(_encode(c) for c in closed.consts),
@@ -620,7 +608,6 @@ def _decode_typed(kind: str, body: Sequence[Any]) -> Any:
 
     import importlib
 
-    import jax
     import numpy as np
 
     if kind == "dtype":
@@ -631,6 +618,12 @@ def _decode_typed(kind: str, body: Sequence[Any]) -> Any:
     if kind == "typed" and body[0] in _TYPED_LITERALS:
         cls = getattr(importlib.import_module(_LITERALS_MODULE), body[0])
         return cls(_TYPED_LITERALS[body[0]](body[2]), np.dtype(body[1]))
+    return _decode_structured(kind, body)
+
+
+def _decode_structured(kind: str, body: Sequence[Any]) -> Any:
+    import jax
+
     if kind == "enum" and body[0] in _ENUM_TYPE_NAMES:
         return getattr(jax.lax, body[0])[body[1]]
     if kind == "struct" and body[0] in _STRUCT_TYPE_NAMES:
@@ -754,23 +747,8 @@ def _recipe_for(recipes: Mapping[str, OpRecipe], op: Any) -> OpRecipe:
 def _capture_from_recipe(
     rec: OpRecipe, op: Any, ops_by_label: Mapping[str, Any], hidden: Mapping[str, Any]
 ) -> Any:
-
     attrs = rec.attrs
-    label = rec.output_slots[0]
-    inputs: list[Any] = [_UNSET] * int(attrs["num_inputs"])
-    for path, value in rec.literals:
-        inputs[_position(path, len(inputs), label)] = _decode(value)
-    for occurrence, element in zip(rec.inputs, attrs["element_index"], strict=True):
-        parent = ops_by_label.get(occurrence.parent_label)
-        if parent is None:
-            raise ReplayRefusal(
-                "slots", f"unknown parent {occurrence.parent_label}", op_label=label
-            )
-        payload = _saved_single_output(parent, hidden)
-        position = _position(occurrence.arg_path, len(inputs), label)
-        inputs[position] = payload[element] if element >= 0 else payload
-    if any(value is _UNSET for value in inputs):
-        raise ReplayRefusal("slots", "recipe leaves a primitive input unset", op_label=label)
+    inputs = _recipe_inputs(rec, ops_by_label, hidden)
     output = _saved_single_output(op, hidden)
     outputs = (output,) if int(attrs["num_outputs"]) == 1 else tuple(output)
     kind = str(attrs["kind"])
@@ -790,6 +768,29 @@ def _capture_from_recipe(
 
 
 _UNSET: Any = object()
+
+
+def _recipe_inputs(
+    rec: OpRecipe, ops_by_label: Mapping[str, Any], hidden: Mapping[str, Any]
+) -> list[Any]:
+    """Primitive inputs: decoded literals plus each occurrence's loaded parent payload."""
+
+    label = rec.output_slots[0]
+    inputs: list[Any] = [_UNSET] * int(rec.attrs["num_inputs"])
+    for path, value in rec.literals:
+        inputs[_position(path, len(inputs), label)] = _decode(value)
+    for occurrence, element in zip(rec.inputs, rec.attrs["element_index"], strict=True):
+        parent = ops_by_label.get(occurrence.parent_label)
+        if parent is None:
+            raise ReplayRefusal(
+                "slots", f"unknown parent {occurrence.parent_label}", op_label=label
+            )
+        payload = _saved_single_output(parent, hidden)
+        position = _position(occurrence.arg_path, len(inputs), label)
+        inputs[position] = payload[element] if element >= 0 else payload
+    if any(value is _UNSET for value in inputs):
+        raise ReplayRefusal("slots", "recipe leaves a primitive input unset", op_label=label)
+    return inputs
 
 
 def _position(path: Sequence[Any], count: int, label: str) -> int:

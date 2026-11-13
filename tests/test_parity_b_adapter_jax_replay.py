@@ -175,19 +175,23 @@ def test_tuple_aware_helpers(adapter) -> None:
     assert not adapter.close(pair, (jnp.ones(2),))
 
 
-def test_opaque_region_is_refused_and_unbindable(adapter) -> None:
-    def with_callback(v):
-        shape = jax.ShapeDtypeStruct(v.shape, v.dtype)
-        return jax.pure_callback(lambda a: np.asarray(a) * 2, shape, v) + 1.0
+@jax.custom_vjp
+def _custom_sin(a):
+    return jnp.sin(a)
 
-    try:
-        trace = capture(with_callback, _x(3))
-    except Exception as exc:  # capture may refuse host callbacks outright
-        pytest.skip(f"capture refused pure_callback: {exc}")
-    reasons = [adapter.can_replay(trace, op) for op in trace._layer_list]
-    if not any(reasons):
-        pytest.skip("callback captured without an opaque op")
+
+_custom_sin.defvjp(lambda a: (jnp.sin(a), a), lambda a, g: (g * jnp.cos(a),))
+
+
+def test_opaque_region_is_refused_and_unbindable(adapter) -> None:
+    trace = capture(lambda v: _custom_sin(v) + 1.0, _x(3))
+    regions = [op for op in trace._layer_list if func(op).startswith("region")]
+    assert regions, "custom_vjp no longer captures as an opaque region"
+    for op in regions:
+        reason = adapter.can_replay(trace, op)
+        assert reason is not None and reason.startswith("opaque region"), reason
+        assert adapter.recipe(trace, op) is None
     recipes = {op.label: adapter.recipe(trace, op) for op in equation_ops(trace)}
     trace.jax_region_captures = ()  # a loaded trace: region captures are not rebuilt
     with pytest.raises(ReplayRefusal):
-        adapter.bind_recipes(trace, {k: v for k, v in recipes.items() if v is not None})
+        adapter.bind_recipes(trace, recipes)
