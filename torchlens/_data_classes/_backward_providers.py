@@ -11,10 +11,11 @@ nothing from torchlens.
 Fill guarantees: ``recorded_ops`` registers with the census module that is the
 only writer of the records it reads, so an absent provider means nothing was
 recorded. The attribution functions register with
-``report._backward_attribution``, which the torch backward capture imports and
-loading a trace imports (its executed-FLOPs record check), so a pass that has
-recorded ops or a saved record always finds them; a lookup that still misses
-raises ``KeyError`` naming the provider rather than returning nothing.
+``report._backward_attribution``, which the census window imports as it opens
+(a deferred import: the report package imports the capture stack) and loading
+a trace imports (its executed-FLOPs record check), so a pass that has recorded
+ops or a saved record always finds them; a lookup that still misses raises
+``KeyError`` naming the provider rather than returning nothing.
 """
 
 from __future__ import annotations

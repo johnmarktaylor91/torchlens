@@ -8,7 +8,11 @@ import cycle); the providers register themselves when their modules import.
 from __future__ import annotations
 
 import ast
+import subprocess
+import sys
 from pathlib import Path
+
+import pytest
 
 import torchlens
 from torchlens._data_classes import _backward_providers
@@ -25,18 +29,38 @@ def test_backward_pass_imports_no_provider_module() -> None:
     assert not any(name.endswith("_backward_attribution") for name in imported)
 
 
-def test_the_torch_backward_capture_fills_every_provider() -> None:
-    """Importing the torch backward capture registers all four providers."""
+_FRESH_CAPTURE = """
+import torch
+import torchlens as tl
+from torchlens._data_classes import _backward_providers
 
-    import torchlens.backends.torch.backward  # noqa: F401
+model = torch.nn.Linear(2, 1)
+trace = tl.trace(model, torch.randn(3, 2), capture=tl.options.CaptureOptions(backward_ready=True))
+trace.backward(trace.output.sum())
+for name in ("recorded_ops", "attribute_census", "executed_flops_record", "attribution_from_record"):
+    assert callable(_backward_providers.backward_provider(name)), name
+print("ok")
+"""
 
-    for name in (
-        "recorded_ops",
-        "attribute_census",
-        "executed_flops_record",
-        "attribution_from_record",
-    ):
-        assert callable(_backward_providers.backward_provider(name))
+
+@pytest.mark.heavy
+def test_a_fresh_capture_and_backward_fill_every_provider() -> None:
+    """In a fresh interpreter, ``tl.trace`` imports cleanly and a backward fills all four providers.
+
+    A fresh process matters: an eager import of the report package from the
+    capture stack once closed an import cycle that only a process importing
+    ``torchlens.report`` first could hide.
+    """
+
+    done = subprocess.run(
+        [sys.executable, "-c", _FRESH_CAPTURE],
+        capture_output=True,
+        text=True,
+        timeout=300,
+        check=False,
+    )
+    assert done.returncode == 0, done.stderr[-4000:]
+    assert done.stdout.strip().endswith("ok")
 
 
 def test_the_loader_record_check_fills_the_attribution_providers() -> None:

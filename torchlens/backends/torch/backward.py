@@ -50,6 +50,7 @@ from ..._ir.events import (
 from ..._ir.predicate import RetroactiveCaptureDecision
 from ..._quantities import Bytes, Duration
 from ..._state import pause_logging
+from ..._trace_core.record_rows import BackwardEpoch, adopt_rows
 from ..._utils._display_bounded import short_dataclass_repr
 from ..._utils._package_frames import is_torchlens_code
 from ..._utils._record_group_table import record_member
@@ -67,7 +68,6 @@ from ..._utils.tensor_utils import synchronize_pending_cpu_async_copies
 from ...errors import ConfigurationError
 from ...recording._exceptions import InvalidStorageError, RecorderStateError
 from ...recording._types import CaptureSpec
-from ...report import _backward_attribution  # noqa: F401  (registers backward providers)
 from ._autograd_grad_boundary import (
     record_autograd_backward_boundary,
     record_autograd_grad_boundary,
@@ -958,8 +958,6 @@ def _bind_backward_epoch(
     adoption succeeded. Non-core-backed traces (loaded artifacts, previews)
     keep detached-backed records.
     """
-
-    from torchlens._trace_core.record_rows import BackwardEpoch, adopt_rows
 
     core = trace.__dict__.get("_trace_core")
     if core is None:

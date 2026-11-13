@@ -228,6 +228,10 @@ def backward_window(trace: Any, pass_index: int) -> Iterator[None]:
         One-based backward pass index.
     """
 
+    # The census feeds BackwardPass's attribution providers; importing the report
+    # module registers them (deferred: the report package imports the capture stack).
+    from ...report import _backward_attribution  # noqa: F401
+
     sink: list[DispatchedOp] = []
     window = (weakref.ref(trace), int(pass_index))
     open_windows = _ACTIVE_WINDOWS.get()
