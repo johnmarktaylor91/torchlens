@@ -87,6 +87,7 @@ from ._capture_helpers import (
     _paddle_facet_snapshot,
     paddle_layer_type,
 )
+from ._capture_scopes import PaddleCaptureHooks
 from ._param_writes import PARAMETER_WRITE_MARKER, ParameterWriteGuard
 from .constants_rule import constant_labels, is_constant_capture, is_literal_producer_capture
 from .derived_grads import (
@@ -387,18 +388,6 @@ class PaddleBackend:
         module_identity_mode = _resolve_optional_capture_field(
             capture, "module_identity_mode", module_identity_mode
         )
-        # keep_orphans/output_device/detach_saved_activations/save_arg_values/
-        # save_code_context/save_rng_states/recurrence_detection/verbose/
-        # compute_input_output_distances/backward_ready/save_raw_input/batch_render/
-        # save_transformed_output/save_visualizations are CaptureOptions-native fields: the
-        # ``capture_options.<field>`` reads above already resolved each one to
-        # its concrete (non-MISSING) default via ``merge_capture_options``,
-        # with the same backend-local defaults this block used to re-apply.
-        # Re-running ``_default_if_missing`` on an already-concrete value was
-        # a no-op at runtime, but it widened mypy's view of the variable back
-        # to its MISSING-including parameter type (``_default_if_missing``
-        # returns ``Any``, which does not narrow); resolving once at the
-        # merge boundary is the fix, not a second pass here.
         activation_transform = _default_if_missing(activation_transform, None)
         save_raw_activations = _default_if_missing(save_raw_activations, True)
         save_grads = _default_if_missing(save_grads, None)
@@ -536,8 +525,12 @@ class PaddleBackend:
         # not been entered yet. ``unwrap_paddle`` on a partially-installed (or
         # empty) registry is safe, and the hook cleanup follows a completed
         # ``prepare_model_session``.
+        hooks = PaddleCaptureHooks(
+            self.tensor_store, trace, backward_ready=bool(backward_ready) or bool(save_grads)
+        )
         try:
             wrap_paddle(self)
+            hooks.open()
             self._label_source_tensors(trace, args, kwargs)
             trace._provenance_start_time = time.time()
             halt_signal: StopSignal | None = None
@@ -564,11 +557,13 @@ class PaddleBackend:
                 trace.transformed_output = (
                     output_transform(output) if callable(output_transform) else None
                 )
+            hooks.see_output(output)
             self._mark_outputs(trace, output)
             materialize_from_events(trace, trace.capture_events)
             delattr(trace, "capture_events")
             _attach_paddle_param_logs(trace, module_tree if use_object_module else None)
             self._finish_trace(trace, module_tree if use_object_module else None)
+            hooks.retain(trace)
             apply_static_label_save_policy(trace, save_predicate, backend_name="paddle")
             if grad_options is not None:
                 self._attach_derived_grads(
@@ -586,6 +581,7 @@ class PaddleBackend:
                 delattr(trace, "_paddle_intervention_runtime")
             freeze_trace_relation_views(trace)
         finally:
+            hooks.close()
             self._param_address_by_id = {}
             self._param_write_guard = ParameterWriteGuard()
             self._source_leaves = PaddleSourceLeaves()

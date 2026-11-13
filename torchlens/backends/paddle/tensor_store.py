@@ -15,6 +15,8 @@ class PaddleTensorLabelStore:
         self._labels: dict[int, str] = {}
         self._live_tensors: weakref.WeakValueDictionary[int, Any] = weakref.WeakValueDictionary()
         self._finalizers: dict[int, weakref.finalize[Any, Any]] = {}
+        self.backward_scope: Any = None
+        """The open native backward scope; notes every labelled tensor when set."""
 
     def set_label(self, tensor: object, label: str) -> None:
         """Associate a raw TorchLens label with a Paddle tensor.
@@ -29,6 +31,8 @@ class PaddleTensorLabelStore:
 
         tensor_id = id(tensor)
         self._labels[tensor_id] = label
+        if self.backward_scope is not None:
+            self.backward_scope.note(label, tensor)
         try:
             self._live_tensors[tensor_id] = tensor
             self._finalizers[tensor_id] = weakref.finalize(tensor, self.discard_id, tensor_id)
