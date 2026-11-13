@@ -202,9 +202,19 @@ class ReplayAdapter(Protocol):
     def recipe(self, trace: Any, op: Any) -> OpRecipe | None:
         """Data-only description of the op, or ``None`` when it has none."""
 
-    def bind_recipes(self, trace: Any, recipes: Mapping[str, OpRecipe]) -> None:
+    def bind_recipes(
+        self,
+        trace: Any,
+        recipes: Mapping[str, OpRecipe],
+        *,
+        param_payloads: Mapping[str, Any] | None = None,
+    ) -> None:
         """Rebuild the runtime capture list from recipes plus loaded payloads.
-        Keys are op labels (the first output slot)."""
+
+        Keys of ``recipes`` are op labels (the first output slot);
+        ``param_payloads`` maps each :attr:`OpRecipe.param_refs` address to its
+        loaded (host) array, or is ``None`` when no parameter is referenced.
+        """
 
     def zeros_like(self, value: Any) -> Any:
         """Framework zeros with the value's shape and dtype."""
