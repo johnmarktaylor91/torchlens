@@ -7,7 +7,8 @@ default specs imports no framework. ``capability_bindings(name)`` returns the
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
+from types import MappingProxyType
 
 
 def _torch_interventions_implementation() -> object:
@@ -161,31 +162,33 @@ def _native_backward_binding(name: str) -> Callable[[], object]:
     return _resolve
 
 
-_BINDINGS: dict[str, dict[str, Callable[[], object]]] = {
-    "torch": {
-        "backward_capture": _torch_backward_capture_implementation,
-        "fastlog": _torch_fastlog_implementation,
-        "can_intervene": _torch_interventions_implementation,
-        "rng_replay": _torch_rng_replay_implementation,
-        "has_streaming": _torch_streaming_implementation,
-        "structure_only_capture": _torch_structure_only_implementation,
-    },
-    "jax": {
-        "backward_capture": _native_backward_binding("jax"),
-    },
-    "mlx": {
-        "can_intervene": _mlx_interventions_implementation,
-    },
-    "tinygrad": {
-        "can_intervene": _tinygrad_interventions_implementation,
-    },
-    "paddle": {
-        "can_intervene": _paddle_interventions_implementation,
-    },
-    "tf": {
-        "can_intervene": _tf_interventions_implementation,
-    },
-}
+_BINDINGS: Mapping[str, Mapping[str, Callable[[], object]]] = MappingProxyType(
+    {
+        "torch": {
+            "backward_capture": _torch_backward_capture_implementation,
+            "fastlog": _torch_fastlog_implementation,
+            "can_intervene": _torch_interventions_implementation,
+            "rng_replay": _torch_rng_replay_implementation,
+            "has_streaming": _torch_streaming_implementation,
+            "structure_only_capture": _torch_structure_only_implementation,
+        },
+        "jax": {
+            "backward_capture": _native_backward_binding("jax"),
+        },
+        "mlx": {
+            "can_intervene": _mlx_interventions_implementation,
+        },
+        "tinygrad": {
+            "can_intervene": _tinygrad_interventions_implementation,
+        },
+        "paddle": {
+            "can_intervene": _paddle_interventions_implementation,
+        },
+        "tf": {
+            "can_intervene": _tf_interventions_implementation,
+        },
+    }
+)
 
 
 def capability_bindings(name: str) -> dict[str, Callable[[], object]]:
