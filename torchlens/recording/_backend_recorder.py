@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import time
 import traceback as traceback_module
+from collections.abc import Callable
 from contextlib import AbstractContextManager, nullcontext
 from types import TracebackType
 from typing import Any
@@ -28,23 +29,20 @@ from .._capture.outcome import (
 )
 from .._capture.predicates import validate_followed_by_capability
 from .._capture.projections import RecordingState, _empty_recording
-from .._deprecations import MISSING, MissingType
 from .._output_slot import (
     forward_failed as output_forward_failed,
     returned as output_returned,
     stopped as output_stopped,
 )
-from ..intervention._predicates import InterventionPredicate
-from ..options import CaptureOptions, StorageOptions
 from ._backend_events import (
     BackendRecordProducer,
     RecordSink,
     _PassFacts,
     refuse_backend_record_state,
 )
-from ._backend_options import resolve_backend_record_config
+from ._backend_options import RecordDoors, resolve_backend_record_config
 from ._halt import StopSignal, _mark_recording_halted
-from ._options import HaltPredicateFn, PredicateFn, RecordingOptions, _RecordingConfig
+from ._options import _RecordingConfig
 from ._recorder import _settle_recording_outcome
 from ._types import Recording
 from ._validation import _warn_zero_match_capture_selectors
@@ -54,34 +52,13 @@ class BackendRecorder:
     """Context manager recording a non-torch model through its backend's producer."""
 
     def __init__(
-        self,
-        model: Any,
-        *,
-        producer: BackendRecordProducer,
-        save: PredicateFn | None | MissingType = MISSING,
-        intervene: InterventionPredicate | None | MissingType = MISSING,
-        stop_after: HaltPredicateFn | None | MissingType = MISSING,
-        storage: StorageOptions | None | MissingType = MISSING,
-        narrate: Any | None | MissingType = MISSING,
-        capture: CaptureOptions | None = None,
-        recording: RecordingOptions | None = None,
-        episode: Any | None = None,
-        lean: bool | MissingType = MISSING,
+        self, model: Any, *, producer: BackendRecordProducer, doors: RecordDoors | None = None
     ) -> None:
         """Resolve and validate the options, then discover the model once."""
 
         self.producer = producer
         self.options: _RecordingConfig = resolve_backend_record_config(
-            producer,
-            save=save,
-            intervene=intervene,
-            stop_after=stop_after,
-            storage=storage,
-            narrate=narrate,
-            capture=capture,
-            recording=recording,
-            episode=episode,
-            lean=lean,
+            producer, doors if doors is not None else RecordDoors()
         )
         validate_followed_by_capability(
             self.options.keep_op, api_name="record(save=...)", supports_retroactive=False
@@ -222,6 +199,19 @@ class BackendRecorder:
         if self._recording is None:
             refuse_backend_record_state("Recorder.recording is only available after __exit__")
         return self._recording
+
+
+def backend_recorder_factory(producer: BackendRecordProducer) -> Callable[..., BackendRecorder]:
+    """Return the ``tl.record`` recorder factory for one producer.
+
+    The factory takes the torch ``Recorder``'s call shape (``model`` plus the
+    keyword doors); an unknown door is a ``TypeError`` from :class:`RecordDoors`.
+    """
+
+    def build(model: Any, **doors: Any) -> BackendRecorder:
+        return BackendRecorder(model, producer=producer, doors=RecordDoors(**doors))
+
+    return build
 
 
 def _lean_stream_recording(state: RecordingState) -> Recording:

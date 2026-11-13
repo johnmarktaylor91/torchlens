@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import functools
 from collections.abc import Callable, Mapping
 from typing import Any
 
@@ -25,7 +24,7 @@ from ..intervention._predicates import InterventionPredicate
 from ..options import CaptureOptions, StorageOptions, _merge_grouped_options
 from ._backend_events import is_backend_record_producer
 from ._backend_options import refuse_record_option
-from ._backend_recorder import BackendRecorder
+from ._backend_recorder import backend_recorder_factory
 from ._generation import GenerationRecording, enrich_generation, record_generation
 from ._generation_options import GenerationOptions
 from ._options import HaltPredicateFn, PredicateFn, RecordingOptions
@@ -142,7 +141,7 @@ def _fastlog_recorder_factory(
             return Recorder
         if is_backend_record_producer(implementation):
             _refuse_torch_only_record_doors(name, generate_kwargs, recording)
-            return functools.partial(BackendRecorder, producer=implementation)
+            return backend_recorder_factory(implementation)
         problem = (
             f"tl.record() cannot dispatch backend {name!r}: its registered fastlog "
             "implementation is neither the torch Recorder nor a backend record producer, "

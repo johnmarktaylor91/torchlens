@@ -10,6 +10,7 @@ in ``supported_options``; nothing is accepted and then ignored.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, NoReturn
 
 from .._deprecations import MISSING
@@ -21,13 +22,30 @@ from ._recording_door import _unfold_recording_options
 from ._validation import refuse_episode_on_record, validate_recording_options
 
 if TYPE_CHECKING:
+    from ..options import CaptureOptions
     from ._backend_events import BackendRecordProducer
+    from ._options import RecordingOptions
 
 _API_NAME = "tl.record"
 
 
+@dataclass(frozen=True, slots=True)
+class RecordDoors:
+    """The recorder's keyword doors, as ``tl.record`` passes them (``MISSING`` = not given)."""
+
+    save: Any = MISSING
+    intervene: Any = MISSING
+    stop_after: Any = MISSING
+    storage: Any = MISSING
+    narrate: Any = MISSING
+    capture: CaptureOptions | None = None
+    recording: RecordingOptions | None = None
+    episode: Any = None
+    lean: Any = MISSING
+
+
 def resolve_backend_record_config(
-    producer: BackendRecordProducer, **doors: Any
+    producer: BackendRecordProducer, doors: RecordDoors
 ) -> _RecordingConfig:
     """Resolve and validate the recorder config for one backend producer.
 
@@ -36,10 +54,8 @@ def resolve_backend_record_config(
     producer:
         The backend's record producer; ``producer.supported_options`` names the
         torch-path options it honours itself.
-    **doors:
-        The recorder's keyword doors: ``save``, ``intervene``, ``stop_after``,
-        ``storage``, ``narrate``, ``capture``, ``recording``, ``episode`` and
-        ``lean`` (``MISSING`` where the caller gave none).
+    doors:
+        The recorder's keyword doors (``MISSING`` where the caller gave none).
 
     Returns
     -------
@@ -52,19 +68,19 @@ def resolve_backend_record_config(
         For an option the producer does not honour.
     """
 
-    flat = _unfold_capture_options(doors["capture"], api_name=_API_NAME)
-    knobs = _unfold_recording_options(doors["recording"], api_name=_API_NAME, lean=doors["lean"])
-    refuse_episode_on_record(doors["episode"])
+    flat = _unfold_capture_options(doors.capture, api_name=_API_NAME)
+    knobs = _unfold_recording_options(doors.recording, api_name=_API_NAME, lean=doors.lean)
+    refuse_episode_on_record(doors.episode)
     backend = str(producer.backend)
     supported = frozenset(getattr(producer, "supported_options", frozenset()))
     for option, code in _requested_torch_path_options(flat, knobs, doors):
         if option not in supported:
             refuse_record_option(backend, option, code=code)
     options = _resolve_recording_config(
-        keep_op=doors["save"],
-        halt=doors["stop_after"],
-        intervene=doors["intervene"],
-        streaming=doors["storage"],
+        keep_op=doors.save,
+        halt=doors.stop_after,
+        intervene=doors.intervene,
+        streaming=doors.storage,
         lookback=flat["lookback"],
         lookback_payload_policy=flat["lookback_payload_policy"],
         seed=flat["seed"],
@@ -76,15 +92,19 @@ def resolve_backend_record_config(
 
 
 def _requested_torch_path_options(
-    flat: dict[str, Any], knobs: dict[str, Any], doors: dict[str, Any]
+    flat: dict[str, Any], knobs: dict[str, Any], doors: RecordDoors
 ) -> list[tuple[str, str]]:
-    """Return ``(option, refusal code)`` for every torch-path option the caller set."""
+    """Return ``(option, refusal code)`` for every torch-path option the caller set.
+
+    One independent check per option, read top to bottom (radon C, 11): the
+    list is the census of torch-path options, so it stays in one place.
+    """
 
     trace_code = "trace_option_unsupported"
     requested: list[tuple[str, str]] = []
-    if doors["intervene"] not in (MISSING, None):
+    if doors.intervene not in (MISSING, None):
         requested.append(("intervene", refusal_code_for_capability("can_intervene")))
-    if doors["narrate"] not in (MISSING, None, False):
+    if doors.narrate not in (MISSING, None, False):
         requested.append(("narrate", trace_code))
     grads = flat["backward_ready"] or flat["save_grads"] not in (None, False, MISSING)
     if grads or knobs["default_grad"] not in (MISSING, False):
