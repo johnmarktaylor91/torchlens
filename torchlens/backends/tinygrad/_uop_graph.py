@@ -7,7 +7,7 @@ reaches an output as data.
 
 from __future__ import annotations
 
-from collections.abc import Collection, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from typing import Any, cast
 
 
@@ -34,6 +34,82 @@ def _unique_uops(outputs: Sequence[Any]) -> tuple[Any, ...]:
             seen.add(id(uop))
             ordered.append(uop)
     return tuple(ordered)
+
+
+def _src(uop: Any, edit_sites: Mapping[int, Any]) -> tuple[Any, ...]:
+    """The UOps a capture treats as ``uop``'s inputs.
+
+    An edit's replacement UOp (a key of ``edit_sites``) stands for the call
+    result it replaced: its inputs are that result's inputs, so the edit's
+    own ops are never walked and stay out of the capture.
+    """
+
+    return tuple(getattr(edit_sites.get(id(uop), uop), "src", ()) or ())
+
+
+def edited_unique_uops(outputs: Sequence[Any], edit_sites: Mapping[int, Any]) -> tuple[Any, ...]:
+    """Return the UOps of an edited forward in the order of the unedited forward.
+
+    Labels are reserved in this order, so an edited capture labels each op as
+    the plain capture of the same forward does. Each reachable UOp is mapped
+    to its unedited counterpart (each replacement back to the result it
+    replaced, everything downstream rebuilt over those); tinygrad interns
+    UOps, so the counterparts are the plain forward's own UOps and their
+    :func:`_unique_uops` order is the plain order.
+
+    Parameters
+    ----------
+    outputs
+        tinygrad output tensors of the edited forward.
+    edit_sites
+        ``id(replacement UOp) -> replaced result UOp``.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        Reachable UOps, the edits' own ops excluded, in plain-forward order.
+    """
+
+    real = _edited_postorder(outputs, edit_sites)
+    plain = _plain_counterparts(real, edit_sites)
+    order: dict[int, int] = {}
+    for output in outputs:
+        for uop in plain[id(cast(Any, output).uop)].toposort():
+            order.setdefault(id(uop), len(order))
+    return tuple(sorted(real, key=lambda uop: order[id(plain[id(uop)])]))
+
+
+def _edited_postorder(outputs: Sequence[Any], edit_sites: Mapping[int, Any]) -> list[Any]:
+    """The UOps reachable from ``outputs`` through :func:`_src`, inputs before users."""
+
+    real: list[Any] = []
+    seen: set[int] = set()
+    stack: list[tuple[Any, bool]] = [(cast(Any, output).uop, False) for output in outputs]
+    while stack:
+        uop, done = stack.pop()
+        if done:
+            real.append(uop)
+        elif id(uop) not in seen:
+            seen.add(id(uop))
+            stack.append((uop, True))
+            stack.extend((src, False) for src in _src(uop, edit_sites) if id(src) not in seen)
+    return real
+
+
+def _plain_counterparts(real: Sequence[Any], edit_sites: Mapping[int, Any]) -> dict[int, Any]:
+    """``id(edited UOp) -> the UOp the unedited forward made in its place``.
+
+    ``real`` must list inputs before users, so every input is mapped first.
+    """
+
+    plain: dict[int, Any] = {}
+    for uop in real:
+        base = edit_sites.get(id(uop), uop)
+        src = tuple(getattr(base, "src", ()) or ())
+        rebuilt = tuple(plain.get(id(item), item) for item in src)
+        changed = any(a is not b for a, b in zip(rebuilt, src, strict=True))
+        plain[id(uop)] = base.replace(src=rebuilt) if changed else base
+    return plain
 
 
 def _is_materializable_uop(uop: Any) -> bool:
@@ -122,6 +198,7 @@ def _data_flow_uops(
     source_ids: Collection[int],
     *,
     boundary_ids: Collection[int] = frozenset(),
+    edit_sites: Mapping[int, Any] | None = None,
 ) -> tuple[Any, ...]:
     """Return the UOps whose values reach an output as data, in ``uops`` order.
 
@@ -146,6 +223,9 @@ def _data_flow_uops(
         ``id()`` of UOps recorded whole: kept when reached, but the walk does
         not continue into what produced them (a pre-forward random weight's
         generator subgraph, see ``_realize_once``).
+    edit_sites
+        ``id(replacement UOp) -> replaced result UOp`` of an edited capture;
+        the walk passes from a replacement to the replaced result's inputs.
 
     Returns
     -------
@@ -167,5 +247,5 @@ def _data_flow_uops(
             continue
         kept.add(key)
         if key not in boundary_ids:
-            stack.extend(getattr(uop, "src", ()) or ())
+            stack.extend(_src(uop, edit_sites or {}))
     return tuple(uop for uop in uops if id(uop) in kept)

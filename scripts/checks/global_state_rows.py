@@ -105,7 +105,7 @@ _SCOPED_CAPTURE_STATE = frozenset(
         ("torchlens/_trace_core/op_store.py", "_CLONE_SCOPE_DEPTH"),
         ("torchlens/backends/mlx/wrappers.py", "_ACTIVE_TAP_OBSERVER"),
         ("torchlens/backends/paddle/wrappers.py", "_ACTIVE_TAP_OBSERVER"),
-        ("torchlens/backends/tinygrad/backend.py", "_ACTIVE_TINYGRAD_MODULE_STACK"),
+        ("torchlens/backends/tinygrad/_module_tree.py", "_ACTIVE_TINYGRAD_MODULE_STACK"),
         ("torchlens/backends/torch/completeness_witness.py", "_ACTIVE_WITNESS_STATE"),
         # Plane-W funcol completion session: published by the capture-scoped
         # distributed_recording_session context (armed captures only) and

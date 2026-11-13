@@ -392,7 +392,7 @@ def test_tinygrad_spec_registered() -> None:
     assert spec.capabilities.backward_capture is False
     assert spec.capabilities.has_validation_replay is True
     assert spec.capabilities.fastlog is False
-    assert spec.capabilities.can_intervene is False
+    assert spec.capabilities.can_intervene is True
     assert spec.capabilities.payload_materialization is True
     assert spec.capabilities.module_identity_modes == ("function_root", "object_module")
     assert spec.serialization_policy.payload_policy == "array_payloads"
@@ -400,7 +400,7 @@ def test_tinygrad_spec_registered() -> None:
     assert capabilities.supports_backward_capture is False
     assert capabilities.supports_validation_replay is True
     assert capabilities.supports_fastlog is False
-    assert capabilities.supports_intervention is False
+    assert capabilities.supports_intervention is True
     assert capabilities.supports_payload_materialization is True
     assert capabilities.module_identity_modes == ("function_root", "object_module")
     assert capabilities.payload_policy == "array_payloads"
@@ -613,13 +613,9 @@ def test_tinygrad_rejects_tinyjit_callable() -> None:
         ({"save": tl.where(lambda op: op.out is not None)}, "concrete activation values"),
         ({"save": ["relu"]}, "full-save only.*save shaping"),
         ({"lookback": 1}, "full-save only.*save-window"),
-        # Gated options refuse through the central capability gate, whose
-        # canonical message names the owning flag and the refused option.
-        (
-            {"intervene": tl.when(tl.func("relu"), tl.zero_ablate())},
-            "can_intervene=False.*intervene",
-        ),
-        ({"stop_after": tl.func("relu")}, "can_intervene=False.*stop_after"),
+        # stop_after passes the can_intervene gate and refuses in the edit
+        # resolver; save_grads refuses through the central capability gate.
+        ({"stop_after": tl.func("where")}, "stop_after"),
         ({"save_grads": True}, "backward_capture=False.*save_grads"),
     ),
 )

@@ -1,9 +1,7 @@
 # tinygrad backend
 
-`backend="tinygrad"` captures a lazy tinygrad forward from its UOp graph. The backend is
-a **preview** (`maturity="preview"`): it fills the shared `BackendProtocol`, runs the shared
-conformance suite, and ships its scorecard, but its spellings may still move before the
-label flips to `stable`.
+`backend="tinygrad"` captures a lazy tinygrad forward from its UOp graph. It fills the
+shared `BackendProtocol`, runs the shared conformance suite, and ships its scorecard.
 
 | Requirement | Value |
 |---|---|
@@ -52,7 +50,28 @@ print(status.state)          # "passed"
 print(status.message)        # names the first offending op when it fails
 ```
 
-Refusals are typed. A request the preview cannot honour raises `BackendUnsupportedError`
+Inputs may be positional tensors, keyword tensors passed through `input_kwargs=`, or both;
+`tl.trace(fn, (), input_kwargs={"x": x})` traces a call with keyword tensors only. Each op
+records the user source lines it ran from in `op.source.frames`, outermost first, as the
+torch backend does:
+
+```python
+frames = trace.output_ops[0].source.frames
+print(frames[-1].func_name, frames[-1].line_number)   # the line in mlp that made the op
+```
+
+A static-selector edit replaces a matched op's value with a lazy expression over it, so
+the capture still realizes once and the edit's own ops are not recorded. The edited op keeps
+its label and parents, downstream ops see the edited value, and the trace validates:
+
+```python
+edited = tl.trace(mlp, x, backend="tinygrad", intervene=tl.when(tl.func("where"), tl.scale(0.5)))
+relu = next(op for op in edited.ops if op.is_edited)
+print(relu.out.numpy())                          # half of mlp(x).numpy()
+assert edited.validate_forward_pass([mlp(x) * 0.5]) is True
+```
+
+Refusals are typed. A request the backend cannot honour raises `BackendUnsupportedError`
 with a `code` from the shared registry before any framework side effect:
 
 ```python
@@ -89,7 +108,7 @@ and its refusal cell has not yet passed on the pinned CI leg (not yet proven, no
 | `intermediate_derived_grads` | supported | opt-in through `GradOptions(intermediate_grads=True)` |
 | `backward_capture` | unsupported | refusal `backward_capture_unsupported` |
 | `fastlog` | unsupported | refusal `fastlog_unsupported` |
-| `can_intervene` | unsupported | refusal `interventions_unsupported` |
+| `can_intervene` | supported | static selectors (`tl.func`, `tl.label`, `tl.label_contains`, `tl.in_module` and their `&`, `|`, `~` combinations) with `tl.zero_ablate`, `tl.scale`, `tl.add`, `tl.clamp`, `tl.replace_with` or a callable transform; see Static-selector edits |
 | `rng_replay` | unsupported | refusal `rng_replay_unsupported` |
 | `has_streaming` | unsupported | refusal `streaming_unsupported` |
 | `structure_only_capture` | unsupported | refusal `structure_only_capture_unsupported` |
@@ -103,8 +122,34 @@ and its refusal cell has not yet passed on the pinned CI leg (not yet proven, no
 | Mid-capture `Tensor.realize()` or TinyJit execution | unsupported | refusal `mid_capture_execution_unsupported` |
 | Input mutation (`Tensor.assign()`, `Tensor.replace()`, setitem on an input) | unsupported | refusal `input_mutation_unsupported` |
 | A callable that returns no tinygrad Tensor | unsupported | refusal `tensor_output_required` |
-| No positional tinygrad Tensor input | unsupported | refusal `tinygrad_input_required` |
+| Keyword tensor inputs (`input_kwargs=`) | supported | each keyword leaf is a trace input |
+| User source lines (`op.source.frames`, `save_source_context=`) | supported | user frames from the `tl.trace` call site to the op's line; TorchLens and tinygrad frames are skipped |
+| No tinygrad Tensor input (positional or keyword) | unsupported | refusal `tinygrad_input_required` |
 | Replay validation or derived gradients on an audit-only trace | unsupported | refusal `live_payloads_required` |
+
+## Static-selector edits
+
+`trace(intervene=tl.when(selector, edit))` runs the forward twice. The first run is a plain
+capture: the selector is matched against its finished ops, as `save=` matches, and each
+matched op is mapped to the Tensor calls that returned it. The second run replaces those
+calls' results with the edit applied lazily, so it still realizes once. The edited op's
+payload is the edited value, and replay validation replays the original op, applies the
+edit and compares. tinygrad interns identical expressions, so an edit at an op applies at
+every call that returned that op.
+
+These stay refused, each with a typed code:
+
+| Request | Refusal |
+|---|---|
+| Value-dependent predicates (`tl.where(...)`, a lambda over values) | `interventions_unsupported`: a lazy forward has no values before its one realization |
+| `stop_after=` | `interventions_unsupported` |
+| Module-output selectors (`tl.module(...)`) and ops no Tensor call returned | `interventions_unsupported` |
+| Gradient sites (`tl.grad(...)`) | `backward_capture_unsupported` |
+| `grad_options=` together with `intervene=` | `intervention_with_derived_grads_unsupported` |
+| An edit that changes shape or dtype | `interventions_unsupported` |
+| A forward reading lazy random values (unrealized default-init weights) | `rng_state_in_graph`: the two runs would draw them twice; realize the parameters first |
+
+A selector that matches nothing warns, as on torch, and returns the plain capture.
 
 ## Scorecard
 

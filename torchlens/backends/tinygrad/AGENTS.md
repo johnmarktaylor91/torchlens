@@ -63,20 +63,32 @@ preview: `backend.py` plus registry-backed `capabilities.py` only.
   (`recurrence_detection` default True).
 - Restricted option surface (each documented in the `capture_trace` docstring):
   `save` must be `"all"` (full-save only for live traces),
-  `output_device` must be `"same"`, `save_args` / `save_source_context` /
-  `save_rng` must be false, and `save_grads` / `backward_ready` /
+  `output_device` must be `"same"`, `save_args` / `save_rng` must be
+  false, and `save_grads` / `backward_ready` /
   `transform` / `activation_transform` are unsupported.
 
 ## capabilities.py
-- Registry-backed re-exports only. Per the registry: `can_intervene=False`,
+- Registry-backed re-exports only. Per the registry: `can_intervene=True` (static-selector edits),
   `intermediate_derived_grads=True`, backward capture / fastlog / rng replay /
   streaming all False, `validation_replay=True`,
   `payload_policy="array_payloads"`.
 
 ## Local Invariants
-- `intervene=` / `stop_after=` are NOT supported on tinygrad (unlike the tf/mlx/
-  paddle previews); unsupported trace options refuse typed through the
-  `.._options` TINYGRAD policies, never silently no-op.
+- `intervene=tl.when(static_selector, edit)` is supported through `_edits.py`
+  (planning run, then an edited run that replaces the matched calls' results
+  with lazy edits; the edit's ops stay unrecorded and the capture realizes once
+  per run). `_edit_plan.py` is the `can_intervene` implementation bound in the
+  spec table. Value-dependent predicates, `stop_after=`, module-output and
+  gradient sites, and forwards with lazy random values refuse typed; other
+  unsupported trace options refuse through the `.._options` TINYGRAD policies,
+  never silently no-op.
+- Validation of an edited op replays the raw op, applies the recorded edit and
+  compares with the saved payload; never compare an edited payload with the raw
+  replay.
+- `_source_lines.py` records user frames per observed call (walk stops at
+  `TinygradBackend._run_observed_forward`); `_observer.py` holds the
+  `Tensor._apply_uop` observer. Keyword tensor inputs are trace inputs
+  (`call_input_leaves`).
 - Capture correctness depends on unrealized UOp lineage: anything that forces
   realization mid-capture must stay a typed refusal.
 - `capabilities.py` only re-exports registry truth; never hardcode flags here.

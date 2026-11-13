@@ -55,6 +55,10 @@ class TinygradModuleFrame:
     module_type: str
 
 
+_ACTIVE_TINYGRAD_MODULE_STACK: list[TinygradModuleFrame] = []
+"""Module frames of the tinygrad calls active right now, outermost first."""
+
+
 @dataclass(frozen=True)
 class TinygradModuleTree:
     """Discovered tinygrad object-module tree.

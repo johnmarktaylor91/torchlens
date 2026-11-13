@@ -198,7 +198,7 @@ def _tinygrad_can_handle(
     -------
     bool
         ``True`` when tinygrad is installed, ``model`` is callable, and any
-        input leaf is a tinygrad tensor.
+        positional or keyword input leaf is a tinygrad tensor.
     """
 
     if not callable(model):
@@ -209,7 +209,8 @@ def _tinygrad_can_handle(
         from tinygrad import Tensor
     except ImportError:
         return False
-    return any(isinstance(leaf, Tensor) for leaf in _simple_leaves(input_args))
+    leaves = (*_simple_leaves(input_args), *_simple_leaves(input_kwargs))
+    return any(isinstance(leaf, Tensor) for leaf in leaves)
 
 
 def _paddle_can_handle(
@@ -686,22 +687,19 @@ def _jax_capture_trace(*args: Any, **kwargs: Any) -> Any:
 
 
 def _tinygrad_capture_trace(*args: Any, **kwargs: Any) -> Any:
-    """Dispatch to the UOp-snapshot tinygrad backend.
+    """Dispatch the public ``trace`` arguments to the tinygrad backend; returns the trace."""
 
-    Parameters
-    ----------
-    *args, **kwargs:
-        Public ``trace`` arguments.
-
-    Returns
-    -------
-    Any
-        Captured trace.
-    """
-
-    from .tinygrad import TinygradBackend
+    from .tinygrad.backend import TinygradBackend
 
     return TinygradBackend().capture_trace(*args, **kwargs)
+
+
+def _tinygrad_interventions_implementation() -> object:
+    """Resolve the tinygrad edit-plan resolver behind ``can_intervene`` (lazy import)."""
+
+    from .tinygrad._edit_plan import resolve_tinygrad_edit_plan
+
+    return resolve_tinygrad_edit_plan
 
 
 def _paddle_interventions_implementation() -> object:
@@ -810,7 +808,7 @@ def _tinygrad_validate_entry(*args: Any, **kwargs: Any) -> bool:
         Validation result.
     """
 
-    from .tinygrad import TinygradBackend
+    from .tinygrad.backend import TinygradBackend
 
     return TinygradBackend().validate_entry(*args, **kwargs)
 
@@ -905,7 +903,7 @@ def _tinygrad_validate_trace(*args: Any, **kwargs: Any) -> Any:
         Validation result.
     """
 
-    from .tinygrad import TinygradBackend
+    from .tinygrad.backend import TinygradBackend
 
     return TinygradBackend().validate_trace(*args, **kwargs)
 
@@ -1185,7 +1183,7 @@ def register_default_backend_specs() -> None:
                 backward_capture=False,
                 has_validation_replay=True,
                 fastlog=False,
-                can_intervene=False,
+                can_intervene=True,
                 rng_replay=False,
                 payload_materialization=True,
                 has_streaming=False,
@@ -1195,9 +1193,9 @@ def register_default_backend_specs() -> None:
                 module_identity_modes=("function_root", "object_module"),
                 trace_options=TINYGRAD_TRACE_OPTIONS,
             ),
+            capability_implementations={"can_intervene": _tinygrad_interventions_implementation},
             serialization_policy=SerializationPolicy(
                 payload_policy="array_payloads",
-                body_format="safetensors",
                 manifest_schema_versions=(2,),
                 runtime_name="tinygrad",
             ),

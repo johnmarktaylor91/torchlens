@@ -263,14 +263,11 @@ JAX_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
 TINYGRAD_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
     runtime_option_names=frozenset(),
     runtime_message=(
-        "tinygrad backend preview does not support runtime-mutation or stop-early "
-        "options: {names}. Static-label save= selectors are supported as "
-        "post-finalization payload filters, but trace(intervene=...) and "
-        "trace(stop_after=...) need predicate-time concrete values and a way to replace or "
-        "truncate lazy UOp descendants before realize(), which tinygrad does not expose "
-        "through a stable TorchLens surface. Use an unfiltered tl.trace(..., "
-        "backend='tinygrad') call, static-label save= selectors, or the PyTorch backend "
-        "for intervention, stop_after, storage, and value-dependent predicates."
+        "tinygrad backend does not support these options: {names}. Static-selector "
+        "trace(intervene=tl.when(...)) edits and static-label save= selectors are "
+        "supported; trace(stop_after=...), storage, and value-dependent predicates are "
+        "not, because they need predicate-time concrete values or a way to truncate lazy "
+        "UOp descendants before realize(). Use the PyTorch backend for them."
     ),
     fallback_message="",
     always_runtime=True,
@@ -436,7 +433,6 @@ JAX_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
 
 TINYGRAD_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
     backend_name="tinygrad",
-    input_kwargs_message="tinygrad backend preview supports positional args only.",
     full_save_message="tinygrad backend preview is full-save only; save shaping is unsupported.",
     rejected_truthy_messages={
         name: (f"tinygrad backend preview does not support {name}; full-save forward capture only.")
@@ -445,7 +441,6 @@ TINYGRAD_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
             "detach_saved_activations",
             "save_grads",
             "save_args",
-            "save_source_context",
             "save_rng",
             "backward_ready",
             "transform",
