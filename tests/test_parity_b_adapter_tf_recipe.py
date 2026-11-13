@@ -27,7 +27,6 @@ from torchlens.backends._replay_adapters import (  # noqa: E402
     encode_recipe,
     get_adapter,
 )
-from torchlens.backends._validation_shared import ops_by_label  # noqa: E402
 from torchlens.backends.tf.validation import (  # noqa: E402
     validate_tf_trace_detailed,
     validate_tf_trace_status,
@@ -53,10 +52,9 @@ def _trace(name: str) -> Any:
 
 
 def _unique_ops(trace: Any) -> list[Any]:
-    seen: dict[int, Any] = {}
-    for op in ops_by_label(trace).values():
-        seen.setdefault(id(op), op)
-    return list(seen.values())
+    """Every recorded op once, in graph (execution) order."""
+
+    return list(trace._layer_list)
 
 
 def _recipes_through_json(trace: Any) -> dict[str, Any]:

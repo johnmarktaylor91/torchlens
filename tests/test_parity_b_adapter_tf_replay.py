@@ -53,10 +53,18 @@ def _capture(name: str) -> tuple[Any, Any, Any]:
 
 
 def _unique_ops(trace: Any) -> list[Any]:
-    seen: dict[int, Any] = {}
-    for op in ops_by_label(trace).values():
-        seen.setdefault(id(op), op)
-    return list(seen.values())
+    """Every recorded op once, in graph (execution) order."""
+
+    return list(trace._layer_list)
+
+
+def _is_model_output(op: Any) -> bool:
+    """Whether ``op``'s value is (part of) the model output: the tape seeds it with ones."""
+
+    if any(bool(getattr(op, name, False)) for name in ("is_output", "is_output_parent")):
+        return True
+    outputs = set(getattr(getattr(op, "_source_trace", None), "output_layers", ()) or ())
+    return bool(outputs & {getattr(op, "label", None), getattr(op, "_label_raw", None)})
 
 
 def _parent_values(trace: Any, recipe: Any) -> list[Any]:
@@ -105,8 +113,9 @@ def _reverse_accumulate(trace: Any) -> dict[str, Any]:
     cotangent: dict[str, Any] = {}
     ops = _unique_ops(trace)
     for op in ops:
-        if bool(getattr(op, "is_output", False)):
+        if _is_model_output(op):
             cotangent[op.label] = ADAPTER.zeros_like(op.out) + 1
+    assert cotangent, "no model-output op to seed"
     for op in reversed(ops):
         seed = cotangent.get(op.label)
         recipe = ADAPTER.recipe(trace, op)

@@ -33,10 +33,18 @@ _CONFIG_ROWS = [name for name in _ROWS if name not in set(tf_roster.ECOSYSTEM_FA
 
 
 def _unique_ops(trace: Any) -> list[Any]:
-    seen: dict[int, Any] = {}
-    for op in ops_by_label(trace).values():
-        seen.setdefault(id(op), op)
-    return list(seen.values())
+    """Every recorded op once, in graph (execution) order."""
+
+    return list(trace._layer_list)
+
+
+def _is_model_output(op: Any) -> bool:
+    """Whether ``op``'s value is (part of) the model output: the tape seeds it with ones."""
+
+    if any(bool(getattr(op, name, False)) for name in ("is_output", "is_output_parent")):
+        return True
+    outputs = set(getattr(getattr(op, "_source_trace", None), "output_layers", ()) or ())
+    return bool(outputs & {getattr(op, "label", None), getattr(op, "_label_raw", None)})
 
 
 def _plan(trace: Any) -> tuple[list[ReplayStep], dict[str, Any]]:
@@ -68,8 +76,9 @@ def test_session_replays_the_graph_and_pullback_matches_the_tape(name: str) -> N
     grads: dict[str, Any] = {
         op.label: ADAPTER.zeros_like(op.out) + 1
         for op in _unique_ops(trace)
-        if bool(getattr(op, "is_output", False))
+        if _is_model_output(op)
     }
+    assert grads, "no model-output op to seed"
     for step in reversed(steps):
         seed = grads.get(step.label)
         if seed is None:
