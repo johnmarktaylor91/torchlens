@@ -610,9 +610,7 @@ def test_tinygrad_rejects_tinyjit_callable() -> None:
 @pytest.mark.parametrize(
     ("kwargs", "pattern"),
     (
-        ({"save": tl.where(lambda op: op.out is not None)}, "concrete activation values"),
         ({"save": ["relu"]}, "full-save only.*save shaping"),
-        ({"lookback": 1}, "full-save only.*save-window"),
         # Gated options refuse through the central capability gate, whose
         # canonical message names the owning flag and the refused option.
         (
@@ -628,6 +626,21 @@ def test_tinygrad_save_shaping_rejected(kwargs: dict[str, Any], pattern: str) ->
 
     with pytest.raises(BackendUnsupportedError, match=pattern):
         _trace(**kwargs)
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    (
+        {"save": tl.where(lambda ctx: ctx.func_name == "where")},
+        {"save": tl.func("where") & tl.preceded_by(tl.func("cmplt")), "lookback": 1},
+    ),
+    ids=("value_dependent", "lookback"),
+)
+def test_tinygrad_post_capture_save_policies_run(kwargs: dict[str, Any]) -> None:
+    """Value-dependent and lookback ``save=`` run on the finished tinygrad capture."""
+
+    trace = _trace(**kwargs)
+    assert {op.func_name for op in trace.saved_ops} == {"where"}
 
 
 def test_tinygrad_static_label_save_filters_public_payloads(tmp_path: Path) -> None:
