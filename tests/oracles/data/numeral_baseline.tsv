@@ -3504,8 +3504,8 @@ docs-md	docs/maintainers/where.md	1748
 docs-md	docs/maintainers/where.md	175
 docs-md	docs/maintainers/where.md	176
 docs-md	docs/maintainers/where.md	1767
-docs-md	docs/maintainers/where.md	1769
 docs-md	docs/maintainers/where.md	177
+docs-md	docs/maintainers/where.md	1770
 docs-md	docs/maintainers/where.md	178
 docs-md	docs/maintainers/where.md	179
 docs-md	docs/maintainers/where.md	18
@@ -3614,13 +3614,13 @@ docs-md	docs/maintainers/where.md	243
 docs-md	docs/maintainers/where.md	244
 docs-md	docs/maintainers/where.md	245
 docs-md	docs/maintainers/where.md	246
+docs-md	docs/maintainers/where.md	2467
 docs-md	docs/maintainers/where.md	247
 docs-md	docs/maintainers/where.md	248
 docs-md	docs/maintainers/where.md	2486
 docs-md	docs/maintainers/where.md	249
 docs-md	docs/maintainers/where.md	2490
 docs-md	docs/maintainers/where.md	2491
-docs-md	docs/maintainers/where.md	2496
 docs-md	docs/maintainers/where.md	25
 docs-md	docs/maintainers/where.md	250
 docs-md	docs/maintainers/where.md	251
@@ -3909,7 +3909,6 @@ docs-md	docs/maintainers/where.md	521
 docs-md	docs/maintainers/where.md	523
 docs-md	docs/maintainers/where.md	5231
 docs-md	docs/maintainers/where.md	524
-docs-md	docs/maintainers/where.md	525
 docs-md	docs/maintainers/where.md	526
 docs-md	docs/maintainers/where.md	527
 docs-md	docs/maintainers/where.md	528
@@ -4036,7 +4035,6 @@ docs-md	docs/maintainers/where.md	692
 docs-md	docs/maintainers/where.md	693
 docs-md	docs/maintainers/where.md	694
 docs-md	docs/maintainers/where.md	695
-docs-md	docs/maintainers/where.md	6951
 docs-md	docs/maintainers/where.md	696
 docs-md	docs/maintainers/where.md	697
 docs-md	docs/maintainers/where.md	698
@@ -4049,7 +4047,7 @@ docs-md	docs/maintainers/where.md	703
 docs-md	docs/maintainers/where.md	704
 docs-md	docs/maintainers/where.md	705
 docs-md	docs/maintainers/where.md	707
-docs-md	docs/maintainers/where.md	708519
+docs-md	docs/maintainers/where.md	708809
 docs-md	docs/maintainers/where.md	71
 docs-md	docs/maintainers/where.md	711
 docs-md	docs/maintainers/where.md	712
@@ -4060,6 +4058,7 @@ docs-md	docs/maintainers/where.md	72
 docs-md	docs/maintainers/where.md	721
 docs-md	docs/maintainers/where.md	723
 docs-md	docs/maintainers/where.md	7241
+docs-md	docs/maintainers/where.md	7242
 docs-md	docs/maintainers/where.md	725
 docs-md	docs/maintainers/where.md	73
 docs-md	docs/maintainers/where.md	730
@@ -4079,7 +4078,7 @@ docs-md	docs/maintainers/where.md	751
 docs-md	docs/maintainers/where.md	752
 docs-md	docs/maintainers/where.md	754
 docs-md	docs/maintainers/where.md	755
-docs-md	docs/maintainers/where.md	7552
+docs-md	docs/maintainers/where.md	7551
 docs-md	docs/maintainers/where.md	756
 docs-md	docs/maintainers/where.md	757
 docs-md	docs/maintainers/where.md	759
@@ -9384,6 +9383,7 @@ test-docstrings	tests/test_mlx_backend_smoke.py	17
 test-docstrings	tests/test_mlx_backend_validation.py	3861
 test-docstrings	tests/test_mlx_operator_capture.py	1.3
 test-docstrings	tests/test_mlx_option_policy.py	17
+test-docstrings	tests/test_mlx_parity_value_edits.py	64
 test-docstrings	tests/test_model_prep_hardening.py	13
 test-docstrings	tests/test_model_prep_hardening.py	45
 test-docstrings	tests/test_modelexplorer_contract.py	256
