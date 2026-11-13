@@ -6,12 +6,11 @@ to a runtime-only sidecar diary, then projected into `BackwardPass`, `GradFn`, `
 per-op gradient records. Saved `.tlspec` files persist the projections and tensor blobs, not the
 live diary.
 
-Backend status: torch and JAX record true backward passes. On JAX, `trace.backward(loss_fn)` takes
-a callable that maps `trace.output` to a real floating-point scalar, and records one `GradFn` per
-backward equation JAX's own derivative rules emit (see the JAX notes below). MLX and TensorFlow
-declare backward capture unsupported. JAX, tinygrad, and Paddle also expose derived
-gradients: leaf gradients from a second backend AD execution over declared leaves, not
-`GradFn`/`GradFnCall` records or live backward hooks.
+Backend status: torch is the only true-backward capture backend in this release. MLX and
+TensorFlow declare backward capture unsupported. JAX, tinygrad, and Paddle expose derived gradients:
+leaf gradients from a second backend AD execution over declared leaves, not
+`GradFn`/`GradFnCall` records or live backward hooks. Real non-torch backward graphs remain
+research.
 
 ## Capturing Gradients
 
@@ -324,14 +323,8 @@ exact saved-op records through `trace.autograd.intermediate_derived_grads` plus 
 `op.autograd.derived_grad`. Paddle traces keep `has_backward_pass=False`; this is not true backward
 capture. TensorFlow currently defers true backward capture and T1/intermediate derived gradients;
 TF traces are forward eager-capture records only. `trace.backward(...)`,
-`trace.autograd.backward_passes`, `trace.saved_grad_ops`, and `op.autograd.grads` raise on MLX, tinygrad,
+`trace.autograd.backward_passes`, `trace.saved_grad_ops`, and `op.autograd.grads` raise on JAX, MLX, tinygrad,
 Paddle, and TensorFlow traces.
-JAX records a backward pass by rebuilding the captured forward from its saved equations under one
-named scope per op, taking `jax.vjp`, and running the pullback's jaxpr. Each backward equation is
-linked to the forward op whose scope emitted it; the `GradFn` class name is the JAX rule that ran
-(`transpose(jvp(tanh))`), and the per-op gradients are the cotangents the pullback computed. JAX
-gives no per-node timing, so timing fields stay empty. Custom-VJP calls and control-flow regions
-kept whole (`jax_control_flow="region"` or over the unroll cap) refuse backward capture.
 A backend with a native backward module records its passes into the same records. There,
 `trace.backward(...)` on a forked trace, `trace.capture_backward()` when the backend cannot observe
 backward calls the user drives, and backward capture on a trace whose capture event stream was
@@ -341,11 +334,6 @@ without a backward pass, refuses with `run_capability_unavailable` at detection 
 `reverse_engine` when a gradient reaches an op the adapter cannot describe or replay, when the
 adapter's derivative returns the wrong number of cotangents, or when the graph is not in forward
 order.
-On JAX, `trace.backward(loss_fn)` takes a callable of `trace.output` and refuses with
-`run_capability_unavailable` at detection stage `native_backward_capture` when it gets keyword
-arguments, when the loss is not a real scalar, when the trace's equation captures were not kept,
-when an op cannot be rebuilt (an opaque region such as a whole `scan` or a `custom_vjp` call),
-or when JAX's backward program does not link one to one with the recorded ops.
 
 Real per-fire timing is measured on every hooked node (universal path): a lightweight timing
 prehook and the hook entry stamp pair one `time.perf_counter()` span per fire, served LIVE by

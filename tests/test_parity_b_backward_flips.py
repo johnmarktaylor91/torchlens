@@ -22,6 +22,16 @@ _W = [[2.0, -1.0], [3.0, 0.5]]
 _X = [[1.0, -2.0], [0.5, 1.5], [2.0, 0.25]]
 
 
+def _held_until_flip(backend: str) -> pytest.MarkDecorator:
+    """Skip while ``backend`` declares no backward capture (the flip is held)."""
+
+    return pytest.mark.skipif(
+        not tl.backends.spec(backend).capabilities.backward_capture,
+        reason=f"{backend} native backward capture is built but held undeclared "
+        "until the non_torch_backward_inert contract allows recorded passes",
+    )
+
+
 def _param_grads(trace: Any) -> list[np.ndarray]:
     """Gradients recorded on the trace's parameters for backward pass 1."""
 
@@ -34,6 +44,7 @@ def _param_grads(trace: Any) -> list[np.ndarray]:
 
 
 @pytest.mark.tf_backend
+@_held_until_flip("tf")
 def test_tf_backward_ready_records_a_pass_through_the_registry() -> None:
     """A TensorFlow capture with ``backward_ready=True`` records ``trace.backward``."""
 
@@ -63,6 +74,7 @@ def test_tf_backward_ready_records_a_pass_through_the_registry() -> None:
 
 
 @pytest.mark.backend_paddle
+@_held_until_flip("paddle")
 def test_paddle_backward_ready_records_a_pass_through_the_registry() -> None:
     """A Paddle capture with ``backward_ready=True`` records ``trace.backward``."""
 

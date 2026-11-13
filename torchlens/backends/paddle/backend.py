@@ -298,7 +298,7 @@ class PaddleBackend:
     """Paddle eager op-wrapping backend."""
 
     name = "paddle"
-    supports_backward_capture = True
+    supports_backward_capture = False
 
     def __init__(self) -> None:
         """Import Paddle lazily and require dygraph mode for backend use."""
