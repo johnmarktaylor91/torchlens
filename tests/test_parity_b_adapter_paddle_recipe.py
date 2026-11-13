@@ -223,7 +223,6 @@ def test_bind_reads_parameters_from_loader_payloads(family: str, monkeypatch: An
     trace._paddle_op_captures = []
     adapter.bind_recipes(trace, recipes)
     assert _validate(trace).state == "failed", family
-    setattr(trace, adapter.PARAM_PAYLOADS_ATTR, payloads)
-    adapter.bind_recipes(trace, recipes)
+    adapter.bind_recipes(trace, recipes, param_payloads=payloads)
     status = _validate(trace)
     assert status.state == "passed", f"{family}: {status.message}"
