@@ -140,15 +140,31 @@ def _reverse_accumulate(trace: Any) -> dict[str, Any]:
 
 
 def _tape_gradients(model: Any, example: Any) -> tuple[Any, list[Any], list[Any]]:
-    inputs = tf.convert_to_tensor(example)
+    """``(input gradient or None, variables, variable gradients)`` from one tape.
+
+    The input gradient is taken only for a single floating input tensor (a
+    token-id dict, for example, has none).
+    """
+
+    inputs = tf.nest.map_structure(tf.convert_to_tensor, example)
+    single_float = tf.is_tensor(inputs) and inputs.dtype.is_floating
     variables = list(getattr(model, "trainable_variables", []) or [])
     with tf.GradientTape() as tape:
-        tape.watch(inputs)
+        if single_float:
+            tape.watch(inputs)
         outputs = model(inputs)
         flat = tf.nest.flatten(outputs)
         loss = tf.add_n([tf.reduce_sum(item) for item in flat])
-    grads = tape.gradient(loss, [inputs, *variables])
-    return grads[0], variables, list(grads[1:])
+    grads = tape.gradient(loss, [inputs if single_float else tf.zeros(()), *variables])
+    return (grads[0] if single_float else None), variables, list(grads[1:])
+
+
+def _gap(expected: Any, actual: Any) -> str:
+    """Size of a mismatch, for the assertion message."""
+
+    want, got = np.asarray(expected, dtype=np.float64), np.asarray(actual, dtype=np.float64)
+    diff = np.abs(want - got)
+    return f"max abs diff {diff.max():.3e}, max abs expected {np.abs(want).max():.3e}"
 
 
 @pytest.mark.parametrize("name", _row_params())
@@ -160,8 +176,10 @@ def test_vjp_composed_over_the_graph_equals_tape_gradient(name: str) -> None:
     model, example, trace = _capture(name)
     cotangent = _reverse_accumulate(trace)
     input_grad, variables, variable_grads = _tape_gradients(model, example)
-    (input_op,) = [op for op in _unique_ops(trace) if bool(getattr(op, "is_input", False))]
-    assert ADAPTER.close(input_grad, cotangent[input_op.label]), name
+    if input_grad is not None:
+        (input_op,) = [op for op in _unique_ops(trace) if bool(getattr(op, "is_input", False))]
+        got = cotangent[input_op.label]
+        assert ADAPTER.close(input_grad, got), f"{name}: {_gap(input_grad, got)}"
     reads: dict[object, list[str]] = defaultdict(list)
     for op in _unique_ops(trace):
         recipe = ADAPTER.recipe(trace, op)
@@ -176,7 +194,8 @@ def test_vjp_composed_over_the_graph_equals_tape_gradient(name: str) -> None:
             grad = cotangent.get(label)
             if grad is not None:
                 total = grad if total is None else ADAPTER.add(total, grad)
-        assert total is not None and ADAPTER.close(expected, total), f"{name}:{variable.name}"
+        assert total is not None, f"{name}:{variable.name}"
+        assert ADAPTER.close(expected, total), f"{name}:{variable.name}: {_gap(expected, total)}"
 
 
 def _capture_of(trace: Any, op: Any) -> Any:

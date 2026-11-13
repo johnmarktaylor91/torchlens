@@ -18,9 +18,11 @@ tf = pytest.importorskip("tensorflow")
 
 import torchlens as tl  # noqa: E402
 from torchlens.backends._replay_adapters import (  # noqa: E402
+    ReplayPlan,
     ReplaySession,
     ReplayStep,
     get_adapter,
+    merge_grads,
     pullback_step,
 )
 from torchlens.backends._validation_shared import ops_by_label  # noqa: E402
@@ -75,7 +77,7 @@ def test_session_replays_the_graph_and_pullback_matches_the_tape(name: str) -> N
     trace = tl.trace(model, example, backend="tf")
     steps, initial = _plan(trace)
     assert steps
-    with ReplaySession(ADAPTER, trace, steps, initial=initial) as session:
+    with ReplaySession(ADAPTER, trace, ReplayPlan(tuple(steps), initial)) as session:
         values = session.run()
     ops = ops_by_label(trace)
     for step in steps:
@@ -87,7 +89,7 @@ def test_session_replays_the_graph_and_pullback_matches_the_tape(name: str) -> N
         if seed is None:
             continue
         parents = [values.get(o.parent_label, initial.get(o.parent_label)) for o in step.inputs]
-        pullback_step(ADAPTER, trace, step, parents, [seed], grads)
+        grads = merge_grads(ADAPTER, grads, pullback_step(ADAPTER, trace, step, parents, [seed]))
     inputs = tf.convert_to_tensor(example)
     with tf.GradientTape() as tape:
         tape.watch(inputs)
