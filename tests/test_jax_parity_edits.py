@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 from typing import Any, cast
 
 import numpy as np
@@ -20,19 +19,6 @@ pytestmark = [pytest.mark.backend_jax, pytest.mark.rare]
 _W = np.asarray([[0.2, -0.4], [0.7, 0.3], [-0.5, 0.1]], dtype=np.float32)
 _B = np.asarray([0.05, -0.1], dtype=np.float32)
 _X = np.asarray([[1.0, -2.0, 0.5], [0.3, 0.1, -0.8]], dtype=np.float32)
-
-
-@pytest.fixture(autouse=True)
-def _jax_intervene_declared() -> Iterator[None]:
-    """Declare ``can_intervene`` on the JAX spec for the test (the spec flip is a registry edit)."""
-
-    spec = tl.backends.spec("jax")
-    previous = spec.capabilities.can_intervene
-    object.__setattr__(spec.capabilities, "can_intervene", True)
-    try:
-        yield
-    finally:
-        object.__setattr__(spec.capabilities, "can_intervene", previous)
 
 
 def _model(x: Any) -> Any:
@@ -258,7 +244,7 @@ def test_jax_intervene_typed_refusals() -> None:
     assert _refusal_code(_model, tl.when(tl.func("tanh"), tl.steer(np.ones(2, np.float32)))) == (
         "trace_option_unsupported"
     )
-    loss = GradOptions(params=None, loss_fn=lambda out: jnp.sum(out))
+    loss = GradOptions(params=None, loss_fn=lambda out: jnp.sum(out), intermediate_grads=True)
     assert _refusal_code(
         _model,
         tl.when(tl.func("tanh"), edit),
