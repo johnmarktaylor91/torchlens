@@ -87,8 +87,13 @@ _RNG_REASON = (
 )
 
 
-class _NotData(ValueError):
-    """A UOp field has no data-only encoding."""
+def _not_data(detail: str) -> ReplayRefusal:
+    """The refusal for a UOp field or value that has no data-only encoding.
+
+    The replay layer's one internal signal, so the adapter adds no exception class.
+    """
+
+    return ReplayRefusal("type", detail)
 
 
 @dataclass(frozen=True)
@@ -176,7 +181,7 @@ def _fixed_sources_refusal(capture: Any, index: _TraceIndex) -> str | None:
     try:
         _encode_attrs(uop)
         fixed = [uop.src[pos] for pos in _fixed_positions(capture, index)]
-    except _NotData as error:
+    except ReplayRefusal as error:
         return f"tinygrad UOp {_uop_name(uop)} has a field with no data encoding: {error}"
     except ValueError as error:
         return f"a parent payload is not available for replay: {error}"
@@ -473,7 +478,7 @@ def _capture_fields(
             raise ReplayRefusal("shape", "a saved value has no inputs", op_label=label)
         try:
             snapshot = _decode_value(item.attrs.get("value"), payload)
-        except (_NotData, KeyError, TypeError, ValueError) as error:
+        except (ReplayRefusal, KeyError, TypeError, ValueError) as error:
             raise ReplayRefusal("shape", f"bad saved value: {error}", op_label=label) from error
         return (raw, snapshot.uop, str(item.attrs.get("uop_op", "")), (), (), snapshot)
     occurrences = []
@@ -516,21 +521,21 @@ def _rebuild_uop(
     try:
         for path, tree in item.literals:
             if len(path) != 1 or type(path[0]) is not int or not 0 <= path[0] < n_src:
-                raise _NotData(f"bad literal position {path!r}")
+                raise _not_data(f"bad literal position {path!r}")
             src[path[0]] = _decode_source(tree)
         for position, parent_raw in occurrences:
             if not 0 <= position < n_src:
-                raise _NotData(f"bad parent position {position}")
+                raise _not_data(f"bad parent position {position}")
             if src[position] is None:
                 src[position] = _saved(ops_by_raw[parent_raw]).uop
         if any(source is None for source in src):
-            raise _NotData("a source position has neither a literal nor a parent")
+            raise _not_data("a source position has neither a literal nor a parent")
         from tinygrad.uop.ops import UOp
 
         return UOp(
             _decode_ops(name), _decode_dtype(attrs["dtype"]), tuple(src), _decode_arg(attrs["arg"])
         )
-    except (_NotData, KeyError, TypeError, AttributeError) as error:
+    except (ReplayRefusal, KeyError, TypeError, AttributeError) as error:
         raise ReplayRefusal("shape", f"cannot rebuild the UOp: {error}", op_label=label) from error
 
 
@@ -539,7 +544,7 @@ def _rebuild_uop(
 
 def _encode_attrs(uop: Any) -> dict[str, Any]:
     if uop.tag is not None:
-        raise _NotData("tagged UOp")
+        raise _not_data("tagged UOp")
     return {
         "uop_op": _uop_name(uop),
         "dtype": _encode_dtype(uop.dtype),
@@ -553,7 +558,7 @@ def _encode_source(source: Any) -> dict[str, Any]:
 
     try:
         return _encode_uop(source)
-    except _NotData:
+    except ReplayRefusal:
         pass
     from tinygrad import Tensor
 
@@ -577,7 +582,7 @@ def _value_tree(value: Any, *, allow_digest: bool = True) -> dict[str, Any]:
     """
 
     if not isinstance(value.device, str):
-        raise _NotData("value on a multi-device tensor")
+        raise _not_data("value on a multi-device tensor")
     tree = {
         "uop_op": _VALUE_NODE,
         "dtype": _encode_dtype(value.dtype),
@@ -597,10 +602,10 @@ def _decode_value(tree: Any, payload: Any = None) -> Any:
     """
 
     if not isinstance(tree, Mapping) or tree.get("uop_op") != _VALUE_NODE:
-        raise _NotData("not a value tree")
+        raise _not_data("not a value tree")
     shape, device = tree.get("shape"), tree.get("device")
     if not isinstance(shape, (tuple, list)) or not isinstance(device, str):
-        raise _NotData("malformed value tree")
+        raise _not_data("malformed value tree")
     dtype = _decode_dtype(tree.get("dtype"))
     if "sha256" in tree:
         if (
@@ -608,12 +613,12 @@ def _decode_value(tree: Any, payload: Any = None) -> Any:
             or str(payload.dtype) != str(dtype)
             or _digest(payload) != tree["sha256"]
         ):
-            raise _NotData("the loaded payload is not the captured value (digest differs)")
+            raise _not_data("the loaded payload is not the captured value (digest differs)")
         value = payload
     else:
         value = _host_tensor(tree.get("data"), dtype, device)
     if tuple(value.shape) != tuple(shape):
-        raise _NotData("value does not have its recorded shape")
+        raise _not_data("value does not have its recorded shape")
     return value
 
 
@@ -628,9 +633,9 @@ def _encode_uop(uop: Any, depth: int = 0) -> dict[str, Any]:
 
     name = _uop_name(uop)
     if name not in LITERAL_UOP_OPS:
-        raise _NotData(f"source UOp {name} is not a literal")
+        raise _not_data(f"source UOp {name} is not a literal")
     if depth > 16:
-        raise _NotData("literal source is too deep")
+        raise _not_data("literal source is too deep")
     return {**_encode_attrs(uop), "src": tuple(_encode_uop(s, depth + 1) for s in uop.src)}
 
 
@@ -638,7 +643,7 @@ def _decode_uop(tree: Any, depth: int = 0) -> Any:
     from tinygrad.uop.ops import UOp
 
     if not isinstance(tree, Mapping) or depth > 16:
-        raise _NotData("literal source is not a bounded mapping")
+        raise _not_data("literal source is not a bounded mapping")
     name = tree.get("uop_op")
     src = tree.get("src")
     if (
@@ -646,7 +651,7 @@ def _decode_uop(tree: Any, depth: int = 0) -> Any:
         or not isinstance(src, (tuple, list))
         or len(src) != tree.get("n_src")
     ):
-        raise _NotData(f"literal source {name!r} is malformed or not allowed")
+        raise _not_data(f"literal source {name!r} is malformed or not allowed")
     children = tuple(_decode_uop(child, depth + 1) for child in src)
     return UOp(_decode_ops(name), _decode_dtype(tree["dtype"]), children, _decode_arg(tree["arg"]))
 
@@ -655,7 +660,7 @@ def _encode_dtype(dtype: Any) -> dict[str, Any]:
     from tinygrad.dtype import INVERSE_DTYPES_DICT, PtrDType
 
     if isinstance(dtype, PtrDType):
-        raise _NotData("pointer dtype")
+        raise _not_data("pointer dtype")
     return {"scalar": INVERSE_DTYPES_DICT[dtype.scalar().name], "count": int(dtype.count)}
 
 
@@ -663,10 +668,10 @@ def _decode_dtype(node: Any) -> Any:
     from tinygrad.dtype import DTYPES_DICT, dtypes
 
     if not isinstance(node, Mapping) or type(node.get("count")) is not int:
-        raise _NotData("malformed dtype")
+        raise _not_data("malformed dtype")
     name = node.get("scalar")
     if name not in DTYPES_DICT and name not in ("void", "weakint"):
-        raise _NotData(f"unknown dtype {name!r}")
+        raise _not_data(f"unknown dtype {name!r}")
     base = getattr(dtypes, name)
     return base if node["count"] == 1 else base.vec(node["count"])
 
@@ -687,7 +692,7 @@ def _encode_arg(arg: Any) -> Any:
         return {"kind": "dtype", "dtype": _encode_dtype(arg)}
     if type(arg) is tuple:
         return tuple(_encode_arg(item) for item in arg)
-    raise _NotData(f"UOp arg of type {type(arg).__name__}")
+    raise _not_data(f"UOp arg of type {type(arg).__name__}")
 
 
 def _decode_arg(node: Any) -> Any:
@@ -698,7 +703,7 @@ def _decode_arg(node: Any) -> Any:
     if isinstance(node, (tuple, list)):
         return tuple(_decode_arg(item) for item in node)
     if not isinstance(node, Mapping):
-        raise _NotData(f"malformed arg {type(node).__name__}")
+        raise _not_data(f"malformed arg {type(node).__name__}")
     kind = node.get("kind")
     if kind == "float" and isinstance(node.get("hex"), str):
         value = float.fromhex(node["hex"])
@@ -707,14 +712,14 @@ def _decode_arg(node: Any) -> Any:
         return _decode_ops(node.get("name"))
     if kind == "dtype":
         return _decode_dtype(node.get("dtype"))
-    raise _NotData(f"unknown arg kind {kind!r}")
+    raise _not_data(f"unknown arg kind {kind!r}")
 
 
 def _decode_ops(name: Any) -> Any:
     from tinygrad.uop import Ops
 
     if name not in REPLAY_UOP_OPS and name not in LITERAL_UOP_OPS and name not in _ARG_OPS:
-        raise _NotData(f"UOp op {name!r} is not allowed")
+        raise _not_data(f"UOp op {name!r} is not allowed")
     return getattr(Ops, name)
 
 
