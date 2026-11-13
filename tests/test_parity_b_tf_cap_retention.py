@@ -153,3 +153,13 @@ def _first_capture_with_literal(op_type: Any, input_type: Any) -> Any:
         if any(isinstance(item, input_type) and item.tensor is not None for item in capture.inputs):
             return capture
     pytest.fail("no op record with a live input")
+
+
+def test_op_records_mark_payloads_the_selector_declined() -> None:
+    """``payload_declined`` is set exactly for the ops ``save=`` did not select."""
+
+    x = tf.constant(_X)
+    assert not any(c.payload_declined for c in tl.trace(_chain, x)._tf_op_captures)
+    sparse = tl.trace(_chain, x, save=tl.func("Relu"))
+    declined = {c.op_type: c.payload_declined for c in sparse._tf_op_captures}
+    assert declined == {"Relu": False, "AddV2": True, "Mul": True}
