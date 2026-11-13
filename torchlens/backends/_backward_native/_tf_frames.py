@@ -28,7 +28,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-__all__ = [
+__all__ = (
     "BackwardRecorder",
     "ForwardCall",
     "Frame",
@@ -37,7 +37,7 @@ __all__ = [
     "frame_consumers",
     "link_frames",
     "tensor_id",
-]
+)
 
 
 def tensor_id(value: Any) -> int | None:

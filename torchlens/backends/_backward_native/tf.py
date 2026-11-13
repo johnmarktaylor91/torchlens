@@ -43,7 +43,6 @@ from ..._ir.events import (
     OpGradObserved,
     ParamGradObserved,
 )
-from ..._runnable import RunnableErrorCode
 from ...errors import RunCapabilityUnavailableError
 from .._backward_neutral import journal_backward_event, next_backward_pass_index, set_pass_roots
 from ._tf_frames import (
@@ -56,11 +55,13 @@ from ._tf_frames import (
     tensor_id,
 )
 
-__all__ = ["backward_ready_scope", "record_backward", "retain_backward_state"]
+__all__ = ("backward_ready_scope", "record_backward", "retain_backward_state")
 
 _STATE_KEY = "_tf_backward_state"
 _SESSION_TAPE = "_tl_backward_tape"
+_CODE = "run_capability_unavailable"  # RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE
 _DETECTION_STAGE = "native_backward_capture"
+_PREFIX = "TensorFlow backward capture is unavailable: "
 _SOURCE_FIELDS = (
     "class_source_file",
     "class_source_line",
@@ -75,16 +76,6 @@ _SOURCE_FIELDS = (
 #: The recorder of the backward pass running now, read by Python backward
 #: functions recorded during the forward (``tf.custom_gradient``).
 _ACTIVE: list[BackwardRecorder] = []
-
-
-def _refuse(problem: str) -> RunCapabilityUnavailableError:
-    """Typed refusal for a TensorFlow backward capture that cannot run."""
-
-    return RunCapabilityUnavailableError(
-        f"TensorFlow backward capture is unavailable: {problem}",
-        code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
-        detection_stage=_DETECTION_STAGE,
-    )
 
 
 # --- private TensorFlow bindings (feature detection) ------------------------
@@ -126,7 +117,11 @@ def _require_bindings() -> SimpleNamespace:
 
     bindings, missing = _private_bindings()
     if bindings is None:
-        raise _refuse(f"this TensorFlow does not expose {missing}, which it needs.")
+        raise RunCapabilityUnavailableError(
+            _PREFIX + f"this TensorFlow does not expose {missing}, which it needs.",
+            code=_CODE,
+            detection_stage=_DETECTION_STAGE,
+        )
     return bindings
 
 
@@ -243,9 +238,11 @@ def _state_of(trace: Any) -> TFBackwardState:
 
     state = trace.__dict__.get(_STATE_KEY)
     if not isinstance(state, TFBackwardState):
-        raise _refuse(
-            "this trace kept no gradient tape. Capture it with backward_ready=True to "
-            "call backward on it."
+        raise RunCapabilityUnavailableError(
+            _PREFIX + "this trace kept no gradient tape. Capture it with backward_ready=True to "
+            "call backward on it.",
+            code=_CODE,
+            detection_stage=_DETECTION_STAGE,
         )
     return state
 
@@ -260,9 +257,11 @@ def _retains(policy: Any) -> bool:
         return False
     if policy is True or policy == "all":
         return True
-    raise _refuse(
-        f"save_grads={policy!r} selects ops, which TensorFlow backward capture does not "
-        "support yet. Pass save_grads=True to keep every gradient, or False to keep none."
+    raise RunCapabilityUnavailableError(
+        _PREFIX + f"save_grads={policy!r} selects ops, which TensorFlow backward capture does not "
+        "support yet. Pass save_grads=True to keep every gradient, or False to keep none.",
+        code=_CODE,
+        detection_stage=_DETECTION_STAGE,
     )
 
 
@@ -276,11 +275,17 @@ def _loss_tensor(trace: Any, state: TFBackwardState, loss: Any) -> Any:
     else:
         value = loss
     if not tf.is_tensor(value):
-        raise _refuse(f"the loss must be a TensorFlow tensor; got {type(value).__name__}.")
+        raise RunCapabilityUnavailableError(
+            _PREFIX + f"the loss must be a TensorFlow tensor; got {type(value).__name__}.",
+            code=_CODE,
+            detection_stage=_DETECTION_STAGE,
+        )
     if value.shape.num_elements() != 1:
-        raise _refuse(
-            f"the loss must be a scalar (one element); got shape {tuple(value.shape)}. "
-            "Reduce it first, as a backward pass starts from one value."
+        raise RunCapabilityUnavailableError(
+            _PREFIX + f"the loss must be a scalar (one element); got shape {tuple(value.shape)}. "
+            "Reduce it first, as a backward pass starts from one value.",
+            code=_CODE,
+            detection_stage=_DETECTION_STAGE,
         )
     return value
 
@@ -366,9 +371,11 @@ def record_backward(
     """
 
     if backward_kwargs:
-        raise _refuse(
-            f"backward keyword(s) {sorted(backward_kwargs)} have no TensorFlow meaning. "
-            "Call backward(loss) with save_grads= only."
+        raise RunCapabilityUnavailableError(
+            _PREFIX + f"backward keyword(s) {sorted(backward_kwargs)} have no TensorFlow meaning. "
+            "Call backward(loss) with save_grads= only.",
+            code=_CODE,
+            detection_stage=_DETECTION_STAGE,
         )
     state = _state_of(trace)
     bindings = _require_bindings()
@@ -402,9 +409,11 @@ def _run_pass(
                 output_gradients=seed,
             )
         if not recorder.frames:
-            raise _refuse(
-                "the loss is not connected to the captured forward on its tape. Pass a "
-                "callable of trace.output (it runs on the tape), or a scalar model output."
+            raise RunCapabilityUnavailableError(
+                _PREFIX + "the loss is not connected to the captured forward on its tape. Pass a "
+                "callable of trace.output (it runs on the tape), or a scalar model output.",
+                code=_CODE,
+                detection_stage=_DETECTION_STAGE,
             )
         state.losses[pass_index] = loss_tensor
         journal = _PassJournal(trace, state, recorder, pass_index, retain, (loss_tensor, seed))
