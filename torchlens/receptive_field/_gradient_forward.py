@@ -22,6 +22,7 @@ from ._gradient import (
     _spatial_support,
     _support_ranges,
 )
+from ._gradient_replay_hook import replay_probe
 from ._path import descendant_labels, require_path, resolve_graph_point
 from ._types import GradReceptiveField, ReceptiveFieldDirection
 
@@ -484,9 +485,8 @@ def projective_gradient_for_unit(
         raise ValueError("atol and rtol must be non-negative.")
     trace: Trace = source.source_trace
     if not get_backend_spec(str(trace._provenance_backend)).capabilities.backward_capture:
-        from ._gradient_provider import projective_for_unit  # deferred: cycle receptive_field
-
-        return projective_for_unit(source, unit, target=target, atol=atol, rtol=rtol)
+        probe = replay_probe("projective")
+        return probe(source, unit, target=target, atol=atol, rtol=rtol)
     if not trace._options_backward_ready:
         raise ReceptiveFieldUnavailableError(
             "Projective gradient fields require backward_ready=True and saved payloads. "

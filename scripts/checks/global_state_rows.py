@@ -196,6 +196,9 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         # 3.0 runnable binder: the bind-time helpers (digest, device, state universe) are
         # installed once by torchlens._io.bundle at import (install_runnable_binders).
         ("torchlens/_io/_format3_runnable_bind.py", "_BINDERS"),
+        # Cone-replay gradient probes: installed once when the receptive_field package
+        # imports torchlens.receptive_field._gradient_provider; never rebound afterwards.
+        ("torchlens/receptive_field/_gradient_replay_hook.py", "_REPLAY_PROBES"),
         ("torchlens/_io/prerelease.py", "_ACTIVE"),
         ("torchlens/_io/prerelease.py", "_ANNOTATIONS_KEY_REGISTRY"),
         ("torchlens/_io/prerelease.py", "_REGISTRY"),

@@ -23,6 +23,7 @@ from ._errors import (
     ReceptiveFieldUnavailableError,
 )
 from ._gradient_live import _RECAPTURE_RECIPE, _saved_tensor
+from ._gradient_replay_hook import replay_probe
 from ._gradient_support import _spatial_support, _support_ranges
 from ._path import require_path, resolve_graph_point
 from ._types import GradReceptiveField, ReceptiveFieldDirection
@@ -694,9 +695,7 @@ def gradient_for_unit(
             input_op = _source_op
             source = None
     if not get_backend_spec(str(trace._provenance_backend)).capabilities.backward_capture:
-        from ._gradient_provider import receptive_for_unit  # deferred: cycle receptive_field
-
-        return receptive_for_unit(target, unit, input_op, source, atol, rtol)
+        return replay_probe("receptive")(target, unit, input_op, source, atol, rtol)
     if not trace._options_backward_ready:
         raise ReceptiveFieldUnavailableError(
             "Gradient receptive fields require backward_ready=True and saved payloads. "

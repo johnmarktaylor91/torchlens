@@ -40,6 +40,7 @@ from ._gradient import (
     _select_inputs,
 )
 from ._gradient_forward import _build_projective_result, _select_targets, _target_key
+from ._gradient_replay_hook import REPLAY_REFUSAL_CODE, install_replay_probes
 from ._path import between_labels, require_path, resolve_graph_point
 from ._types import GradReceptiveField, ReceptiveFieldDirection
 from ._unit_vjp import ReplayRefusal, backend_module
@@ -70,9 +71,6 @@ class _Cone:
 _P = ParamSpec("_P")
 _R = TypeVar("_R")
 
-#: ``fields["code"]`` of every refusal this provider raises (PROPOSED NAME).
-_REFUSAL_CODE = "gradient_replay_unavailable"
-
 
 def _refusing(probe: Callable[_P, _R]) -> Callable[_P, _R]:
     """Convert the cone replay's internal refusal into the public typed refusal.
@@ -89,7 +87,7 @@ def _refusing(probe: Callable[_P, _R]) -> Callable[_P, _R]:
         try:
             return probe(*args, **kwargs)
         except ReplayRefusal as exc:
-            raise ReceptiveFieldUnavailableError(str(exc), code=_REFUSAL_CODE) from exc
+            raise ReceptiveFieldUnavailableError(str(exc), code=REPLAY_REFUSAL_CODE) from exc
 
     return refusing
 
@@ -470,3 +468,6 @@ def projective_for_unit(
     if explicit:
         return next(iter(results.values()))
     return MappingProxyType(results)
+
+
+install_replay_probes(receptive=receptive_for_unit, projective=projective_for_unit)
