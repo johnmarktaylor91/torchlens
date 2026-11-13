@@ -205,7 +205,7 @@ def _attach_intermediate(backend: Any, trace: Any, capture: DerivedGradCapture) 
 
     _, _, args, static_argnums, closed_jaxpr, _, captured_output, grad_options = capture[:8]
     control_flow = capture.control_flow
-    records = getattr(trace, "_autograd_derived_grads", None)
+    records = trace._autograd_derived_grads
     fingerprint = next(
         (
             record.provenance.get("fingerprint")

@@ -180,11 +180,21 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # loaded-flag reads use the try/except seam the `Trace` validation methods already
     # use for `_loaded_from_bundle`. The lazy-initialised mlx stores and the
     # loaded-trace guards keep their defaulted reads (absence is meaningful).
-    "backends/jax": 5,
+    # backends/jax 5 -> 6 (2026-11-12 parity-train merge): the module-exit
+    # return probe (85004203cd) reads the scrub-declared runtime-only
+    # `_jax_capture_index_to_raw_op_label` map with the {} default, the idiom
+    # already ledgered at backend.py for that exact field.
+    "backends/jax": 6,
     "backends/mlx": 19,
     "backends/paddle": 18,
     "backends/tf": 8,
     "backends/tinygrad": 4,
+    # 0 -> 1 (2026-11-12 parity-train merge): the shared replay-input reader in
+    # _validation_shared.py reads the scrub-declared runtime-only
+    # `_selective_save_hidden_payloads` side channel of an op's owner trace;
+    # absent unless a save filter or save shaping ran, and absent on loaded
+    # traces, so the None default is the correct "no hidden copy" reading.
+    "backends": 1,
     # 111 -> 112 (2026-08-14 fixwave-2 reconcile): heavy site churn from the
     # ops.py/completeness_witness.py file splits nets +1, dominated by the
     # intended safetynet stage-2 rescue path (rescue.py) and backward-projection
@@ -308,7 +318,11 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # `_primitive_op_profile` store (x2) and `_capture_events` stream; absent
     # on non-aten / loaded traces, so the None default is the correct
     # "no primitive layer" reading.
-    "_postprocess": 8,
+    # 8 -> 9 (2026-11-12 parity-train merge): post-capture save shaping
+    # merges into `_selective_save_hidden_payloads`, which the static-label
+    # save policy only writes when a save predicate is present, so the None
+    # default is the correct "nothing hidden yet" reading.
+    "_postprocess": 9,
     "report": 1,
     # 7 -> 6 (2026-08-14 fixwave-2 reconcile): one reach-in discharged upstream.
     # 6 -> 0 (fast2 ci-fix reconcile): every repgeom reach-in (the

@@ -143,7 +143,7 @@ def paddle_code_context(trace: Any, kind: str) -> tuple[FuncCallLocation, ...]:
     if not selected:
         return ()
     num_context_lines = int(getattr(trace, "num_context_lines", 7))
-    load_source = bool(getattr(trace, "_options_save_source_context", False))
+    load_source = bool(trace._options_save_source_context)
     cache = trace._code_context_cache
     key = (
         "paddle",

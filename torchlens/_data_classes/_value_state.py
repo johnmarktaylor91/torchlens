@@ -139,8 +139,7 @@ def _record_backend(record: Any) -> str | None:
     slot = getattr(record, "_slot", None)
     ref = slot("_source_trace_ref") if callable(slot) else None
     trace = ref() if callable(ref) else None
-    backend = getattr(trace, "_provenance_backend", None)
-    return None if backend is None else str(backend)
+    return None if trace is None else str(trace._provenance_backend)
 
 
 def edited_token(record: Any) -> str:
