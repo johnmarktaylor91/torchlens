@@ -467,7 +467,6 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # Re-keyed down 2300 -> 2200 (r7 R43-F2 slack rule): the branch-label text
     # helpers moved to _branch_label_text.py; measured 2198.
     "torchlens/_visualization/_render_leaf.py": 2200,
-    "torchlens/debug/_infer_input_shape.py": 2100,
     "torchlens/_postprocess/ast_branches.py": 2250,
     # Re-keyed down 2150 -> 2050 (r7 R43-F2 slack rule): the raw-input scratch
     # folder, input photo and picture-box layout moved to _input_photo.py and
