@@ -28,6 +28,8 @@ from dataclasses import dataclass, field
 from typing import Any, cast
 
 from .._protocols.tinygrad import TinygradProtocol
+from ._captures import TinygradCaptureSession, after_realize, extra_realize_targets
+from ._execution_guard import _reject_mid_capture_execution
 from ._rules import (
     CONSTANT_UNREALIZABLE_CODE,
     RNG_STATE_IN_GRAPH_CODE,
@@ -316,6 +318,7 @@ def realize_capture(
     is_tensor: Callable[[Any], bool],
     *,
     edit_sites: Mapping[int, Any] | None = None,
+    session: TinygradCaptureSession | None = None,
 ) -> RealizedCapture:
     """Read the forward's graph, plan the capture, and realize it once.
 
@@ -335,6 +338,9 @@ def realize_capture(
         Predicate selecting the tinygrad tensor leaves of ``call_leaves``.
     edit_sites
         ``id(replacement UOp) -> replaced result UOp`` of an edited capture.
+    session
+        The capture's hook session: gradient tensors a backward scope builds
+        join the same single realize, and logged draws resolve after it.
 
     Returns
     -------
@@ -348,7 +354,10 @@ def realize_capture(
     source_uops = tuple(uop for _path, _value, uop in input_leaves)
     output_uops = tuple(cast(Any, output).uop for output in outputs)
     plan = plan_capture(outputs, source_uops, preexisting_uops, edit_sites)
-    realized, owned = realize_recorded_values(plan, source_uops, outputs)
+    with _reject_mid_capture_execution():
+        extra = extra_realize_targets(session, plan, source_uops)
+    realized, owned = realize_recorded_values(plan, source_uops, (*extra, *outputs))
+    after_realize(session)
     return RealizedCapture(plan, realized, owned, input_leaves, output_uops)
 
 

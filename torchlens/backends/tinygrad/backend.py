@@ -83,6 +83,7 @@ from .._validation_shared import (
     replay_payload,
     scalar_replay_close,
 )
+from . import _captures as hooks
 from ._capture_state import begin_capture, event_module_frames, mark_edit, realize_with_state
 from ._captures import TinygradIntermediateCandidate, TinygradUOpCapture
 from ._derived_grads import (
@@ -227,6 +228,7 @@ class TinygradBackend:
     _call_kwargs: Mapping[str, Any] = MappingProxyType({})
     _source_lines: SourceLineRecorder | None = None
     _edit_session: TinygradEditSession | None = None
+    _capture_session: hooks.TinygradCaptureSession | None = None
     _warn_zero_fire = staticmethod(settle_capture_zero_fire)
 
     def capture_trace(
@@ -374,8 +376,6 @@ class TinygradBackend:
             save_visualizations=save_visualizations,
             module_identity_mode=module_identity_mode,
         )
-        layers_to_save = capture_options._layers_to_save
-        keep_orphans = capture_options.keep_orphans
         output_device = capture_options.output_device
         detach_saved_activations = capture_options.detach_saved_activations
         save_arg_values = capture_options.save_args
@@ -400,8 +400,8 @@ class TinygradBackend:
             capture, "layer_visualizers", layer_visualizers
         )
         random_seed = _resolve_optional_capture_field(capture, "seed", random_seed)
-        layers_to_save = _default_if_missing(layers_to_save, "all")
-        keep_orphans = _default_if_missing(keep_orphans, False)
+        layers_to_save = _default_if_missing(capture_options._layers_to_save, "all")
+        keep_orphans = _default_if_missing(capture_options.keep_orphans, False)
         output_device = _default_if_missing(output_device, "same")
         save_raw_activations = _default_if_missing(save_raw_activations, True)
         detach_saved_activations = _default_if_missing(detach_saved_activations, False)
@@ -458,6 +458,7 @@ class TinygradBackend:
         )
         self._assert_runtime_supported()
         self._assert_tinygrad_inputs(args)
+        hooks.arm_backward(self._capture_session, backward_ready, grad_options)
         trace = self._new_trace(
             model=model,
             keep_orphans=cast(bool, keep_orphans),
@@ -554,8 +555,11 @@ class TinygradBackend:
             observed_ops, observed_module_stacks, pinned_uops=pinned_uops
         )
         observer.source_lines, observer.edits = self._source_lines, self._edit_session
-        with module_call_context, observer, _reject_mid_capture_execution():
-            output = model(*args, **self._call_kwargs)
+        with hooks.capture_scopes(session := self._capture_session), module_call_context, observer:
+            with _reject_mid_capture_execution():
+                output = model(*args, **self._call_kwargs)
+            if session is not None:
+                session.raw_output = output
         if self._input_identities(args) != input_identities:
             raise BackendUnsupportedError(
                 "The tinygrad backend cannot capture Tensor.assign(), Tensor.replace(), "
@@ -759,7 +763,7 @@ class TinygradBackend:
             Mapping from UOp object id to raw source label.
         """
 
-        uop_labels: dict[int, str] = {}
+        uop_labels = hooks.fresh_label_map(self._capture_session)
         for path, value, uop in capture.input_leaves:
             event = self._append_event(
                 trace=trace,
@@ -1227,6 +1231,7 @@ class TinygradBackend:
             finish_before_module_logs=False,
             recurrence_detection=bool(trace._options_recurrence_detection),
         )
+        hooks.retain_hook_state(trace, self._capture_session, module_tree)
 
     def _attach_object_module_logs(self, trace: Trace, tree: TinygradModuleTree) -> None:
         """Build public module logs for a tinygrad object-module trace.
@@ -1735,11 +1740,6 @@ class TinygradBackend:
         ----------
         **options
             Normalized public trace options.
-
-        Returns
-        -------
-        None
-            Returns when all options are supported.
         """
 
         reject_unsupported_trace_options(
@@ -1755,11 +1755,6 @@ class TinygradBackend:
         ----------
         kwargs
             Extra keyword arguments.
-
-        Returns
-        -------
-        None
-            Returns when no extras are present.
         """
 
         reject_extra_trace_kwargs(

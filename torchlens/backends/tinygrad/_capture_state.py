@@ -14,7 +14,7 @@ from types import MappingProxyType
 from typing import Any, cast
 
 from ..._ir.events import ModuleFrame, OpEvent
-from ._captures import TinygradUOpCapture
+from ._captures import TinygradCaptureSession, TinygradUOpCapture
 from ._derived_grads import call_input_leaves
 from ._edits import fire_amendment
 from ._module_tree import TinygradModuleFrame
@@ -53,6 +53,7 @@ def begin_capture(
     """
 
     backend._call_kwargs = MappingProxyType(dict(input_kwargs or {}))
+    backend._capture_session = TinygradCaptureSession()
     backend._source_lines = SourceLineRecorder(
         type(backend)._run_observed_forward.__code__,
         cast(int, num_context_lines),
@@ -90,6 +91,7 @@ def realize_with_state(
         preexisting_uops,
         backend.is_tensor,
         edit_sites=session.replaced if session is not None else None,
+        session=backend._capture_session,
     )
     if backend._source_lines is not None:
         backend._source_lines.fill_unobserved(realized.plan.recorded, realized.plan.edit_sites)
