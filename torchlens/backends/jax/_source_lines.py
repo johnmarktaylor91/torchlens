@@ -27,6 +27,7 @@ from __future__ import annotations
 import os
 import sys
 from collections.abc import Sequence
+from types import FrameType
 from typing import Any, NamedTuple
 
 from ..._data_classes.func_call_location import FuncCallLocation
@@ -103,7 +104,7 @@ class EquationFrames:
     def _live_call_site(self) -> _LiveFrame | None:
         """Return the first live frame outside TorchLens and JAX: the trace call site."""
 
-        frame = sys._getframe(1)
+        frame: FrameType | None = sys._getframe(1)
         while frame is not None and self._kind(frame.f_code.co_filename) != "user":
             frame = frame.f_back
         if frame is None:
