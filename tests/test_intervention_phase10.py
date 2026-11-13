@@ -1040,4 +1040,4 @@ def test_atomic_save_cleans_up_after_tensor_write_failure(tmp_path: Path) -> Non
         )
 
     assert not target.exists()
-    assert not list(tmp_path.glob("tmp.*"))
+    assert not list(tmp_path.glob(f"{target.name}.tmp.*"))

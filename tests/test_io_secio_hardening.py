@@ -30,7 +30,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._io import bundle as bundle_mod
+from torchlens._io import _staging, bundle as bundle_mod
 from torchlens._io.bundle import _reanchor_visualizer_paths, cleanup_tmp
 from torchlens._io.format3.decode import decode_value
 from torchlens.errors import ArtifactError
@@ -132,7 +132,7 @@ def test_save_failure_persists_type_name_not_message(tmp_path: Path, monkeypatch
     spec = tmp_path / "fail.tlspec"
     with pytest.raises(ArtifactError):
         trace.save(str(spec))
-    reasons = list(tmp_path.glob("fail.tlspec.tmp.*/" + bundle_mod.REASON_SENTINEL))
+    reasons = list(tmp_path.glob("fail.tlspec.tmp.*/" + _staging.REASON_SENTINEL))
     assert reasons, "no PARTIAL reason sentinel was written"
     for reason_file in reasons:
         text = reason_file.read_text()

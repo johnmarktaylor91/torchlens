@@ -282,7 +282,7 @@ def test_intervention_overwrite_rename_failure_restores_previous_artifact(
     def fail_replacement(source: str | Path, target: str | Path) -> None:
         """Fail only the staged replacement's final installation."""
 
-        if Path(source).name.startswith("tmp.") and Path(target) == path:
+        if Path(source).name.startswith(f"{path.name}.tmp.") and Path(target) == path:
             raise OSError("simulated intervention swap refusal")
         original_rename(source, target)
 

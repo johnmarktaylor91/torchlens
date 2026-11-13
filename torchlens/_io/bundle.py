@@ -89,6 +89,12 @@ from ._save_gates import (
 )
 from ._save_subject import resolve_save_subject
 from ._skipped_blobs import _apply_skipped_blobs_to_scrubbed_state
+from ._staging import (
+    PARTIAL_SENTINEL,
+    mark_partial as _mark_partial,
+    refuse_stale_load,
+    sibling_staging_dirs,
+)
 from ._tlspec_identity import _preflight_schema_v2_runtime
 from .format3 import (
     contract as format3_contract,
@@ -147,8 +153,6 @@ if TYPE_CHECKING:
     from ..intervention._spec import Recipe
     from ..intervention._types import InterventionSpec
 
-PARTIAL_SENTINEL = "PARTIAL"
-REASON_SENTINEL = "REASON.txt"
 # Coarse anti-DoS ceiling on ``metadata.pkl``, for parity with the JSON
 # boundary's byte ceiling (512 MiB, ``_json._MAX_JSON_BYTES``). Structural trace
 # metadata (tensor payloads live in separate safetensors blobs) never approaches
@@ -194,8 +198,6 @@ _MAX_METADATA_PKL_OPCODES = 24_000_000
 # Count opcodes only on files large enough for the ceiling to be reachable: below this
 # the count would tax every real load for a ceiling no stream that size can hit.
 _METADATA_PKL_PRESCAN_BYTES = 8 * 1024**2
-# Belt bound on the persisted PARTIAL failure-reason sentinel.
-_MAX_PARTIAL_REASON_CHARS = 200
 _BLOB_TENSOR_KEY = "data"
 
 
@@ -1239,6 +1241,7 @@ def load(
     # its class-definition fingerprint before this artifact is decoded.
     invalidate_static_class_attr_cache()
     bundle_path = Path(path)
+    refuse_stale_load(bundle_path, member=_bundle_visited is not None)
     if bundle_path.is_dir():
         # Version-gated merged-directory branch: the merged root manifest is a
         # different discriminated object from a trace bundle's manifest (it
@@ -1274,11 +1277,10 @@ def load(
             trust_custom_callables=trust_custom_callables,
             allowed_custom_callable_modules=allowed_custom_callable_modules,
         )
-    # Stable ``fields["code"]`` on the six distinct tl.load front-door causes so a
-    # caller can branch on the cause instead of parsing one content-free string
-    # a symlinked load path, an unreadable manifest, a non-object manifest
-    # root, a metadata-integrity refusal (tagged at the unpickle boundary below), a
-    # below-floor version, and a generic bundle-load failure.
+    # Stable ``fields["code"]`` on the six distinct tl.load front-door causes so a caller can
+    # branch on the cause instead of parsing one string: a symlinked load path, an unreadable
+    # manifest, a non-object manifest root, a metadata-integrity refusal (tagged at the
+    # unpickle boundary below), a below-floor version, and a generic bundle-load failure.
     _reject_symlink_path(bundle_path, context="bundle path", code="load_path_symlink_rejected")
     manifest_path = bundle_path / "manifest.json"
     metadata_path = bundle_path / "metadata.pkl"
@@ -2295,10 +2297,7 @@ def cleanup_tmp(path: str | Path, *, force: bool = False) -> list[Path]:
     # metacharacters in a legal filename (e.g. ``job*``) from widening the sweep --
     # and, crucially, the backup RESTORATION below -- to sibling bundles.
     escaped_name = glob.escape(bundle_path.name)
-    tmp_pattern = f"{escaped_name}.tmp.*"
-    for candidate in bundle_path.parent.glob(tmp_pattern):
-        if candidate.is_symlink():
-            raise ArtifactError(f"Refusing to clean symlink temp directory {candidate}.")
+    for candidate in sibling_staging_dirs(bundle_path):
         if not candidate.is_dir():
             continue
         if force or (candidate / PARTIAL_SENTINEL).exists():
@@ -3613,31 +3612,6 @@ def _make_backup_path(bundle_path: Path) -> Path:
     """
 
     return bundle_path.parent / f"{bundle_path.name}.bak.{uuid.uuid4().hex}"
-
-
-def _mark_partial(tmp_path: Path, *, reason: str | None = None) -> None:
-    """Best-effort mark a temp bundle directory as partial after failure.
-
-    Parameters
-    ----------
-    tmp_path:
-        Temporary bundle directory path.
-    reason:
-        Optional failure reason string to persist alongside the sentinel. Callers
-        pass a scrubbed value (the exception TYPE name, not ``str(exc)``, whose
-        message can carry object reprs / paths / values); this sink additionally
-        length-bounds it as a belt so recovery debris never grows unbounded
-        or leaks a large payload.
-    """
-
-    try:
-        if tmp_path.exists():
-            (tmp_path / PARTIAL_SENTINEL).write_text("", encoding="utf-8")
-            if reason is not None:
-                bounded = reason[:_MAX_PARTIAL_REASON_CHARS]
-                (tmp_path / REASON_SENTINEL).write_text(bounded, encoding="utf-8")
-    except OSError:
-        return
 
 
 def _run_save_recovery(

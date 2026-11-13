@@ -496,6 +496,38 @@ class TestArtifactHardening:
         backups = list(tmp_path.glob("merged.tlspec.bak.*"))
         assert backups, "the backup must remain recoverable"
 
+    def test_failed_overwrite_keeps_partial_staging_and_load_refuses(
+        self, gloo_world, tmp_path, monkeypatch
+    ):
+        """A failed overwrite restores the older artifact and keeps its staging dir PARTIAL,
+        so ``tl.load`` refuses ``newer_save_unfinished`` until ``cleanup_tmp`` accepts the
+        older copy (before: the staging dir was deleted and load served the older copy)."""
+
+        from torchlens.io import cleanup_tmp
+
+        merged = tl.merge_ranks([_capture()])
+        art = tmp_path / "merged.tlspec"
+        merged.save(art)
+        original_rename = Path.rename
+
+        def failing_install(self: Path, target: Any) -> Any:
+            if self.name.startswith("merged.tlspec.tmp.") and Path(target) == art:
+                raise OSError("simulated install failure")
+            return original_rename(self, target)
+
+        monkeypatch.setattr(Path, "rename", failing_install)
+        with pytest.raises(OSError, match="simulated install failure"):
+            merged.save(art, overwrite=True)
+        monkeypatch.undo()
+
+        (staging,) = tmp_path.glob("merged.tlspec.tmp.*")
+        assert (staging / "REASON.txt").read_text(encoding="utf-8") == "OSError"
+        with pytest.raises(tl.errors.ArtifactError) as info:
+            tl.load(art)
+        assert info.value.fields.get("code") == "newer_save_unfinished"
+        assert staging in cleanup_tmp(art)
+        tl.load(art)
+
 
 class TestRefusedSurfacesTyped:
     """R18-9 presenter half: contract-promised refusals are typed, never bare."""

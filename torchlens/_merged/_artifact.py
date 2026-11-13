@@ -30,6 +30,7 @@ from typing import Any
 
 from .._io import _json
 from .._io._durability import fsync_dir, fsync_tree
+from .._io._staging import settle_failed_staging
 from .._utils.hashing import update_hasher_from_file
 from ._engine import _STRUCTURAL_KINDS, PerRankRef, derive_merge
 from ._enums import (
@@ -443,9 +444,7 @@ def save_merged(merged: MergedTrace, path: str | Path, *, overwrite: bool = Fals
         fsync_dir(root.parent)
         if backup_root is not None:
             shutil.rmtree(backup_root, ignore_errors=True)
-    except BaseException:
-        if staging_root.exists():
-            shutil.rmtree(staging_root, ignore_errors=True)
+    except BaseException as exc:
         if backup_root is not None and not root.exists() and backup_root.exists():
             try:
                 backup_root.rename(root)
@@ -468,6 +467,7 @@ def save_merged(merged: MergedTrace, path: str | Path, *, overwrite: bool = Fals
                     TorchLensWarning,
                     stacklevel=2,
                 )
+        settle_failed_staging(staging_root, root, overwrite=overwrite, primary=exc)
         raise
 
 
@@ -886,7 +886,7 @@ def load_merged(path: str | Path) -> MergedTrace:
     load_degradations: list[str] = []
     for declared_rank, member_path in sorted(member_paths.items()):
         try:
-            trace = load_bundle(member_path)
+            trace = load_bundle(member_path, _bundle_visited=frozenset({root}))
         except (MemoryError, OSError):
             # ENOMEM/EIO during member load is an ENVIRONMENT failure, not
             # evidence about the artifact: the member's bytes were just read

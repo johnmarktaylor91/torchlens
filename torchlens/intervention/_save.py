@@ -17,6 +17,7 @@ import torch
 from .._errors import InvalidArgumentError
 from .._io._durability import fsync_tree
 from .._io._json import read_bounded
+from .._io._staging import settle_failed_staging
 from .._io.format3.contract import INTERVENTION_FILE
 from .._io.format3.payloads import PayloadStore
 from .._io.format3.recipe import (
@@ -133,7 +134,7 @@ def save_intervention(
     refuse_changed_staged_helpers(trace._intervention_spec, door="save_intervention")
     target_path = Path(path)
     _reject_symlink_path(target_path, context="intervention spec target")
-    tmp_path = target_path.parent / f"tmp.{uuid.uuid4().hex}"
+    tmp_path = target_path.parent / f"{target_path.name}.tmp.{uuid.uuid4().hex}"
     backup_path: Path | None = None
 
     try:
@@ -195,9 +196,7 @@ def save_intervention(
         _fsync_directory(target_path.parent)
         if backup_path is not None:
             shutil.rmtree(backup_path, ignore_errors=True)
-    except BaseException:
-        if tmp_path.exists():
-            shutil.rmtree(tmp_path, ignore_errors=True)
+    except BaseException as exc:
         if backup_path is not None and not target_path.exists() and backup_path.exists():
             try:
                 os.rename(backup_path, target_path)
@@ -214,6 +213,7 @@ def save_intervention(
                     UserWarning,
                     stacklevel=2,
                 )
+        settle_failed_staging(tmp_path, target_path, overwrite=overwrite, primary=exc)
         raise
 
 

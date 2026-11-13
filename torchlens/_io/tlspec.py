@@ -20,6 +20,7 @@ from .._errors import InvalidArgumentError
 from .._utils._record_group_table import record_member
 from . import TLSPEC_VERSION, refuse_bundle_exists
 from ._durability import _restrict_mode, _restrict_tree_modes, fsync_dir, fsync_tree
+from ._staging import settle_failed_staging
 from ._tlspec_identity import _backend_v2_fields, _model_fingerprint, _model_signature, _safe_len
 from ._tlspec_json_helpers import _json_int_or_none, _json_str_or_none, _utc_timestamp
 from .format3.container import write_members
@@ -320,18 +321,18 @@ class _TlSpecWriter:
                 # lose the new bundle, so a cleanup failure must not fail the
                 # save nor trigger a spurious restore.
                 shutil.rmtree(backup_path, ignore_errors=True)
-        except BaseException:
+        except BaseException as exc:
             # ``BaseException`` (not ``Exception``) so an interrupt unwinding
             # mid-swap still restores the old bundle; ``raise`` re-raises the
             # original unchanged, preserving control-flow semantics.
-            if tmp_path.exists():
-                shutil.rmtree(tmp_path, ignore_errors=True)
             if backup_path is not None and not target_path.exists() and backup_path.exists():
                 # The swap did not install the new bundle; put the old one back
                 # exactly where it was. If this restore itself fails, the old
                 # bundle survives under ``backup_path`` as a recovery artifact.
                 with contextlib.suppress(OSError):
                     os.replace(backup_path, target_path)
+            # An older bundle left at the target keeps the staging dir PARTIAL for tl.load.
+            settle_failed_staging(tmp_path, target_path, overwrite=overwrite, primary=exc)
             raise
 
     @classmethod

@@ -28,6 +28,7 @@ from typing import Any, NamedTuple
 
 from .._errors import InvalidArgumentError
 from .._io._durability import fsync_tree
+from .._io._staging import settle_failed_staging
 from .._io.format3.contract import INTERVENTION_FILE
 from .._io.format3.payloads import PayloadStore
 from .._io.format3.reader import validate_artifact
@@ -133,11 +134,9 @@ def _write_recipe_tree(tmp_path: Path, recipe: Recipe, save_level: SaveLevel) ->
     fsync_tree(tmp_path)
 
 
-def _restore_after_failed_save(tmp_path: Path, target_path: Path, backup_path: Path | None) -> None:
-    """Drop the half-written tree and put a displaced previous recipe back."""
+def _restore_after_failed_save(target_path: Path, backup_path: Path | None) -> None:
+    """Put a displaced previous recipe back after a failed save."""
 
-    if tmp_path.exists():
-        shutil.rmtree(tmp_path, ignore_errors=True)
     if backup_path is not None and not target_path.exists() and backup_path.exists():
         try:
             os.rename(backup_path, target_path)
@@ -183,7 +182,7 @@ def save_recipe(
     save_level = _coerce_save_level(level)
     target_path = Path(path)
     _reject_symlink_path(target_path, context="recipe target")
-    tmp_path = target_path.parent / f"tmp.{uuid.uuid4().hex}"
+    tmp_path = target_path.parent / f"{target_path.name}.tmp.{uuid.uuid4().hex}"
     backup_path: Path | None = None
     try:
         if target_path.exists() and not overwrite:
@@ -198,8 +197,9 @@ def save_recipe(
         _fsync_directory(target_path.parent)
         if backup_path is not None:
             shutil.rmtree(backup_path, ignore_errors=True)
-    except BaseException:
-        _restore_after_failed_save(tmp_path, target_path, backup_path)
+    except BaseException as exc:
+        _restore_after_failed_save(target_path, backup_path)
+        settle_failed_staging(tmp_path, target_path, overwrite=overwrite, primary=exc)
         raise
 
 
