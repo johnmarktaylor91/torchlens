@@ -59,16 +59,41 @@ def _dump(trace: Any, model: nn.Module | None = None) -> dict[str, Any]:
     mask's ``address`` rule hides only integers of twelve digits or more, which
     covers Linux heap addresses but not macOS ones (about ten digits). An id
     that is not one of ``model``'s modules is left as it is and still compared.
+
+    For the same reason the storage address inside each ``storage_key`` (a
+    ``(device, data_ptr, nbytes)`` tuple, ``buffer_writes.storage_key``) is
+    replaced by the order in which the dump first names it, so two keys on one
+    storage still read equal and keys on different storages still differ.
     """
 
     dump, _canon = snapshot_trace(trace, [(str(REPO_ROOT), "<repo>")], Mask(enabled=True))
     dump["trace"]["event_stream"]["fields"].pop("run_nonce", None)
     text = json.dumps(dump, default=repr, sort_keys=True).replace(trace.name, "<trace>")
-    loaded = json.loads(text)
+    loaded = _numbered_storage_addresses(json.loads(text), {})
     if model is None:
         return loaded
     names = {id(module): name or "<root>" for name, module in model.named_modules()}
     return _with_named_cache_modules(loaded, names)
+
+
+def _numbered_storage_addresses(value: Any, seen: dict[int, int]) -> Any:
+    """Replace the storage address of every canonical ``storage_key`` tuple by its first-seen order."""
+
+    if isinstance(value, dict):
+        out = {}
+        for key, entry in value.items():
+            parts = (
+                entry.get("__tuple__") if key == "storage_key" and isinstance(entry, dict) else None
+            )
+            if isinstance(parts, list) and len(parts) == 3 and isinstance(parts[1], int):
+                number = seen.setdefault(parts[1], len(seen))
+                out[key] = {**entry, "__tuple__": [parts[0], f"<storage {number}>", parts[2]]}
+            else:
+                out[key] = _numbered_storage_addresses(entry, seen)
+        return out
+    if isinstance(value, list):
+        return [_numbered_storage_addresses(entry, seen) for entry in value]
+    return value
 
 
 def _with_named_cache_modules(value: Any, names: dict[int, str]) -> Any:
@@ -427,6 +452,7 @@ def test_thin_modules_import_nothing_from_the_capture_cycle() -> None:
         "..._ir._row_journal",
         "..._utils.display",
         "..._utils._internal_read",
+        "..._utils.env_flags",
         "._ops_freeze_refs",
         "._ops_row_journal",
         "._thin_record",
