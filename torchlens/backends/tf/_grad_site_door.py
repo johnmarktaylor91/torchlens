@@ -55,7 +55,7 @@ def do_signal_plan(trace: Any, plan: Any, request: Any) -> Any:
         )
     import tensorflow as tf  # deferred: the door runs only for a TensorFlow trace
 
-    edits = []
+    edits: list[Any] = []
     for index, (site, edit) in enumerate(_pairs(plan.backward)):
         edits.extend(
             build_grad_site_edits(
@@ -82,4 +82,4 @@ def _pairs(half: tuple[Any, Any]) -> list[tuple[Any, Any]]:
     return [(site, edit)]
 
 
-__all__ = ["do_signal_plan"]
+__all__ = ("do_signal_plan",)

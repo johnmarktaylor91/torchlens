@@ -118,4 +118,4 @@ def _restored_stop_latch(trace: Any) -> Iterator[None]:
             trace.__dict__[_STOP_LATCH] = latch
 
 
-__all__ = ["preserved_module_counts", "run_tf_gradient_replay"]
+__all__ = ("preserved_module_counts", "run_tf_gradient_replay")

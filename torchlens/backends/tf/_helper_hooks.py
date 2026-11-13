@@ -215,4 +215,4 @@ _BUILDERS: dict[str, Callable[[Any, Any], Callable[[Any], Any]]] = {
 }
 
 
-__all__ = ["TF_SUPPORTED_HELPER_NAMES", "tf_helper_hook"]
+__all__ = ("TF_SUPPORTED_HELPER_NAMES", "tf_helper_hook")

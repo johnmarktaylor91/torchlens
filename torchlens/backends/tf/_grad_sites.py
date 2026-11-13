@@ -72,7 +72,7 @@ def arm_tf_grad_sites(trace: Any, tf: Any) -> None:
     output-slot labels). Call it on a finalized trace.
     """
 
-    edits = []
+    edits: list[Any] = []
     for index, clause in enumerate(staged_tf_grad_clauses(trace)):
         apply = tf_grad_apply(clause.decision.hook, tf)
         edits.extend(
@@ -148,7 +148,7 @@ def resolve_forward_labels(trace: Any, selector: Any) -> tuple[str, ...]:
     )
 
 
-__all__ = [
+__all__ = (
     "arm_tf_grad_sites",
     "grad_replay_clauses",
     "resolve_forward_labels",
@@ -157,4 +157,4 @@ __all__ = [
     "stage_tf_grad_clauses",
     "staged_tf_grad_clauses",
     "tf_grad_apply",
-]
+)
