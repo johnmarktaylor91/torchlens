@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1769 modules, 708519 lines, 0 modules without a docstring.
+85 packages, 1775 modules, 709344 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -54,12 +54,12 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.attribution` | Input-attribution methods for TorchLens. | 31 | 15152 |
 | `torchlens.attribution._graph` | Attribution graphs: direct linear effects between transcoder features, errors, tokens and logits. | 7 | 2550 |
 | `torchlens.attribution._onebackward` | One-backward attribution reads: one backward pass seeded at gradient edges resolved from existing op fields, returned as a :class:'ReadTa... | 11 | 3881 |
-| `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 24 | 7552 |
+| `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 24 | 7546 |
 | `torchlens.backends._protocols` | Per-backend ''BackendProtocol'' objects, kept import-light. | 8 | 928 |
 | `torchlens.backends.jax` | JAX backend preview exports. | 17 | 9645 |
 | `torchlens.backends.mlx` | Technical-preview MLX backend for TorchLens. | 17 | 6951 |
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6595 |
-| `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8577 |
+| `torchlens.backends.tf` | TensorFlow backend preview exports. | 19 | 9408 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 11 | 4583 |
 | `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 138 | 59358 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8876 |
@@ -1332,7 +1332,7 @@ One-backward attribution reads: one backward pass seeded at gradient edges resol
 
 ### `torchlens.backends`
 
-Backend Protocol and public registry exports for TorchLens adapters. (24 modules, 7552 lines)
+Backend Protocol and public registry exports for TorchLens adapters. (24 modules, 7546 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1353,7 +1353,7 @@ Backend Protocol and public registry exports for TorchLens adapters. (24 modules
 | `_intervention_evidence` | Which backends write the intervention evidence a Trace's pristine reading uses. | 31 |
 | `_invariants` | Run the metadata-invariant tripwire from a backend's validate path. | 23 |
 | `_module_returns` | Recorded module returns: how a preview backend hands module-call outputs to the finalizer. | 234 |
-| `_options` | Shared backend trace-option defaulting and rejection helpers. | 790 |
+| `_options` | Shared backend trace-option defaulting and rejection helpers. | 784 |
 | `_protocol` | Backend Protocol for unified TorchLens capture. | 354 |
 | `_root_frames` | The root call's frame in preview op module stacks. | 76 |
 | `_scorecard_rows` | ''backend_scorecard:<name>'' rows for ''tl.report.doctor''. | 206 |
@@ -1447,23 +1447,29 @@ Paddle backend preview. (14 modules, 6595 lines)
 
 ### `torchlens.backends.tf`
 
-TensorFlow backend preview exports. (13 modules, 8577 lines)
+TensorFlow backend preview exports. (19 modules, 9408 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | TensorFlow backend preview exports. | 8 |
-| `_raw_op_replay` | Raw-op replay kernels for TensorFlow validation. | 457 |
+| `_callback_attrs` | TensorFlow op-callback attribute and op-type normalization helpers. | 74 |
+| `_halt` | TensorFlow ''trace(stop_after=...)'': halt the eager forward at a frontier op. | 229 |
+| `_intervention_hooks` | Leaf helpers for the TensorFlow intervention layer (no imports from the capture core). | 162 |
+| `_intervention_plan` | TensorFlow intervention site and plan records (leaf: no capture-core imports). | 77 |
+| `_raw_op_replay` | Raw-op replay kernels for TensorFlow validation. | 458 |
+| `_source_context` | Source lines for TensorFlow eager ops: the user frames that ran each op. | 118 |
 | `_tensor_leaves` | Tensor-leaf helpers shared by the TensorFlow intervention engine (file cap split). | 62 |
-| `_tensor_probe` | TensorFlow tensor probes for the eager op-callback capture (file cap split). | 232 |
-| `_tf_compat` | TensorFlow compatibility probes for private eager-capture APIs. | 164 |
-| `backend` | TensorFlow backend preview with eager op-callback capture. | 1360 |
+| `_tensor_probe` | TensorFlow tensor probes for the eager op-callback capture (file cap split). | 277 |
+| `_tf_compat` | TensorFlow compatibility probes for private eager-capture APIs. | 224 |
+| `_wrap_registry` | Entry points the TensorFlow intervention layer wraps to present op outputs. | 156 |
+| `backend` | TensorFlow backend preview with eager op-callback capture. | 1309 |
 | `capabilities` | Registry-backed capability exports for the TensorFlow backend preview. | 38 |
 | `derived_grads` | TensorFlow derived-gradient replay (leaf + exact op-level intermediates). | 900 |
 | `funcgraph` | TensorFlow static FuncGraph capture engine. | 1624 |
-| `interventions` | TensorFlow static-label intervention layer. | 786 |
+| `interventions` | TensorFlow static-label intervention layer. | 777 |
 | `modules` | TensorFlow module discovery, call-stack patching, and parameter logs. | 773 |
-| `op_callback_capture` | TensorFlow eager op-callback capture engine. | 1097 |
-| `validation` | Non-vacuous replay validation for the TensorFlow eager backend. | 1076 |
+| `op_callback_capture` | TensorFlow eager op-callback capture engine. | 1065 |
+| `validation` | Non-vacuous replay validation for the TensorFlow eager backend. | 1077 |
 
 ### `torchlens.backends.tinygrad`
 
