@@ -219,10 +219,10 @@
         "tests/test_episode_capture.py",
         "tests/test_io_bundle.py",
         "tests/test_io_corruption.py",
+        "tests/test_io_stale_load.py",
         "tests/test_schema_v9_c07x_episode.py",
         "tests/test_tlspec_runnable_execution.py",
         "tests/test_tlspec_runnable_r31_input_metadata_witness.py",
-        "tests/test_tlspec_runnable_r67_input_structure.py",
         "tests/test_w051_episode_binding.py"
       ],
       "torchlens/_capture/_flops_shape_rules.py": [
@@ -1574,10 +1574,10 @@
       ],
       "torchlens/_data_classes/_trace_missing_attrs.py": [
         "tests/test_exports.py",
-        "tests/test_indexing_coherence.py",
         "tests/test_intervention_render_marks.py",
         "tests/test_io_bundle.py",
         "tests/test_io_policy_lookup_counters.py",
+        "tests/test_io_stale_load.py",
         "tests/test_merged_engine_hardening.py",
         "tests/test_tlspec_runnable_execution.py",
         "tests/test_treescope_cards_bridge.py"
@@ -2446,9 +2446,9 @@
         "tests/test_io_bundle.py",
         "tests/test_io_corruption.py",
         "tests/test_io_durability_bounds.py",
-        "tests/test_io_mediated_allocation_bypass.py",
         "tests/test_io_runnable_payload_integrity.py",
         "tests/test_io_scrub_policy.py",
+        "tests/test_io_stale_load.py",
         "tests/test_io_streaming.py",
         "tests/test_w051_io_artifact_anchors.py"
       ],
@@ -2465,7 +2465,7 @@
       "torchlens/_io/_artifact_anchors.py": [
         "tests/test_io_bundle.py",
         "tests/test_io_corruption.py",
-        "tests/test_io_durability_bounds.py",
+        "tests/test_io_stale_load.py",
         "tests/test_tlspec_runnable_execution.py",
         "tests/test_tlspec_runnable_r31_input_metadata_witness.py",
         "tests/test_tlspec_runnable_r67_input_structure.py",
@@ -2513,7 +2513,7 @@
         "tests/test_io_bundle.py",
         "tests/test_io_corruption.py",
         "tests/test_io_durability_bounds.py",
-        "tests/test_io_secio_hardening.py",
+        "tests/test_io_stale_load.py",
         "tests/test_tlspec_runnable_execution.py",
         "tests/test_tlspec_runnable_r31_input_metadata_witness.py",
         "tests/test_tlspec_runnable_r67_input_structure.py",
@@ -2543,7 +2543,7 @@
         "tests/test_format3_runnable_replay.py",
         "tests/test_io_bundle.py",
         "tests/test_io_corruption.py",
-        "tests/test_io_durability_bounds.py",
+        "tests/test_io_stale_load.py",
         "tests/test_tlspec_runnable_execution.py",
         "tests/test_tlspec_runnable_r31_input_metadata_witness.py",
         "tests/test_tlspec_runnable_r67_input_structure.py",
@@ -2592,7 +2592,7 @@
         "tests/test_io_bundle.py",
         "tests/test_io_corruption.py",
         "tests/test_io_durability_bounds.py",
-        "tests/test_io_secio_hardening.py",
+        "tests/test_io_stale_load.py",
         "tests/test_tlspec_runnable_execution.py",
         "tests/test_tlspec_runnable_r31_input_metadata_witness.py",
         "tests/test_tlspec_runnable_r67_input_structure.py",
@@ -2611,8 +2611,8 @@
       "torchlens/_io/_pickle_prescan.py": [
         "tests/test_io_bundle.py",
         "tests/test_io_corruption.py",
-        "tests/test_io_durability_bounds.py",
         "tests/test_io_mediated_allocation_bypass.py",
+        "tests/test_io_stale_load.py",
         "tests/test_tlspec_runnable_execution.py",
         "tests/test_tlspec_runnable_r31_input_metadata_witness.py",
         "tests/test_unpickle_c_path.py",
@@ -2622,7 +2622,7 @@
         "tests/test_io_bundle.py",
         "tests/test_io_corruption.py",
         "tests/test_io_durability_bounds.py",
-        "tests/test_io_secio_hardening.py",
+        "tests/test_io_stale_load.py",
         "tests/test_tlspec_runnable_execution.py",
         "tests/test_tlspec_runnable_r31_input_metadata_witness.py",
         "tests/test_tlspec_runnable_r67_input_structure.py",
@@ -2656,11 +2656,11 @@
         "tests/test_fastlog_halt.py",
         "tests/test_io_bundle.py",
         "tests/test_io_corruption.py",
+        "tests/test_io_stale_load.py",
         "tests/test_load_refuses_saved_by_2x.py",
         "tests/test_tlspec_runnable_execution.py",
         "tests/test_tlspec_runnable_r31_input_metadata_witness.py",
-        "tests/test_tlspec_runnable_r67_input_structure.py",
-        "tests/test_tlspec_runnable_r69_input_contract.py"
+        "tests/test_tlspec_runnable_r67_input_structure.py"
       ],
       "torchlens/_io/_runnable_param_identity.py": [
         "tests/test_format3_runnable_replay.py",
@@ -2683,10 +2683,10 @@
         "tests/test_tlspec_runnable_resolver.py"
       ],
       "torchlens/_io/_runtime_identity.py": [
-        "tests/composition_expectations/test_universe_registry.py",
         "tests/test_io_corruption.py",
         "tests/test_io_durability_bounds.py",
         "tests/test_io_interrupt_recovery.py",
+        "tests/test_io_stale_load.py",
         "tests/test_io_streaming.py",
         "tests/test_r59_writer_toctou.py",
         "tests/test_streaming_async.py",
@@ -2716,7 +2716,7 @@
         "tests/test_io_bundle.py",
         "tests/test_io_corruption.py",
         "tests/test_io_durability_bounds.py",
-        "tests/test_io_secio_hardening.py",
+        "tests/test_io_stale_load.py",
         "tests/test_tlspec_runnable_execution.py",
         "tests/test_tlspec_runnable_r31_input_metadata_witness.py",
         "tests/test_tlspec_runnable_r67_input_structure.py",
@@ -2753,7 +2753,7 @@
         "tests/test_io_bundle.py",
         "tests/test_io_corruption.py",
         "tests/test_io_durability_bounds.py",
-        "tests/test_io_secio_hardening.py",
+        "tests/test_io_stale_load.py",
         "tests/test_tlspec_runnable_execution.py",
         "tests/test_tlspec_runnable_r31_input_metadata_witness.py",
         "tests/test_tlspec_runnable_r67_input_structure.py",
@@ -2779,11 +2779,21 @@
         "tests/test_owned_record_displays.py",
         "tests/test_schema_v9_annotations.py"
       ],
+      "torchlens/_io/_staging.py": [
+        "tests/test_io_bundle.py",
+        "tests/test_io_corruption.py",
+        "tests/test_io_secio_hardening.py",
+        "tests/test_io_stale_load.py",
+        "tests/test_load_refuses_earlier_major.py",
+        "tests/test_merged_save_durability.py",
+        "tests/test_tlspec_runnable_execution.py",
+        "tests/test_tlspec_runnable_r31_input_metadata_witness.py"
+      ],
       "torchlens/_io/_tlspec_identity.py": [
         "tests/test_io_bundle.py",
         "tests/test_io_corruption.py",
         "tests/test_io_durability_bounds.py",
-        "tests/test_io_interrupt_recovery.py",
+        "tests/test_io_stale_load.py",
         "tests/test_tlspec_runnable_execution.py",
         "tests/test_tlspec_runnable_r31_input_metadata_witness.py",
         "tests/test_tlspec_runnable_r67_input_structure.py",
@@ -2794,6 +2804,7 @@
         "tests/test_exception_taxonomy.py",
         "tests/test_io_determinism_fixes.py",
         "tests/test_io_interrupt_recovery.py",
+        "tests/test_io_stale_load.py",
         "tests/test_r59_writer_toctou.py",
         "tests/test_tlspec_unified.py"
       ],
@@ -3019,20 +3030,20 @@
         "tests/test_format3_round_trip_fidelity.py",
         "tests/test_io_bundle.py",
         "tests/test_io_corruption.py",
+        "tests/test_io_stale_load.py",
         "tests/test_tlspec_runnable_execution.py",
         "tests/test_tlspec_runnable_r31_input_metadata_witness.py",
-        "tests/test_tlspec_runnable_r67_input_structure.py",
-        "tests/test_tlspec_runnable_r69_input_contract.py"
+        "tests/test_tlspec_runnable_r67_input_structure.py"
       ],
       "torchlens/_io/format3/route.py": [
         "tests/test_hf_pickled_weights_route.py",
         "tests/test_io_bundle.py",
         "tests/test_io_corruption.py",
         "tests/test_io_embedded_tensor_route_refused.py",
+        "tests/test_io_stale_load.py",
         "tests/test_tlspec_runnable_execution.py",
         "tests/test_tlspec_runnable_r31_input_metadata_witness.py",
-        "tests/test_tlspec_runnable_r67_input_structure.py",
-        "tests/test_tlspec_runnable_r69_input_contract.py"
+        "tests/test_tlspec_runnable_r67_input_structure.py"
       ],
       "torchlens/_io/format3/runnable.py": [
         "tests/test_format3_runnable_replay.py",
@@ -3120,11 +3131,11 @@
       "torchlens/_io/injection_codec.py": [
         "tests/test_io_bundle.py",
         "tests/test_io_corruption.py",
+        "tests/test_io_stale_load.py",
         "tests/test_log_injections_s2_forgery.py",
         "tests/test_log_injections_s2_persistence.py",
         "tests/test_tlspec_runnable_execution.py",
         "tests/test_tlspec_runnable_r31_input_metadata_witness.py",
-        "tests/test_tlspec_runnable_r67_input_structure.py",
         "tests/test_w051_bind_fixwave.py"
       ],
       "torchlens/_io/lazy.py": [
@@ -3226,11 +3237,11 @@
         "tests/test_format3_contract.py",
         "tests/test_io_bundle.py",
         "tests/test_io_corruption.py",
+        "tests/test_io_stale_load.py",
         "tests/test_persist_honesty_save_options.py",
         "tests/test_persist_honesty_structure_only.py",
         "tests/test_prebump_roundtrip_acceptance.py",
-        "tests/test_tlspec_runnable_execution.py",
-        "tests/test_tlspec_runnable_r31_input_metadata_witness.py"
+        "tests/test_tlspec_runnable_execution.py"
       ],
       "torchlens/_io/scrub.py": [
         "tests/test_grind_b4_lane_p.py",
@@ -3255,19 +3266,19 @@
       "torchlens/_io/state_contract.py": [
         "tests/test_io_bundle.py",
         "tests/test_io_corruption.py",
+        "tests/test_io_stale_load.py",
         "tests/test_load_refuses_earlier_major.py",
         "tests/test_rehydration_floor.py",
         "tests/test_tlspec_envelope_state_contract.py",
         "tests/test_tlspec_runnable_execution.py",
-        "tests/test_tlspec_runnable_r31_input_metadata_witness.py",
         "tests/test_w051_io_artifact_anchors.py"
       ],
       "torchlens/_io/state_keys.py": [
-        "tests/surface_oracle/test_surface_oracle.py",
         "tests/test_exception_taxonomy.py",
         "tests/test_gc.py",
         "tests/test_grind_b4_lane_p.py",
         "tests/test_io_bundle.py",
+        "tests/test_io_stale_load.py",
         "tests/test_record_field_policy.py",
         "tests/test_tlspec_rehydrate_no_planted_call.py",
         "tests/test_tlspec_runnable_execution.py"
@@ -3286,6 +3297,7 @@
         "tests/test_exception_taxonomy.py",
         "tests/test_fastlog/test_storage_modes.py",
         "tests/test_fastlog_reason_redaction.py",
+        "tests/test_io_stale_load.py",
         "tests/test_io_streaming.py",
         "tests/test_r18p_streaming_lazy.py",
         "tests/test_r59_writer_toctou.py",
@@ -3294,8 +3306,8 @@
       "torchlens/_io/tensor_policy.py": [
         "tests/test_io_bundle.py",
         "tests/test_io_corruption.py",
-        "tests/test_io_durability_bounds.py",
         "tests/test_io_security_r27.py",
+        "tests/test_io_stale_load.py",
         "tests/test_tlspec_runnable_execution.py",
         "tests/test_tlspec_runnable_r31_input_metadata_witness.py",
         "tests/test_tlspec_runnable_r67_input_structure.py",
@@ -12472,9 +12484,9 @@
         "tests/test_attested_coupling_flip.py",
         "tests/test_format3_writer.py",
         "tests/test_grad_site_doors.py",
-        "tests/test_interv_substrate_fire_evidence.py",
         "tests/test_interv_substrate_spec_noun.py",
         "tests/test_intervene_multiclause_module.py",
+        "tests/test_io_stale_load.py",
         "tests/test_surgery_live_bind.py",
         "tests/test_w051_bind_fixwave.py"
       ],
@@ -12572,10 +12584,10 @@
       "torchlens/intervention/_rerun_predicate.py": [
         "tests/test_interv_substrate_addressing.py",
         "tests/test_io_security_r27.py",
+        "tests/test_io_stale_load.py",
         "tests/test_masked_edit_portable.py",
         "tests/test_persist_honesty_intervention_spec.py",
         "tests/test_r12_import_ref_rce.py",
-        "tests/test_rerun_state_snapshot_sharing.py",
         "tests/test_state_hygiene_oracles.py",
         "tests/test_subspace_spec_portable.py"
       ],
@@ -12668,10 +12680,10 @@
         "tests/test_interv_substrate_addressing.py",
         "tests/test_intervention_phase10.py",
         "tests/test_io_security_r27.py",
+        "tests/test_io_stale_load.py",
         "tests/test_masked_edit_portable.py",
         "tests/test_persist_honesty_intervention_spec.py",
         "tests/test_r12_import_ref_rce.py",
-        "tests/test_subspace_mask_portable.py",
         "tests/test_subspace_spec_portable.py"
       ],
       "torchlens/intervention/_site_keys.py": [
