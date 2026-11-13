@@ -594,11 +594,11 @@ def _feature_dim(
 
 
 def _unit_axis_reason(trace: Trace, out: Any, dim: int | None) -> str:
-    """Explain spatial preview rows whose unit layout the trace does not specify."""
+    """Explain non-PyTorch spatial rows whose unit layout the trace does not specify."""
 
     if dim is None and isinstance(out, torch.Tensor) and out.ndim > 2:
         if str(trace._provenance_backend) != TORCH_BACKEND_NAME:
-            return "unit axis unavailable for preview spatial output; pass dim explicitly"
+            return "unit axis unavailable for non-PyTorch spatial output; pass dim explicitly"
     return "invalid-dim"
 
 

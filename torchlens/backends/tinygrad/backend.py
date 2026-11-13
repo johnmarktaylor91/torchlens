@@ -1,4 +1,4 @@
-"""UOp-snapshot tinygrad backend preview."""
+"""UOp-snapshot tinygrad backend."""
 
 from __future__ import annotations
 
@@ -122,7 +122,7 @@ from ._uop_graph import _data_flow_uops, _op_func_name, _unique_uops, _uop_name
 
 @dataclass(frozen=True)
 class GradOptions:
-    """tinygrad derived-gradient preview options.
+    """tinygrad derived-gradient options.
 
     Parameters
     ----------
@@ -284,7 +284,7 @@ class TinygradBackend:
         output_device
             Must be ``"same"``.
         activation_transform
-            Unsupported for tinygrad in this preview.
+            Unsupported for tinygrad.
         save_raw_activations
             Must be true.
         detach_saved_activations
@@ -306,11 +306,11 @@ class TinygradBackend:
         verbose
             Stored on the returned trace.
         backward_ready
-            Unsupported for tinygrad in this preview.
+            Unsupported for tinygrad.
         name
             Trace label.
         transform
-            Unsupported for tinygrad in this preview.
+            Unsupported for tinygrad.
         raw_input
             Original user input.
         save_raw_input
@@ -322,9 +322,9 @@ class TinygradBackend:
         save_transformed_output
             Transformed-output save policy.
         layer_visualizers
-            Unsupported for tinygrad in this preview.
+            Unsupported for tinygrad.
         save_visualizations
-            Unsupported for tinygrad in this preview.
+            Unsupported for tinygrad.
         lookback
             Predicate lookback window. Only the default ``0`` is supported.
         lookback_payload_policy
@@ -429,7 +429,7 @@ class TinygradBackend:
         grad_options = None if _is_missing(grad_options) else grad_options
         if random_seed is not None:
             raise BackendUnsupportedError(
-                "tinygrad backend preview does not support random_seed; pass explicit RNG "
+                "The tinygrad backend does not support random_seed; pass explicit RNG "
                 "state through the model/input surface instead.",
                 code="explicit_seed_unsupported",
             )
@@ -478,7 +478,7 @@ class TinygradBackend:
         )
         if not (outputs := tuple(self._tensor_leaves(output))):
             raise BackendUnsupportedError(
-                "tinygrad backend preview requires at least one tinygrad Tensor output.",
+                "The tinygrad backend requires at least one tinygrad Tensor output.",
                 code="tensor_output_required",
             )
         trace._cost_forward_duration = Duration(time.time() - trace._provenance_start_time)
@@ -558,7 +558,7 @@ class TinygradBackend:
             output = model(*args, **self._call_kwargs)
         if self._input_identities(args) != input_identities:
             raise BackendUnsupportedError(
-                "tinygrad backend preview cannot capture Tensor.assign(), Tensor.replace(), "
+                "The tinygrad backend cannot capture Tensor.assign(), Tensor.replace(), "
                 "or setitem input mutation inside the traced callable yet; return a pure lazy "
                 "tinygrad expression instead.",
                 code="input_mutation_unsupported",
@@ -1703,7 +1703,7 @@ class TinygradBackend:
         version = getattr(tinygrad, "__version__", None)
         if version not in {"0.13.0", None}:
             raise BackendUnsupportedError(
-                f"tinygrad backend preview is pinned to tinygrad==0.13.0; found {version!r}.",
+                f"The tinygrad backend is pinned to tinygrad==0.13.0; found {version!r}.",
                 code="runtime_version_unsupported",
             )
 
@@ -1724,12 +1724,12 @@ class TinygradBackend:
         leaves = call_input_leaves(args, self._call_kwargs)
         if not any(self.is_tensor(leaf) for _path, leaf in leaves):
             raise BackendUnsupportedError(
-                "tinygrad backend preview requires tinygrad Tensor inputs.",
+                "The tinygrad backend requires tinygrad Tensor inputs.",
                 code="tinygrad_input_required",
             )
 
     def _reject_unsupported_options(self, **options: Any) -> None:
-        """Reject public trace options outside the tinygrad preview surface.
+        """Reject public trace options outside the tinygrad backend surface.
 
         Parameters
         ----------

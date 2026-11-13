@@ -133,7 +133,7 @@ from .wrappers import is_alias_allowed_op, paddle_tap_observer, unwrap_paddle, w
 
 @dataclass(frozen=True)
 class GradOptions:
-    """Paddle derived-gradient preview options.
+    """Paddle derived-gradient options.
 
     Parameters
     ----------

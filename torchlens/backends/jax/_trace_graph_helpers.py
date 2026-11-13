@@ -1,4 +1,4 @@
-"""Trace-graph helpers for the JAX preview backend's validation oracles.
+"""Trace-graph helpers for the JAX backend's validation oracles.
 
 Saved-output lookup on the materialized trace graph (single, multi-output and
 region-boundary ops), the parent-perturbation oracle that tells a genuine data
