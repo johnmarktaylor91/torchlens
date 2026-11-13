@@ -8,8 +8,8 @@ fingerprint and the trace. These tests pin the soundness side of that cache:
   (container structure, the observability-session reader, autocast);
 * facts that can change inside a forward stay per-call reads (the observability
   session, the grad mode carried in the autocast snapshot);
-* equal autocast snapshots are one object inside a trace and never shared by two
-  traces.
+* no op shares a mutable autocast snapshot with another op: equal snapshots read
+  equal per op, and changing one op's snapshot leaves every other op's unchanged.
 """
 
 from __future__ import annotations
@@ -159,17 +159,23 @@ def test_grad_mode_inside_forward_is_recorded_per_op() -> None:
     assert grad_enabled("sub") is True
 
 
-def test_equal_autocast_snapshots_are_one_object_per_trace() -> None:
-    """Ops with equal autocast state share a snapshot; two traces share none."""
+def test_autocast_snapshots_are_equal_per_op_and_never_shared() -> None:
+    """Equal autocast snapshots read equal per op; no op's snapshot is another's."""
 
     model, x = _FlagModel(), torch.ones(2)
     first, second = tl.trace(model, x), tl.trace(model, x)
-    first_states = [op.call.autocast_state for op in _ops(first, "add") + _ops(first, "mul")]
+    first_ops = _ops(first, "add") + _ops(first, "mul")
+    first_states = [op.call.autocast_state for op in first_ops]
     second_states = [op.call.autocast_state for op in _ops(second, "add") + _ops(second, "mul")]
     assert len(first_states) == 2
-    assert len({id(state) for state in first_states}) == 1
-    assert first_states[0] == second_states[0]
-    assert not {id(state) for state in first_states} & {id(state) for state in second_states}
+    assert first_states[0] == first_states[1] == second_states[0]
+    expected = {device: dict(entry) for device, entry in first_states[1].items()}
+    changed = first_states[0]
+    changed["__execution__"]["grad_enabled"] = not changed["__execution__"]["grad_enabled"]
+    changed["__extra__"] = {"enabled": True}
+    for op in first_ops[1:]:
+        assert op.call.autocast_state == expected
+    assert second_states[0] == expected
 
 
 def test_session_facts_are_read_again_for_a_new_session() -> None:
