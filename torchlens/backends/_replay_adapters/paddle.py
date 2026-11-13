@@ -282,10 +282,11 @@ def can_replay(trace: Any, op: Any) -> str | None:
     site = _site(trace, op)
     if site is None:
         return _REASON_NO_CAPTURE
-    gap = _trace_gap(trace)
-    if gap is not None:
-        return gap
-    capture = site.capture
+    return _trace_gap(trace) or _capture_refusal(site.capture)
+
+
+def _capture_refusal(capture: Any) -> str | None:
+    """Why one recorded call cannot be replayed, or ``None``."""
     markers = tuple(getattr(capture, "capture_gap_markers", ()))
     if markers:
         return f"opaque region: {markers[0]}"
@@ -293,9 +294,7 @@ def can_replay(trace: Any, op: Any) -> str | None:
         return None
     if str(capture.op_name) not in ALLOWLIST or not callable(capture.func):
         return f"unlisted raw op: {capture.op_name!r}"
-    if _dropout_is_random(capture):
-        return _REASON_RANDOM
-    return None
+    return _REASON_RANDOM if _dropout_is_random(capture) else None
 
 
 def _require(trace: Any, op: Any) -> _Site:
@@ -423,7 +422,7 @@ def close(expected: Any, actual: Any) -> bool:
 
 
 def _encode_literal(value: Any) -> Any:
-    """Encode one non-tensor template leaf as recipe data (essential type switch)."""
+    """Encode one non-tensor template leaf as recipe data."""
     if value is None or type(value) in (bool, int, float, complex, str):
         return value
     if isinstance(value, (tuple, list)):
@@ -433,18 +432,25 @@ def _encode_literal(value: Any) -> Any:
         if any(type(key) is not str or key in _TAGS for key in value):
             raise ReplayRefusal("type", "literal mapping with a non-str or reserved key")
         return {key: _encode_literal(item) for key, item in value.items()}
+    return _encode_tagged(value)
+
+
+def _encode_tagged(value: Any) -> dict[str, Any]:
+    """Tag one non-JSON literal: Ellipsis, a slice, a NumPy scalar or dtype, a Paddle dtype."""
     if value is Ellipsis:
-        return {_TAG_ELLIPSIS: True}
-    if isinstance(value, slice):
-        return {_TAG_SLICE: _encode_literal((value.start, value.stop, value.step))}
-    if isinstance(value, np.generic):
-        return {_TAG_NP_SCALAR: (str(value.dtype), _encode_literal(value.item()))}
-    if isinstance(value, np.dtype):
-        return {_TAG_NP_DTYPE: str(value)}
-    dtype_name = _paddle_dtype_name(value)
-    if dtype_name is not None:
-        return {_TAG_DTYPE: dtype_name}
-    raise ReplayRefusal("type", f"literal of type {type(value).__name__}")
+        tagged: dict[str, Any] = {_TAG_ELLIPSIS: True}
+    elif isinstance(value, slice):
+        tagged = {_TAG_SLICE: _encode_literal((value.start, value.stop, value.step))}
+    elif isinstance(value, np.generic):
+        tagged = {_TAG_NP_SCALAR: (str(value.dtype), _encode_literal(value.item()))}
+    elif isinstance(value, np.dtype):
+        tagged = {_TAG_NP_DTYPE: str(value)}
+    else:
+        dtype_name = _paddle_dtype_name(value)
+        if dtype_name is None:
+            raise ReplayRefusal("type", f"literal of type {type(value).__name__}")
+        tagged = {_TAG_DTYPE: dtype_name}
+    return tagged
 
 
 def _paddle_dtype_name(value: Any) -> str | None:
@@ -468,16 +474,23 @@ def _decode_literal(node: Any) -> Any:
         return node
     if len(node) == 1 and next(iter(node)) in _TAGS:
         ((tag, payload),) = node.items()
-        if tag == _TAG_ELLIPSIS:
-            return Ellipsis
-        if tag == _TAG_SLICE:
-            return slice(*_decode_literal(payload))
-        if tag == _TAG_NP_SCALAR:
-            return np.dtype(payload[0]).type(payload[1])
-        if tag == _TAG_NP_DTYPE:
-            return np.dtype(payload)
-        return _decode_paddle_dtype(payload)
+        return _decode_tagged(tag, payload)
     return {key: _decode_literal(item) for key, item in node.items()}
+
+
+def _decode_tagged(tag: str, payload: Any) -> Any:
+    """Rebuild one tagged literal (inverse of :func:`_encode_tagged`)."""
+    if tag == _TAG_ELLIPSIS:
+        value: Any = Ellipsis
+    elif tag == _TAG_SLICE:
+        value = slice(*_decode_literal(payload))
+    elif tag == _TAG_NP_SCALAR:
+        value = np.dtype(payload[0]).type(payload[1])
+    elif tag == _TAG_NP_DTYPE:
+        value = np.dtype(payload)
+    else:
+        value = _decode_paddle_dtype(payload)
+    return value
 
 
 def _decode_paddle_dtype(name: Any) -> Any:
@@ -749,7 +762,7 @@ def bind_recipes(
     trace._paddle_capture_gap_markers = [m for c in captures for m in c.capture_gap_markers]
 
 
-__all__ = [
+__all__ = (
     "ALLOWLIST",
     "BACKEND",
     "add",
@@ -763,4 +776,4 @@ __all__ = [
     "to_host",
     "vjp",
     "zeros_like",
-]
+)
