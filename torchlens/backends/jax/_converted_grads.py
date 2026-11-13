@@ -29,7 +29,12 @@ from ..._data_classes.derived_grad import (
     set_intermediate_derived_grads,
 )
 from ...backends.registry import BackendUnsupportedError
-from ._edited_grads import EditedProgram, edited_closed_jaxpr, edited_program_of
+from ._edited_grads import (
+    EditedProgram,
+    edited_closed_jaxpr,
+    edited_grads_refusal,
+    edited_program_of,
+)
 from ._host_state import _reject_closed_over_host_state
 
 
@@ -189,6 +194,13 @@ def attach_jax_derived_grads(
     the raw path unchanged.
     """
 
+    if getattr(trace, "is_stopped", False) is True:
+        raise edited_grads_refusal(
+            "a capture halted by stop_after= has no gradient program for its halted "
+            "boundary yet; differentiating the whole jaxpr would rerun past the stop. "
+            "Drop stop_after= or grad_options=.",
+            code="intervention_with_derived_grads_unsupported",
+        )
     model, traced, args, static_argnums = capture[:4]
     grad_options, control_flow = capture.grad_options, capture.control_flow
     edits = edited_program_of(backend, trace)

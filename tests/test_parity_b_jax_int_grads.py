@@ -272,3 +272,21 @@ def test_unmatched_edit_keeps_clean_grads() -> None:
         )
     clean_p, _ = _hand_grads(_model, params, x)
     assert jnp.allclose(trace.autograd.derived_grads["params.w"].grad, clean_p["w"], atol=1e-6)
+
+
+def test_halted_capture_refuses_derived_grads_typed() -> None:
+    """A trace halted by ``stop_after=`` never differentiates the whole jaxpr."""
+
+    from types import SimpleNamespace
+
+    from torchlens.backends.jax._converted_grads import attach_jax_derived_grads
+
+    with pytest.raises(BackendUnsupportedError) as caught:
+        attach_jax_derived_grads(
+            object(),
+            trace=SimpleNamespace(is_stopped=True),
+            capture=cast(Any, None),
+            derive=lambda *_args: None,
+        )
+    error = cast(Any, caught.value)
+    assert (getattr(error, "code", None) or error.fields.get("code")) == _CODE
