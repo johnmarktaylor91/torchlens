@@ -471,7 +471,6 @@ TINYGRAD_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
 
 PADDLE_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
     backend_name="paddle",
-    input_kwargs_message="paddle backend preview supports positional args only.",
     full_save_message="paddle backend preview is full-save only; save shaping is unsupported.",
     rejected_truthy_messages={
         name: (f"paddle backend preview does not support {name}; full-save forward capture only.")
@@ -480,7 +479,6 @@ PADDLE_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
             "detach_saved_activations",
             "save_grads",
             "save_args",
-            "save_source_context",
             "save_rng",
             "backward_ready",
             "transform",
