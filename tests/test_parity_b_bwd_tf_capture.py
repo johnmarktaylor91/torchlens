@@ -31,6 +31,7 @@ from torchlens.backends.tf.op_callback_capture import TFEagerCaptureSession  # n
 from torchlens.errors import RunCapabilityUnavailableError  # noqa: E402
 from torchlens.validation._backward_neutral import (  # noqa: E402
     BackwardCheckResult,
+    RecordedBackward,
     check_backward_records,
     recorded_backward_from_trace,
 )
@@ -151,14 +152,31 @@ def check_pass(trace: Any, pass_number: int) -> BackwardCheckResult:
         for (label, _), grad in zip(known, grads, strict=True)
         if grad is not None
     }
-    recorded = recorded_backward_from_trace(trace, pass_number)
-    return check_backward_records(trace, ADAPTER, graph, recorded, leaf_grads)
+    return check_backward_records(trace, ADAPTER, graph, _recorded(trace, pass_number), leaf_grads)
+
+
+def _recorded(trace: Any, pass_number: int) -> RecordedBackward:
+    """The pass's records keyed by the labels the replay adapter's graph uses.
+
+    ``recorded_backward_from_trace`` keys gradients by ``Op.layer_label``; the
+    TensorFlow adapter's recipes name ops by ``Op.label`` (``"relu_1_5:1"``),
+    so the gradients are re-read here under ``Op.label``. Same values, same
+    checks: only the key differs.
+    """
+
+    calls = recorded_backward_from_trace(trace, pass_number).calls
+    grads = {}
+    for op in trace._layer_list:
+        for record in op._slot("_grad_records") or ():
+            if record.backward_pass_number == pass_number and record.grad is not None:
+                grads[op.label] = record.grad
+    return RecordedBackward(calls=calls, grads=grads)
 
 
 def _labels(trace: Any, pass_number: int) -> dict[str, Any]:
     """What the validator keyed on, for a failure message."""
 
-    recorded = recorded_backward_from_trace(trace, pass_number)
+    recorded = _recorded(trace, pass_number)
     return {
         "calls": sorted(recorded.calls),
         "grads": sorted(recorded.grads),
