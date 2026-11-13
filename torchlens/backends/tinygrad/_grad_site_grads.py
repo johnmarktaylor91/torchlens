@@ -100,8 +100,8 @@ def _seed(trace: Any, adapter: Any, values: dict[str, Any], loss_fn: Any) -> dic
     label = str(outputs[0]._label_raw) if recipe is None else recipe.output_slots[0]
     from tinygrad import Tensor
 
-    leaf = Tensor(values[label].numpy())
-    leaf.requires_grad = True
+    # tinygrad 0.13 takes requires_grad= at runtime; its annotations omit it.
+    leaf = Tensor(values[label].numpy(), requires_grad=True)  # type: ignore[call-arg]
     loss = loss_fn(leaf) if loss_fn is not None else leaf
     if tuple(loss.shape) not in ((), (1,)):
         raise ValueError(

@@ -35,6 +35,9 @@ if TYPE_CHECKING:
 
 __tl_layer__ = "L2"
 
+# The one tinygrad method the edited gradient run wraps (the capture observer wraps it too).
+_PATCHED_METHOD = "_apply_uop"
+
 
 class _EditedGradientRun:
     """Re-apply an edit at fixed call numbers while the gradient forward runs.
@@ -77,7 +80,7 @@ class _EditedGradientRun:
             return returned
 
         # The capture observer replaces the same tinygrad method the same way.
-        Tensor._apply_uop = wrapped  # type: ignore[method-assign]
+        setattr(Tensor, _PATCHED_METHOD, wrapped)
         return self
 
     def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
@@ -85,7 +88,7 @@ class _EditedGradientRun:
 
         from tinygrad import Tensor
 
-        Tensor._apply_uop = self._original  # type: ignore[method-assign]
+        setattr(Tensor, _PATCHED_METHOD, self._original)
 
 
 def _edited_model(model: Callable[..., Any], run: _EditedGradientRun) -> Callable[..., Any]:
