@@ -1508,15 +1508,15 @@ def test_jax_capture_index_map_survives_selective_save_filtering() -> None:
     assert all(trace[label].out is None for label in unsaved_capture_labels)
 
 
-def test_jax_value_dependent_save_predicate_rejected_with_traced_value_blocker() -> None:
-    """JAX should reject value-dependent save predicates with the traced-value blocker."""
+def test_jax_value_dependent_save_predicate_runs_post_capture() -> None:
+    """A ``tl.where`` save predicate runs on the finished JAX trace instead of refusing."""
 
-    with pytest.raises(BackendUnsupportedError, match="concrete activation values"):
-        _trace_jax(
-            _mlp,
-            (_params(), jnp.ones((2, 3))),
-            save=tl.where(lambda op: op.out is not None),
-        )
+    trace = _trace_jax(
+        _mlp,
+        (_params(), jnp.ones((2, 3))),
+        save=tl.where(lambda ctx: ctx.func_name == "dot_general"),
+    )
+    assert {op.func_name for op in trace.saved_ops} == {"dot_general"}
 
 
 def test_jax_trace_unrolls_scan_and_groups_body_iterations() -> None:

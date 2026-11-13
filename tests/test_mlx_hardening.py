@@ -784,7 +784,6 @@ def test_mlx_static_label_contains_and_composite_save_work() -> None:
     ("selector", "pattern"),
     [
         (tl.model_output(0), "unsupported selector kind 'output'"),
-        (tl.where(_always_true, name_hint="always"), "tl.where"),
     ],
 )
 @pytest.mark.optional
@@ -796,6 +795,15 @@ def test_mlx_static_save_rejects_unsupported_selector_kinds(
 
     with pytest.raises(BackendUnsupportedError, match=pattern):
         tl.trace(TinyMLP(), _tiny_mlp_input(), save=selector)
+
+
+@pytest.mark.optional
+def test_mlx_where_save_runs_post_capture() -> None:
+    """``tl.where`` through ``tl.trace`` applies on the finished MLX trace."""
+
+    trace = tl.trace(TinyMLP(), _tiny_mlp_input(), save=tl.where(_always_true, name_hint="always"))
+    full = tl.trace(TinyMLP(), _tiny_mlp_input())
+    assert list(trace.saved_ops.keys()) == list(full.saved_ops.keys())
 
 
 @pytest.mark.optional

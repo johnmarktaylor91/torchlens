@@ -202,7 +202,7 @@ def backend_unit_axis(trace: Trace, op: Op, out: Any, memo: dict[str, int]) -> i
 def _same_shape_parents(trace: Trace, op: Op, shape: tuple[int, ...]) -> list[Op]:
     """Return every parent op whose output has exactly ``shape``, in parent order."""
 
-    parents = (_op_from_label(trace, str(label)) for label in op.parents or ())
+    parents = (_op_from_label(trace, str(label)) for label in getattr(op, "parents", None) or ())
     return [
         parent
         for parent in parents
