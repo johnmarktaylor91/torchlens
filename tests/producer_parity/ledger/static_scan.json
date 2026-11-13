@@ -6369,6 +6369,22 @@
  },
  {
   "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/backends/tf/_halt.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "label_raw",
+  "file": "torchlens/backends/tf/_halt.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "modules",
   "file": "torchlens/backends/tf/_tf_compat.py",
   "has_default": false,
@@ -6481,27 +6497,11 @@
  },
  {
   "ambiguous": true,
-  "field": "kind",
+  "field": "label_raw",
   "file": "torchlens/backends/tf/interventions.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "label_raw",
-  "file": "torchlens/backends/tf/interventions.py",
-  "has_default": false,
-  "sites": 4,
-  "via_getattr": false
- },
- {
-  "ambiguous": false,
-  "field": "record_context",
-  "file": "torchlens/backends/tf/interventions.py",
-  "has_default": true,
-  "sites": 2,
-  "via_getattr": true
  },
  {
   "ambiguous": true,
@@ -6524,7 +6524,7 @@
   "field": "label_raw",
   "file": "torchlens/backends/tf/op_callback_capture.py",
   "has_default": false,
-  "sites": 20,
+  "sites": 21,
   "via_getattr": false
  },
  {

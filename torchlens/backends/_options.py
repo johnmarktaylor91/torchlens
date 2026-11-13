@@ -360,14 +360,11 @@ MLX_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
 TF_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
     runtime_option_names=frozenset(
         {
-            "stop_after",
             "storage",
             "streaming",
         }
     ),
-    runtime_message=(
-        "tf backend preview does not support runtime-mutation or stop-early options: {names}."
-    ),
+    runtime_message=("tf backend preview does not support runtime-mutation options: {names}."),
     fallback_message="tf backend preview does not support: {names}.",
     inert_values={
         "lookback": 0,
@@ -376,11 +373,9 @@ TF_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
 )
 """Extra public-kwarg rejection policy for the TensorFlow preview backend.
 
-``intervene``/``halt`` left this table when tf lifted the ``interventions``
-capability: ``intervene=`` dispatches for real, and ``halt=`` refuses typed
-inside the tf capture path (a declarative rejection here would classify the
-True flag as a self-contradictory registration). ``facets`` is popped and
-snapshotted before this policy runs (``facet_recipes`` record)."""
+``intervene=`` and ``stop_after=`` (``halt``) are not in this table: both run live
+in the tf eager capture path and are popped before this policy runs, as is
+``facets`` (``facet_recipes`` record)."""
 
 
 JAX_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
@@ -541,7 +536,6 @@ TF_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
             "detach_saved_activations",
             "save_grads",
             "save_args",
-            "save_source_context",
             "save_rng",
             "backward_ready",
             "transform",

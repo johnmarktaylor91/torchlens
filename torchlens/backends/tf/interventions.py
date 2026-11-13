@@ -8,9 +8,14 @@ capture spine:
 1. Module-boundary sites (``tl.module`` / ``tl.in_module`` conditions)
    substitute Keras/`tf.Module` call outputs through the existing module
    ``__call__`` patch.
-2. Op-level sites (``tl.func`` / ``tl.label`` / ``tl.label_contains`` conditions)
-   substitute returns of a curated registry of python entry points that
-   Keras-3 eager execution actually flows through.
+2. Op-level sites (``tl.func`` / ``tl.label`` / ``tl.label_contains`` conditions,
+   and value-dependent callable conditions) substitute returns of the python
+   op wrappers every eager op returns through (``_wrap_registry``).
+
+Op-level sites are evaluated ONCE per op, in the op callback that records it,
+on the same ``RecordContext`` torch predicates see (real scalar-bool values
+included). A site that fires leaves a pending decision on the op's label; the
+wrap layer applies it when the op's output reaches Python.
 
 Capture truth stays with op callbacks: replacement values are produced by
 real ops that the callback records, so downstream records consume the
@@ -22,22 +27,40 @@ not intervening.
 
 from __future__ import annotations
 
-import inspect
+import functools
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
-from dataclasses import dataclass, field
-from typing import Any, Literal
+from dataclasses import dataclass, replace
+from functools import partial
+from typing import Any, Literal, cast
 
 from ..._ir.intervention import FireResult
 from ..._ir.op_record import amend_module_exit_intervention
+from ..._ir.selector_eval import first_selector_kind_outside, selector_contains_kind
 from ..._postprocess._selective_save import (
     _STATIC_INTERVENTION_SELECTOR_KINDS,
     reject_selector_outside_kinds,
 )
 from ..._selection.selectors import BaseSelector
 from ...intervention._types import Edit, InterventionDecision
+from ...recording._exceptions import PredicateError
 from ..registry import BackendUnsupportedError
+from ._halt import CallbackAbort, TFHaltRuntime, apply_halt_outcome, chain_output_hooks
+from ._intervention_hooks import (
+    _producer_label,
+    _selector_kinds,
+    _tf_callable_hook,
+    _tf_helper_hook,
+    _TFModuleExitContext,
+)
+from ._intervention_plan import (
+    TFInterventionPlan,
+    TFInterventionSite,
+    TFInterventionSiteUnreachableError,
+)
+from ._source_context import TFSourceContext
 from ._tensor_leaves import _is_tf_tensor_like, _map_tensor_leaves
+from ._wrap_registry import _CURATED_WRAP_ENTRIES, iter_wrap_targets
 
 #: Refusal code for gradient-universe sites (registered in `_protocols.tf`).
 _TF_REFUSAL_BACKWARD = "backward_capture_unsupported"
@@ -46,129 +69,8 @@ _TF_REFUSAL_BACKWARD = "backward_capture_unsupported"
 # there) -- never re-spell the kinds here.
 _TF_INTERVENTION_SELECTOR_KINDS = _STATIC_INTERVENTION_SELECTOR_KINDS
 _MODULE_ONLY_KINDS = frozenset({"module", "in_module", "and", "or", "not"})
-
-_CURATED_WRAP_ENTRIES: tuple[tuple[str, str], ...] = (
-    ("nn", "relu"),
-    ("nn", "relu6"),
-    ("nn", "leaky_relu"),
-    ("nn", "elu"),
-    ("nn", "selu"),
-    ("nn", "gelu"),
-    ("nn", "silu"),
-    ("nn", "swish"),
-    ("nn", "sigmoid"),
-    ("nn", "softmax"),
-    ("nn", "log_softmax"),
-    ("nn", "softplus"),
-    ("nn", "bias_add"),
-    ("nn", "conv2d"),
-    ("nn", "convolution"),
-    ("nn", "max_pool2d"),
-    ("nn", "avg_pool2d"),
-    ("", "matmul"),
-    ("", "add"),
-    ("", "subtract"),
-    ("", "multiply"),
-    ("", "divide"),
-    ("", "tanh"),
-    ("", "sigmoid"),
-    ("", "exp"),
-    ("", "concat"),
-    ("", "reduce_sum"),
-    ("", "reduce_mean"),
-    ("", "reduce_max"),
-    ("math", "add"),
-    ("math", "multiply"),
-    ("math", "tanh"),
-    ("math", "sigmoid"),
-    ("math", "exp"),
-    ("math", "log"),
-    ("linalg", "matmul"),
-)
-"""Curated (submodule, name) python entry points wrapped for op-level sites."""
-
-
-class TFInterventionSiteUnreachableError(BackendUnsupportedError):
-    """A selector matched captured ops the writable wrap layer never saw."""
-
-
-@dataclass(frozen=True)
-class TFInterventionSite:
-    """One normalized TensorFlow intervention site.
-
-    Parameters
-    ----------
-    plan_id
-        Stable site identifier within the plan.
-    predicate
-        ``tl.when``-built predicate returning a decision on match.
-    selector
-        Static selector used for matching and the reachability audit.
-    decision
-        Normalized intervention decision.
-    hook
-        Resolved TensorFlow replacement callable.
-    level
-        Dispatch level, ``"module"`` or ``"op"``.
-    """
-
-    plan_id: str
-    predicate: Callable[[Any], InterventionDecision | None]
-    selector: BaseSelector
-    decision: InterventionDecision
-    hook: Callable[[Any], Any]
-    level: Literal["module", "op"]
-
-
-@dataclass
-class TFInterventionPlan:
-    """Mutable per-capture TensorFlow intervention state.
-
-    Parameters
-    ----------
-    sites
-        All normalized sites.
-    op_sites
-        Op-level sites dispatched by the functional wrap layer.
-    module_sites
-        Module-boundary sites dispatched at module exits.
-    """
-
-    sites: tuple[TFInterventionSite, ...]
-    op_sites: tuple[TFInterventionSite, ...]
-    module_sites: tuple[TFInterventionSite, ...]
-    presented_labels: set[str] = field(default_factory=set)
-    hook_generated_labels: set[str] = field(default_factory=set)
-    fired_site_labels: list[tuple[str, str]] = field(default_factory=list)
-    _in_hook: bool = False
-
-
-@dataclass(frozen=True)
-class _TFModuleExitContext:
-    """Selector subject for one TensorFlow module-boundary exit.
-
-    Parameters
-    ----------
-    module
-        Pass-qualified module-call label such as ``"dense:1"``.
-    address
-        Module address.
-    module_type
-        Module class name.
-    module_stack
-        Active module frames including the exiting module.
-    source_trace
-        Owning trace, so selector evaluation sees a non-torch backend.
-    """
-
-    module: str
-    address: str
-    module_type: str
-    module_stack: tuple[dict[str, Any], ...]
-    source_trace: Any
-    kind: str = "module_exit"
-    label: None = None
-    raw_label: None = None
+#: Kinds a value-dependent rule may use: the static op kinds plus ``tl.where``.
+_TF_VALUE_SELECTOR_KINDS = _TF_INTERVENTION_SELECTOR_KINDS | frozenset({"predicate"})
 
 
 def normalize_tf_interventions(intervene: Any, tf: Any) -> TFInterventionPlan:
@@ -190,42 +92,85 @@ def normalize_tf_interventions(intervene: Any, tf: Any) -> TFInterventionPlan:
     predicates = list(intervene) if isinstance(intervene, (list, tuple)) else [intervene]
     sites: list[TFInterventionSite] = []
     for index, predicate in enumerate(predicates):
+        plan_id = f"tf_intervene_{index}"
         selector = getattr(predicate, "selector", None)
         decision = getattr(predicate, "decision", None)
-        if not isinstance(selector, BaseSelector) or not isinstance(decision, InterventionDecision):
-            raise BackendUnsupportedError(
-                "tf backend supports trace(intervene=...) built from "
-                "tl.when(selector, action) with static selectors such as tl.func, "
-                "tl.label, tl.module, tl.in_module, tl.label_contains, and boolean "
-                "composites; value-dependent callable conditions need predicate-time "
-                "semantics the tf preview does not implement."
-            )
-        _reject_gradient_site(selector)
-        reject_selector_outside_kinds(
-            selector,
-            allowed=_TF_INTERVENTION_SELECTOR_KINDS,
-            backend_name="tf",
-        )
-        hook = _resolve_tf_hook(decision, tf)
-        level: Literal["module", "op"] = (
-            "module" if _selector_kinds(selector) <= _MODULE_ONLY_KINDS else "op"
-        )
-        sites.append(
-            TFInterventionSite(
-                plan_id=f"tf_intervene_{index}",
-                predicate=predicate,
-                selector=selector,
-                decision=decision,
-                hook=hook,
-                level=level,
-            )
-        )
+        if (
+            isinstance(selector, BaseSelector)
+            and isinstance(decision, InterventionDecision)
+            and not selector_contains_kind(selector, "predicate", unwrap=True)
+        ):
+            sites.append(_static_site(plan_id, predicate, selector, decision, tf))
+        else:
+            sites.append(_value_site(plan_id, predicate))
     normalized = tuple(sites)
     return TFInterventionPlan(
         sites=normalized,
         op_sites=tuple(site for site in normalized if site.level == "op"),
         module_sites=tuple(site for site in normalized if site.level == "module"),
     )
+
+
+def _static_site(
+    plan_id: str,
+    predicate: Any,
+    selector: BaseSelector,
+    decision: InterventionDecision,
+    tf: Any,
+) -> TFInterventionSite:
+    """Normalize one static-selector ``tl.when`` clause into a site."""
+
+    _reject_gradient_site(selector)
+    reject_selector_outside_kinds(
+        selector,
+        allowed=_TF_INTERVENTION_SELECTOR_KINDS,
+        backend_name="tf",
+    )
+    level: Literal["module", "op"] = (
+        "module" if _selector_kinds(selector) <= _MODULE_ONLY_KINDS else "op"
+    )
+    return TFInterventionSite(
+        plan_id=plan_id,
+        predicate=predicate,
+        selector=selector,
+        decision=decision,
+        hook=_resolve_tf_hook(decision, tf),
+        level=level,
+    )
+
+
+def _value_site(plan_id: str, predicate: Any) -> TFInterventionSite:
+    """Normalize a value-dependent (callable or multi-clause) predicate into an op site.
+
+    The predicate runs on each op's ``RecordContext`` in the op callback (paddle and
+    torch semantics); its returned decision resolves into a hook per firing. Clauses
+    that only a module boundary can answer refuse typed, since op contexts would
+    silently never match them.
+    """
+
+    if not callable(predicate):
+        raise BackendUnsupportedError(
+            "tf backend trace(intervene=...) requires tl.when(condition, action) or a "
+            "callable predicate returning an intervention decision; got "
+            f"{type(predicate).__name__!s}.",
+            code="trace_option_unsupported",
+            option="intervene",
+        )
+    for target in (getattr(rule, "target", None) for rule in getattr(predicate, "rules", ())):
+        if not isinstance(target, BaseSelector):
+            continue
+        _reject_gradient_site(target)
+        outside = first_selector_kind_outside(target, allowed=_TF_VALUE_SELECTOR_KINDS)
+        if outside is not None or _selector_kinds(target) <= _MODULE_ONLY_KINDS:
+            raise BackendUnsupportedError(
+                f"tf backend evaluates value-dependent and multi-clause intervene= specs "
+                f"on op contexts; the clause {target!r} needs a module boundary or a "
+                "selector kind tf does not evaluate. Pass module clauses as their own "
+                "tl.when entry in the intervene= list.",
+                code="trace_option_unsupported",
+                option="intervene",
+            )
+    return TFInterventionSite(plan_id, predicate, None, None, None, "op")
 
 
 def _reject_gradient_site(selector: BaseSelector) -> None:
@@ -242,56 +187,10 @@ def _reject_gradient_site(selector: BaseSelector) -> None:
         )
 
 
-def _selector_kinds(selector: Any) -> frozenset[str]:
-    """Return every selector kind used in a selector tree.
-
-    Parameters
-    ----------
-    selector
-        Static selector or composite.
-
-    Returns
-    -------
-    frozenset[str]
-        Selector kinds present in the tree.
-    """
-
-    kinds: set[str] = set()
-    stack = [selector]
-    while stack:
-        node = stack.pop()
-        kind = getattr(node, "selector_kind", None)
-        if kind is None:
-            continue
-        kinds.add(str(kind))
-        value = getattr(node, "selector_value", None)
-        if isinstance(value, (list, tuple)):
-            stack.extend(value)
-        elif isinstance(value, BaseSelector):
-            stack.append(value)
-        inner = getattr(node, "inner", None)
-        if isinstance(inner, BaseSelector):
-            stack.append(inner)
-        members = getattr(node, "selectors", None)
-        if isinstance(members, (list, tuple)):
-            stack.extend(members)
-    return frozenset(kinds)
-
-
 def _resolve_tf_hook(decision: InterventionDecision, tf: Any) -> Callable[[Any], Any]:
     """Resolve a decision's hook into a TensorFlow replacement callable.
 
-    Parameters
-    ----------
-    decision
-        Normalized intervention decision.
-    tf
-        Imported TensorFlow module.
-
-    Returns
-    -------
-    Callable[[Any], Any]
-        Callable mapping the original output tensor to its replacement.
+    Returns a callable mapping the original output tensor to its replacement.
     """
 
     hook = decision.hook
@@ -302,60 +201,6 @@ def _resolve_tf_hook(decision: InterventionDecision, tf: Any) -> Callable[[Any],
     raise BackendUnsupportedError(
         f"tf backend interventions require a helper action or callable; got {type(hook).__name__}."
     )
-
-
-def _tf_helper_hook(spec: Edit, tf: Any) -> Callable[[Any], Any]:
-    """Return the TensorFlow implementation for a curated helper spec.
-
-    Parameters
-    ----------
-    spec
-        Portable helper spec built by ``tl.zero_ablate``/``tl.scale``/``tl.add``.
-    tf
-        Imported TensorFlow module.
-
-    Returns
-    -------
-    Callable[[Any], Any]
-        TensorFlow replacement callable.
-    """
-
-    if spec.name == "zero_ablate":
-        return lambda out: tf.zeros_like(out)
-    if spec.name == "scale":
-        factor = spec.args[0]
-        return lambda out: out * tf.cast(factor, out.dtype)
-    if spec.name == "add":
-        delta = spec.args[0]
-        return lambda out: out + tf.cast(delta, out.dtype)
-    raise BackendUnsupportedError(
-        f"tf backend interventions implement the curated helpers zero_ablate, scale, "
-        f"and add; helper {spec.name!r} has no TensorFlow implementation. Pass "
-        "a callable action for custom replacements."
-    )
-
-
-def _tf_callable_hook(hook: Callable[..., Any]) -> Callable[[Any], Any]:
-    """Normalize a user callable into the single-argument hook convention.
-
-    Parameters
-    ----------
-    hook
-        User replacement callable, optionally accepting a ``hook`` keyword.
-
-    Returns
-    -------
-    Callable[[Any], Any]
-        Callable invoked with the original output tensor only.
-    """
-
-    try:
-        parameter_names = set(inspect.signature(hook).parameters)
-    except (TypeError, ValueError):
-        parameter_names = set()
-    if "ctx" in parameter_names:
-        return lambda out: hook(out, ctx=None)
-    return hook
 
 
 @contextmanager
@@ -394,13 +239,7 @@ def tf_intervention_wrap(tf: Any, plan: TFInterventionPlan, session: Any) -> Ite
     # yield; a BaseException escaping it used to strand every wrapper
     # installed so far.
     try:
-        for submodule_name, attr_name in _CURATED_WRAP_ENTRIES:
-            owner = tf if submodule_name == "" else getattr(tf, submodule_name, None)
-            if owner is None:
-                continue
-            original = getattr(owner, attr_name, None)
-            if original is None or not callable(original):
-                continue
+        for owner, attr_name, original in iter_wrap_targets(tf, _CURATED_WRAP_ENTRIES):
             wrapper = wrapper_by_original.get(id(original))
             if wrapper is None:
                 wrapper = _wrap_entry_point(original, plan, session, tf)
@@ -441,6 +280,7 @@ def _wrap_entry_point(
         Wrapper substituting matched op-level site outputs.
     """
 
+    @functools.wraps(original)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         """Run the original entry point and consult op-level sites."""
 
@@ -462,7 +302,7 @@ def _consider_op_substitution(
     tf: Any,
     tensor: Any,
 ) -> Any:
-    """Evaluate op-level sites against one wrapped-call output tensor.
+    """Apply the op-level decisions pending on one wrapped-call output tensor.
 
     Parameters
     ----------
@@ -484,18 +324,61 @@ def _consider_op_substitution(
     label = _producer_label(session, tensor)
     if label is None or label in plan.hook_generated_labels:
         return tensor
-    event = session.events.op_event_by_label_raw.get(label)
-    context = getattr(event, "record_context", None)
-    if event is None or context is None:
+    if label not in session.events.op_event_by_label_raw:
         return tensor
     plan.presented_labels.add(label)
     current = tensor
-    for site in plan.op_sites:
-        decision = site.predicate(context)
-        if decision is None:
-            continue
+    # Popped, so an output passing through nested wrappers fires once.
+    for site in plan.pending_decisions.pop(label, ()):
         current = _fire_site(plan, session, tf, site, current, label)
+    if plan.on_presented is not None:
+        plan.on_presented(label, current)
     return current
+
+
+def observe_tf_op_sites(plan: TFInterventionPlan, tf: Any, recorded: Sequence[Any]) -> None:
+    """Evaluate every op-level site once per recorded op output, in its op callback.
+
+    Parameters
+    ----------
+    plan
+        Normalized intervention plan.
+    tf
+        Imported TensorFlow module.
+    recorded
+        ``(label_raw, context, tensor)`` per output the callback just recorded.
+    """
+
+    if plan._in_hook:
+        return
+    for label, context, _tensor in recorded:
+        due = [site for site in (_site_due(item, context, tf) for item in plan.op_sites) if site]
+        if due:
+            plan.pending_decisions[label] = due
+
+
+def _site_due(site: TFInterventionSite, context: Any, tf: Any) -> TFInterventionSite | None:
+    """Return the site to fire on one op context (value sites resolved), or ``None``."""
+
+    result = site.predicate(context)
+    if site.decision is not None:
+        return site if result is not None else None
+    # deferred: intervention sits above the backends in the layer map
+    from ...intervention._predicates import as_intervention_decision
+
+    try:
+        decision = as_intervention_decision(result)
+    except TypeError as exc:
+        raise PredicateError(
+            "intervene predicate must return InterventionDecision, Edit, callable, or "
+            "None. Remedy: return one of those values from the intervene predicate.",
+            ctx=context,
+            result=result,
+            code="predicate_return_invalid",
+        ) from exc
+    if decision is None or decision.hook is None:
+        return None
+    return replace(site, decision=decision, hook=_resolve_tf_hook(decision, tf))
 
 
 def apply_tf_module_intervention(
@@ -597,10 +480,12 @@ def _fire_site(
         Replacement tensor.
     """
 
+    # Static sites carry their hook; a value site fires through its per-op resolved copy.
+    hook = cast(Callable[[Any], Any], site.hook)
     events_before = len(session.events.op_events)
     plan._in_hook = True
     try:
-        replacement = site.hook(tensor)
+        replacement = hook(tensor)
     finally:
         plan._in_hook = False
         for event in session.events.op_events[events_before:]:
@@ -618,7 +503,24 @@ def _fire_site(
             f"({original_shape}/{tensor.dtype} -> {replacement_shape}/"
             f"{replacement.dtype}); shape-preserving replacements only."
         )
-    fire_result = FireResult(
+    fire_result = _fire_result(site, label, session, tensor, replacement)
+    if label is not None:
+        _mark_intervention_event(session, label, fire_result)
+    # Accounting is UNCONDITIONAL: a fire whose producer label could not be
+    # resolved still fired, and the zero-match audit must not misreport it.
+    plan.fired_site_labels.append((site.plan_id, label or "<unresolved>"))
+    return replacement
+
+
+def _fire_result(
+    site: TFInterventionSite, label: str | None, session: Any, tensor: Any, replacement: Any
+) -> FireResult:
+    """Build the normalized fire record for one site firing."""
+
+    original_shape = tuple(int(dim) for dim in getattr(tensor, "shape", ()))
+    replacement_shape = tuple(int(dim) for dim in getattr(replacement, "shape", ()))
+    selector = site.selector if site.selector is not None else site.predicate
+    return FireResult(
         plan_id=site.plan_id,
         site_label=label or "<unresolved>",
         fired_at_capture_index=len(session.events.op_events),
@@ -632,16 +534,10 @@ def _fire_site(
             "plan_id": site.plan_id,
             "site_label": label or "<unresolved>",
             "level": site.level,
-            "selector": repr(site.selector),
+            "selector": repr(selector),
             "replaced": replacement is not tensor,
         },
     )
-    if label is not None:
-        _mark_intervention_event(session, label, fire_result)
-    # Accounting is UNCONDITIONAL: a fire whose producer label could not be
-    # resolved still fired, and the zero-match audit must not misreport it.
-    plan.fired_site_labels.append((site.plan_id, label or "<unresolved>"))
-    return replacement
 
 
 def _mark_intervention_event(session: Any, label: str, fire_result: FireResult) -> None:
@@ -683,7 +579,9 @@ def _mark_intervention_event(session: Any, label: str, fire_result: FireResult) 
     )
 
 
-def audit_tf_site_reachability(plan: TFInterventionPlan, session: Any) -> None:
+def audit_tf_site_reachability(
+    plan: TFInterventionPlan, session: Any, exempt: frozenset[str] = frozenset()
+) -> None:
     """Fail closed on op-level sites the wrap layer could not reach.
 
     Parameters
@@ -692,6 +590,8 @@ def audit_tf_site_reachability(plan: TFInterventionPlan, session: Any) -> None:
         Normalized intervention plan after the forward.
     session
         Capture session holding the full callback event stream.
+    exempt
+        Labels a ``stop_after`` halt cut off before Python received them.
 
     Returns
     -------
@@ -701,33 +601,26 @@ def audit_tf_site_reachability(plan: TFInterventionPlan, session: Any) -> None:
     Raises
     ------
     TFInterventionSiteUnreachableError
-        When a site's selector matched captured ops that never passed through
-        the curated wrap layer.
+        When a site fired on captured ops that never passed through the wrap layer.
     """
 
-    for site in plan.op_sites:
-        unreachable: list[tuple[str, str]] = []
-        for event in session.events.op_events:
-            if event.kind != "op" or event.label_raw in plan.hook_generated_labels:
-                continue
-            context = getattr(event, "record_context", None)
-            if context is None:
-                continue
-            try:
-                matched = bool(site.selector(context))
-            except Exception:
-                matched = False
-            if matched and event.label_raw not in plan.presented_labels:
-                unreachable.append((str(event.function.func_name), event.label_raw))
-        if unreachable:
-            summary = ", ".join(f"{op_type} ({label})" for op_type, label in unreachable[:8])
-            raise TFInterventionSiteUnreachableError(
-                f"tf intervention site {site.plan_id} matched captured ops that never "
-                f"passed through the writable wrap layer: {summary}. TensorFlow op "
-                "callbacks are read-only, so only calls through the curated python "
-                "entry points (tf.nn/tf.math core) or module boundaries can be "
-                "substituted; refusing instead of silently not intervening."
-            )
+    by_site: dict[str, list[str]] = {}
+    for label, due in plan.pending_decisions.items():
+        if label in exempt:
+            continue
+        event = session.events.op_event_by_label_raw.get(label)
+        op_type = str(event.function.func_name) if event is not None else "?"
+        for site in due:
+            by_site.setdefault(site.plan_id, []).append(f"{op_type} ({label})")
+    for plan_id, unreachable in by_site.items():
+        raise TFInterventionSiteUnreachableError(
+            f"tf intervention site {plan_id} matched captured ops that never "
+            f"passed through the writable wrap layer: {', '.join(unreachable[:8])}. "
+            "TensorFlow op callbacks are read-only, so only ops whose output returns "
+            "through a python op wrapper (generated tf ops and the tf.nn/tf.math entry "
+            "points) or a module boundary can be substituted; refusing instead of "
+            "silently not intervening."
+        )
     # Zero-match disclosure (the preview half of the torch-side fix): the
     # reachability refusal above covers matched-but-unpresented ops only, so a
     # selector matching NOTHING -- or a module site whose boundary the exit
@@ -750,37 +643,133 @@ def audit_tf_site_reachability(plan: TFInterventionPlan, session: Any) -> None:
             )
 
 
-def _producer_label(session: Any, tensor: Any) -> str | None:
-    """Return the raw label of the op event that produced ``tensor``.
+@dataclass(frozen=True)
+class TFEagerWiring:
+    """What one wired eager session carries beyond the session itself.
 
     Parameters
     ----------
+    plan
+        Normalized intervention plan, or ``None`` without ``intervene=``.
+    halt
+        ``stop_after`` runtime, or ``None`` without ``stop_after=``.
+    """
+
+    plan: Any
+    halt: TFHaltRuntime | None
+
+
+def wire_eager_session(trace: Any, session: Any, intervene: Any, halt: Any) -> TFEagerWiring:
+    """Install intervention, halt and source-context hooks on one eager session.
+
+    Parameters
+    ----------
+    trace
+        Trace being captured.
     session
-        Active capture session.
-    tensor
-        Candidate TensorFlow tensor.
+        ``TFEagerCaptureSession`` about to run; it carries the imported TensorFlow
+        module and the discovered module tree (``None`` in function-root mode).
+    intervene
+        Public ``intervene=`` value, or ``None``.
+    halt
+        Public ``stop_after=`` value, or ``None``.
 
     Returns
     -------
-    str | None
-        Producer raw label when the callback recorded the tensor.
+    TFEagerWiring
+        Plan and halt runtime for :func:`run_wired_session`.
     """
 
-    ref = getattr(tensor, "ref", None)
-    if not callable(ref):
-        return None
+    tf = session.tf
+    plan = None
+    edit_hook = None
+    if intervene is not None:
+        plan = normalize_tf_interventions(intervene, tf)
+        if plan.module_sites and session.module_tree is None:
+            raise BackendUnsupportedError(
+                "tf module-boundary interventions (tl.module/tl.in_module "
+                "conditions) require object-module attribution; this capture "
+                "entry discovered no Keras/tf.Module tree."
+            )
+        # The session calls the hook as (frame, module_type, output, module_stack).
+        session.module_exit_hook = partial(apply_tf_module_intervention, plan, session, tf, trace)
+        if plan.op_sites:
+            edit_hook = partial(observe_tf_op_sites, plan, tf)
+    halt_runtime = (
+        TFHaltRuntime(halt, trace, isinstance(halt, BaseSelector)) if halt is not None else None
+    )
+    if halt_runtime is not None and plan is not None and plan.op_sites:
+        halt_runtime.edit_pending = plan.pending_decisions.__contains__
+        plan.on_presented = halt_runtime.release
+    session.output_hook = chain_output_hooks(
+        edit_hook, halt_runtime.observe if halt_runtime is not None else None
+    )
+    session.code_context_fn = TFSourceContext(
+        trace.num_context_lines, bool(trace._options_save_source_context)
+    )
+    return TFEagerWiring(plan=plan, halt=halt_runtime)
+
+
+def run_wired_session(tf: Any, session: Any, wiring: TFEagerWiring) -> Any:
+    """Run the forward under the writable wrap layer, then audit site reachability.
+
+    Parameters
+    ----------
+    tf
+        Imported TensorFlow module.
+    session
+        Wired capture session.
+    wiring
+        Result of :func:`wire_eager_session`.
+
+    Returns
+    -------
+    TFCaptureResult
+        The session result (``stop_signal`` set when ``stop_after`` halted).
+    """
+
     try:
-        return session.producer_by_ref.get(ref())
-    except TypeError:
-        return None
+        if wiring.plan is None:
+            return session.run()
+        with tf_intervention_wrap(tf, wiring.plan, session):
+            result = session.run()
+    except CallbackAbort as abort:
+        # A typed refusal raised by an observer inside the op callback.
+        raise abort.error.with_traceback(abort.error.__traceback__) from None
+    cut = wiring.halt.cut_labels if wiring.halt is not None else frozenset()
+    audit_tf_site_reachability(wiring.plan, session, exempt=cut)
+    return result
+
+
+def finish_halt(trace: Any, wiring: TFEagerWiring, signal: Any) -> None:
+    """Write the halt outcome, or settle a ``stop_after`` that never fired.
+
+    Parameters
+    ----------
+    trace
+        Trace being finalized.
+    wiring
+        Result of :func:`wire_eager_session`.
+    signal
+        ``StopSignal`` that ended the forward, or ``None``.
+    """
+
+    apply_halt_outcome(trace, signal)
+    if wiring.halt is not None:
+        wiring.halt.settle_unfired(trace)
 
 
 __all__ = [
+    "TFEagerWiring",
     "TFInterventionPlan",
     "TFInterventionSite",
     "TFInterventionSiteUnreachableError",
     "apply_tf_module_intervention",
     "audit_tf_site_reachability",
+    "finish_halt",
     "normalize_tf_interventions",
+    "observe_tf_op_sites",
+    "run_wired_session",
     "tf_intervention_wrap",
+    "wire_eager_session",
 ]

@@ -172,9 +172,15 @@ def test_tf_unreachable_op_site_refuses_typed() -> None:
     """A selector matching only unwrapped captured ops refuses fail-closed."""
 
     x = tf.constant([1.0, -1.0, 2.0])
+
+    def raw_op_add(value: Any) -> Any:
+        # tf.raw_ops entries are generated copies of the op wrappers, not the
+        # wrapped python functions, so their outputs never reach the wrap layer.
+        return tf.raw_ops.AddV2(x=tf.nn.relu(value), y=tf.constant(10.0))
+
     with pytest.raises(TFInterventionSiteUnreachableError, match="never\\s+passed through"):
         tl.trace(
-            _relu_plus_ten,
+            raw_op_add,
             x,
             backend="tf",
             intervene=tl.when(tl.func("addv2"), tl.zero_ablate()),
@@ -215,17 +221,19 @@ def test_tf_callable_action_substitutes() -> None:
     assert np.allclose(np.asarray(add_ops[-1].out), [12.0, 11.0, 13.0])
 
 
-def test_tf_value_dependent_condition_refuses_typed() -> None:
-    """Callable conditions without a static selector refuse typed."""
+def test_tf_value_dependent_condition_applies() -> None:
+    """A callable condition runs per op on the live context and edits matched ops."""
 
     x = tf.constant([1.0, -1.0, 2.0])
-    with pytest.raises(BackendUnsupportedError, match="static selectors"):
-        tl.trace(
-            _relu_plus_ten,
-            x,
-            backend="tf",
-            intervene=tl.when(lambda ctx: True, tl.zero_ablate()),
-        )
+    trace = tl.trace(
+        _relu_plus_ten,
+        x,
+        backend="tf",
+        intervene=tl.when(lambda ctx: str(ctx.func_name) == "Relu", tl.scale(2.0)),
+    )
+    add_op = next(op for op in trace._layer_list if op.func_name == "AddV2")
+    assert np.allclose(np.asarray(add_op.out), [12.0, 10.0, 14.0])
+    assert TFBackend().validate_trace(trace) is True
 
 
 def test_tf_unsupported_helper_refuses_typed() -> None:
@@ -254,12 +262,13 @@ def test_tf_shape_changing_replacement_refuses_typed() -> None:
         )
 
 
-def test_tf_halt_keeps_typed_refusal() -> None:
-    """stop_after= refuses typed inside the capture path."""
+def test_tf_halt_stops_inside_the_capture_path() -> None:
+    """stop_after= halts the eager capture at the frontier op."""
 
     x = tf.constant([1.0, -1.0, 2.0])
-    with pytest.raises(BackendUnsupportedError, match="stop_after"):
-        tl.trace(_relu_plus_ten, x, backend="tf", stop_after=tl.func("relu"))
+    trace = tl.trace(_relu_plus_ten, x, backend="tf", stop_after=tl.func("relu"))
+    assert trace.is_stopped is True
+    assert not any(op.func_name == "AddV2" for op in trace._layer_list)
 
 
 def test_tf_recipes_snapshot_dispatches() -> None:
