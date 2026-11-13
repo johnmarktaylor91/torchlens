@@ -188,7 +188,7 @@ def _one_hot(cone: _Cone, like: Any, host: np.ndarray, unit: tuple[int, ...]) ->
 def _to_torch(cone: _Cone, value: Any) -> torch.Tensor:
     """Convert a native gradient to the CPU torch tensor the result fields hold."""
 
-    return torch.from_numpy(np.ascontiguousarray(cone.framework.to_numpy(value)))
+    return torch.from_numpy(np.array(cone.framework.to_numpy(value), order="C", copy=True))
 
 
 def _differentiate(

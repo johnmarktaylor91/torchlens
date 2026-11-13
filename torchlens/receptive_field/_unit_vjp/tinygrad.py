@@ -120,11 +120,11 @@ def replayer(trace: Any) -> _TinygradReplayer:
 
 
 def vjp(fn: Callable[..., Any], primals: tuple[Any, ...], cotangent: Any) -> tuple[Any, ...]:
-    """``Tensor.gradient`` of ``fn`` at fresh copies of ``primals``; unused sources get zeros."""
+    """``Tensor.gradient`` of ``fn`` at fresh copies of ``primals`` (unconnected ones get zeros)."""
 
     sources = tuple(from_numpy(to_numpy(value), value) for value in primals)
     output = fn(*sources)
-    grads = output.gradient(*sources, gradient=cotangent, materialize_grads=True)
+    grads = output.gradient(*sources, gradient=cotangent)
     return tuple(grads)
 
 
