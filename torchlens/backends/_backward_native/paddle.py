@@ -50,6 +50,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ... import _state
+from ..._ir.capture_events import CaptureEvents
 from ..._ir.events import (
     BackwardPassEnd,
     BackwardPassStart,
@@ -296,10 +297,11 @@ def _sites(trace: Any, scope: BackwardScope) -> tuple[dict[int, _Site], dict[str
             if leaf.label is not None:
                 uses[leaf.label] = uses.get(leaf.label, 0) + 1
         site = adapter._site(trace, capture)
-        node = None if site is None else scope.nodes.get(site.slot_labels[0])
-        if node is None or _name(node) == ACCUMULATION:
+        if site is None:
             continue
-        sites.setdefault(_ptr(node), _Site(capture, site.slot_labels))
+        node = scope.nodes.get(site.slot_labels[0])
+        if node is not None and _name(node) != ACCUMULATION:
+            sites.setdefault(_ptr(node), _Site(capture, site.slot_labels))
     for op in trace._layer_list:
         if getattr(op, "is_output", False):
             raw = str(getattr(op, "_label_raw", op.layer_label))
@@ -330,6 +332,10 @@ def retain_backward_state(trace: Any, session: Any) -> None:
         str(getattr(op, "_label_raw", op.layer_label)): op.layer_label for op in trace._layer_list
     }
     trace.__dict__[STATE_KEY] = _Retained(scope, sites, uses, _params(trace), finals)
+    if getattr(trace, "_capture_events", None) is None:
+        # The capture releases its forward stream after materializing; backward
+        # passes journal into a fresh stream that extends the projection.
+        trace._capture_events = CaptureEvents.detached_from(trace)
 
 
 def _loss_tensor(state: _Retained, loss: Any) -> Any:
