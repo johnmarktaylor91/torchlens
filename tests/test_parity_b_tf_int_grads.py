@@ -26,7 +26,7 @@ keras = pytest.importorskip("keras")
 import torchlens as tl  # noqa: E402
 from torchlens.backends.tf import GradOptions  # noqa: E402
 from torchlens.backends.tf.derived_grads import attach_tf_derived_grads  # noqa: E402
-from torchlens.errors import BackendUnsupportedError  # noqa: E402
+from torchlens.errors import BackendUnsupportedError, InvalidArgumentError  # noqa: E402
 
 pytestmark = [pytest.mark.tf_backend, pytest.mark.rare]
 
@@ -148,7 +148,7 @@ def test_engine_edit_changes_the_gradient() -> None:
 def test_engine_refuses_an_unedited_output_for_an_edited_capture() -> None:
     model, x = _DenseRelu(), tf.constant(_X)
     clean_output, _clean = _by_hand(model, x, lambda r: r)
-    with pytest.raises(BackendUnsupportedError):
+    with pytest.raises(InvalidArgumentError, match="diverged from captured raw output"):
         _engine(model, x, intervene=tl.when(tl.func("relu"), tl.scale(3.0)), output=clean_output)
 
 

@@ -105,7 +105,7 @@ def test_tf_intervention_graph_stays_honest_by_construction() -> None:
     )
 
     add_op = next(op for op in trace._layer_list if op.func_name == "AddV2")
-    zeros_op = next(op for op in trace._layer_list if op.func_name == "ZerosLike")
+    zeros_op = next(op for op in trace._layer_list if op.func_name == "Fill")
     # Torch parity: parents resolves through the CONDITIONAL label map -- a
     # single-pass referenced op (zeros_op, here) by its bare layer_label, a
     # multi-pass one by its pass-qualified label.
