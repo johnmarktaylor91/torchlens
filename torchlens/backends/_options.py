@@ -250,11 +250,11 @@ JAX_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
 TINYGRAD_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
     runtime_option_names=frozenset(),
     runtime_message=(
-        "tinygrad backend does not support these options: {names}. Static-selector "
-        "trace(intervene=tl.when(...)) edits and static-label save= selectors are "
-        "supported; trace(stop_after=...), storage, and value-dependent predicates are "
-        "not, because they need predicate-time concrete values or a way to truncate lazy "
-        "UOp descendants before realize(). Use the PyTorch backend for them."
+        "tinygrad backend does not support these options: {names}. "
+        "trace(intervene=...) edits and save= selectors, static or value-dependent, "
+        "are supported; trace(stop_after=...) and storage= are not, because they need "
+        "a way to truncate lazy UOp descendants before realize(). Use the PyTorch "
+        "backend for them."
     ),
     fallback_message="",
     always_runtime=True,
@@ -301,13 +301,11 @@ under the backend-neutral ``facet_recipes`` record.
 MLX_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
     runtime_option_names=frozenset(),
     runtime_message=(
-        "The MLX backend does not support: {names}. Static-label save= "
-        "selectors, static-label trace(intervene=tl.when(...)), and static-label "
-        "trace(stop_after=...) are supported; storage= and value-dependent "
-        "predicates need predicate-time concrete values or replay semantics that "
-        "MLX lazy evaluation does not expose through a stable TorchLens surface. "
-        "Use an unfiltered tl.trace(..., backend='mlx') call or the PyTorch "
-        "backend for this surface."
+        "The MLX backend does not support: {names}. save= selectors, "
+        "trace(intervene=...) and trace(stop_after=...), static or value-dependent, "
+        "are supported; storage= is not, because MLX lazy evaluation exposes no "
+        "stable TorchLens surface for streaming payloads during capture. Use the "
+        "PyTorch backend for this surface."
     ),
     fallback_message="",
     always_runtime=True,
