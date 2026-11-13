@@ -140,9 +140,14 @@ def test_shared_dense_layer_has_one_node_per_call() -> None:
         return dense(params["w"], params["b"], dense(params["w"], params["b"], x))
 
     params = {"w": _x(3, 3, seed=2) * 0.5, "b": _x(3, seed=3) * 0.1}
-    trace = _assert_recorded(shared, (params, _x(4, 3)), lambda out: jnp.sum(out**2))
+    x = _x(4, 3)
+    loss = lambda out: jnp.sum(out**2)  # noqa: E731
+    trace = _assert_recorded(shared, (params, x), loss)
     dots = [g for g in trace._grad_fn_logs.values() if "dot_general" in g.class_name]
     assert len(dots) == 2
+    expected = jax.grad(lambda p: loss(shared(p, x)))(params)
+    for address in ("w", "b"):
+        assert get_adapter("jax").close(expected[address], trace._param_logs[address].grad)
 
 
 def test_multi_output_split_and_top_k() -> None:

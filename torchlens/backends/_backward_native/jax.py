@@ -38,6 +38,7 @@ from ..._ir.events import (
     GradFnDiscovered,
     GradFnFired,
     OpGradObserved,
+    ParamGradObserved,
 )
 from .._backward_neutral import journal_backward_event, next_backward_pass_index, set_pass_roots
 from .._replay_adapters import jax as jax_adapter
@@ -255,6 +256,52 @@ def _op_grad_events(
     return events
 
 
+def _param_address(trace: Any, node: ProgramNode) -> str | None:
+    """The ``trace.params`` address of a source op that is a leaf of the params argument.
+
+    Uses the JAX capture's own rule: an input leaf at container path ``0.<address>``
+    is the parameter ``<address>`` when ``trace.params`` holds it.
+    """
+
+    if node.kind != "source" or trace._param_logs is None:
+        return None
+    annotations = getattr(node.op, "annotations", None) or {}
+    path = annotations.get("jax_container_path")
+    if not isinstance(path, str) or not path.startswith("0."):
+        return None
+    address = path.removeprefix("0.")
+    return address if address in trace._param_logs else None
+
+
+def _param_grad_events(
+    trace: Any,
+    program: Program,
+    run: BackwardRun,
+    reached: _Reached,
+    pass_index: int,
+    stamp: float,
+) -> list[ParamGradObserved]:
+    events = []
+    for node in program.nodes:
+        address = _param_address(trace, node)
+        if address is None or not reached.has(node.label):
+            continue
+        grad = _op_grad(program, run, reached, node)
+        shape, dtype, memory = _shape_dtype_memory(grad)
+        events.append(
+            ParamGradObserved(
+                param_address=address,
+                pass_index=pass_index,
+                payload_ref=grad,
+                shape=shape,
+                dtype=dtype,
+                memory=memory,
+                timestamp=stamp,
+            )
+        )
+    return events
+
+
 def _journal(trace: Any, program: Program, run: BackwardRun, started: float) -> None:
     pass_index = next_backward_pass_index(trace)
     reached = _reached(program, run)
@@ -275,6 +322,7 @@ def _journal(trace: Any, program: Program, run: BackwardRun, started: float) -> 
         for node in reversed(fired)
     )
     events.extend(_op_grad_events(program, run, reached, pass_index, stamp))
+    events.extend(_param_grad_events(trace, program, run, reached, pass_index, stamp))
     events.append(_end_event(pass_index, run.duration))
     for event in events:
         journal_backward_event(trace, event)
