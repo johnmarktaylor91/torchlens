@@ -617,6 +617,7 @@ _WEAK_SUBJECT_TABLES = frozenset(
         # TF variable-read ledger per live Trace (WeakKeyDictionary keyed by the
         # Trace): pre-forward snapshots and handle writes for validation; dies with it.
         ("torchlens/backends/tf/_variable_reads.py", "_LEDGERS"),
+        ("torchlens/intervention/_grad_site_neutral.py", "_ARMED"),
         # Replay recipe section read with a loaded Trace (WeakKeyDictionary keyed
         # by the Trace), bound on its first validation-status read; dies with it.
         ("torchlens/_io/_replay_recipe_codec.py", "_LOADED_SECTIONS"),
@@ -1004,6 +1005,7 @@ _WEAKLY_HELD = frozenset(
         ("torchlens/_utils/_optimizer_hooks.py", "_BINDINGS"),
         ("torchlens/_postprocess/_call_site_contract.py", "_CALL_SITE_CLASSES"),
         ("torchlens/backends/tf/_variable_reads.py", "_LEDGERS"),
+        ("torchlens/intervention/_grad_site_neutral.py", "_ARMED"),
         ("torchlens/_io/_replay_recipe_codec.py", "_LOADED_SECTIONS"),
         ("torchlens/_utils/_call_site.py", "_CODE_TOKENS"),
         ("torchlens/_utils/_call_site.py", "_INSTRUCTION_MAPS"),
@@ -1150,6 +1152,9 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/backends/mlx/settings.py", "__all__"),
         ("torchlens/backends/tf/_capture_hooks.py", "__all__"),
         ("torchlens/backends/tf/_retention.py", "__all__"),
+        ("torchlens/backends/tf/_edited_replay.py", "__all__"),
+        ("torchlens/backends/tf/_helper_hooks.py", "__all__"),
+        ("torchlens/backends/tf/_record.py", "__all__"),
         ("torchlens/backends/torch/_session_cleanup.py", "__all__"),
         ("torchlens/_data_substrate/__init__.py", "__all__"),
         ("torchlens/_data_substrate/artifact.py", "__all__"),
