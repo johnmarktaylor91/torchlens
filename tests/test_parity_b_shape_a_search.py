@@ -222,8 +222,11 @@ def test_rank_and_size_bounds_skip_without_probing() -> None:
 def test_probe_budget_is_a_typed_failure() -> None:
     """An exhausted budget returns budget_exhausted, never more probes."""
 
+    def never(x: Any) -> Any:
+        raise ValueError(f"bad shape {x.shape}")
+
     ladder = [_candidate((1, width)) for width in (1, 2, 3, 4)]
-    report = guess_with_priors(_fake_priors(ladder), _needs_features(99), _trace_ok, max_probes=2)
+    report = guess_with_priors(_fake_priors(ladder), never, _trace_ok, max_probes=2)
     assert not report.found and report.reason == "budget_exhausted"
     assert len(report.attempts) == 2
 
