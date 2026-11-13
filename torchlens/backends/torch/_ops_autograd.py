@@ -35,6 +35,7 @@ from ..._utils.tensor_utils import (
 from ._completeness_origins import internal_scalar_read
 from ._functorch_check import functorch_wrapped_check
 from ._user_grad_fn import raw_grad_fn
+from ._wrapper_session import captures_container_structure
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
@@ -661,7 +662,7 @@ def register_call_input_container_snapshots(
         Monotonic ordering value for the pre-call snapshot.
     """
 
-    if not getattr(trace, "_capture_container_structure", False):
+    if not captures_container_structure(trace):
         return
     registry = trace._wrapper_runtime_ws.container_registry
     for index, arg in enumerate(args):

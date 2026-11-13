@@ -33,6 +33,17 @@ from ..._utils.tensor_utils import _DEFER_ENABLED as _COW_ENABLED
 NO_MARKERS: tuple[bool, Any] = (False, None)
 
 
+def captures_container_structure(trace: Any) -> bool:
+    """Whether ``trace``'s capture records container structure.
+
+    ``_capture_container_structure`` is a capture-entry transient (attached and deleted
+    by the capture entrypoint), so it is read with a default; this is its one reader
+    for the per-call wrapper paths.
+    """
+
+    return bool(getattr(trace, "_capture_container_structure", False))
+
+
 class SessionFacts:
     """The wrapper's per-session facts for one capture session."""
 
@@ -53,9 +64,9 @@ class SessionFacts:
         self.fingerprint = fingerprint
         self.trace_id = id(trace) if trace is not None else None
         #: ``register_call_input_container_snapshots`` returns at once without it.
-        self.container_structure = bool(getattr(trace, "_capture_container_structure", False))
+        self.container_structure = captures_container_structure(trace)
         #: ``_push_op_markers`` opens an NVTX range for every call with it.
-        self.markers_nvtx = bool(getattr(trace, "_options_emit_nvtx", False))
+        self.markers_nvtx = trace is not None and bool(trace._options_emit_nvtx)
         #: The observability-session reader; the session it returns is read per call.
         self.session_reader = session_reader
         self.track_device_memory = getattr(trace, "track_device_memory", False)
