@@ -8,13 +8,12 @@ values must stay in its capture. When it answers ``False`` the interpreter
 may free the values after their last use in the jaxpr; the capture keeps only
 abstract shape and dtype placeholders.
 
-A capture that never set a policy keeps every value, which is the plain
-capture's behavior.
+A session carries its policy as its ``jax_retention`` attribute; a session
+without one keeps every value, which is the plain capture's behavior.
 """
 
 from __future__ import annotations
 
-import weakref
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import Any
@@ -43,8 +42,6 @@ class Retention:
 KEEP_ALL = Retention(keep=None)
 KEEP_NONE = Retention(keep=frozenset())
 
-_POLICIES: weakref.WeakKeyDictionary[Any, Retention] = weakref.WeakKeyDictionary()
-
 
 def keep_only(indexes: Iterable[int]) -> Retention:
     """Return a retention keeping the values of the listed capture indexes."""
@@ -52,19 +49,11 @@ def keep_only(indexes: Iterable[int]) -> Retention:
     return Retention(keep=frozenset(int(index) for index in indexes))
 
 
-def set_retention(session: Any, retention: Retention) -> None:
-    """Attach ``retention`` to one capture's equation session."""
-
-    _POLICIES[session] = retention
-
-
 def retention_of(session: Any) -> Retention:
-    """Return the retention attached to ``session`` (keep all when none was set)."""
+    """Return the retention a session carries as ``jax_retention`` (keep all when none)."""
 
-    try:
-        return _POLICIES.get(session, KEEP_ALL)
-    except TypeError:  # not weak-referenceable, so no policy can have been attached
-        return KEEP_ALL
+    retention = getattr(session, "jax_retention", None)
+    return retention if isinstance(retention, Retention) else KEEP_ALL
 
 
 def retention_policy(session: Any) -> KeepTest:

@@ -28,7 +28,7 @@ from ._edits import _REGION_LAYER_TYPES
 from ._input_kwargs import bind_input_kwargs
 from ._interp_hooks import InterpreterHooks
 from ._module_frames import jax_event_module_frames
-from ._retention import KEEP_NONE, set_retention
+from ._retention import KEEP_NONE, Retention
 from .jaxpr import flatten_dynamic_args, interpret_closed_jaxpr_with_inlining
 from .modules import discover_equinox_module_tree, discover_nnx_module_tree
 
@@ -40,12 +40,15 @@ class _StopRecording(Exception):
     """Raised inside the equation hook to unwind the interpreter at a stop."""
 
 
+@dataclass(frozen=True)
 class _PassRetention:
-    """Retention key of one record pass: no capture keeps its values.
+    """Retention of one record pass: no capture keeps its values.
 
     The hook hands every selected value to the sink before the capture is
     stored, so the interpreter may free each intermediate after its last use.
     """
+
+    jax_retention: Retention = KEEP_NONE
 
 
 class JaxPayloadCodec:
@@ -110,7 +113,7 @@ class JaxRecordProducer:
         from .backend import _reject_transformed_callable
 
         _reject_transformed_callable(model)
-        tree = discover_equinox_module_tree(model)
+        tree: Any = discover_equinox_module_tree(model)
         if tree is None:
             tree = discover_nnx_module_tree(model)
         return _Prepared(model=model, module_tree=tree)
@@ -137,7 +140,6 @@ class JaxRecordProducer:
         flat_args, _treedef = flatten_dynamic_args(args, ())
         emitter = _EventEmitter(sink, self)
         retention = _PassRetention()
-        set_retention(retention, KEEP_NONE)
         try:
             emitter.emit_sources(backend, args, consts)
             result = interpret_closed_jaxpr_with_inlining(
@@ -213,7 +215,7 @@ class _EventEmitter:
         reserved = self.labels.reserve_label(layer_type)
         if isinstance(value, tuple):
             value = value[0] if len(value) == 1 else value
-        frames = jax_event_module_frames(*stacks)[1] if stacks else ()
+        frames: Any = jax_event_module_frames(*stacks)[1] if stacks else ()
         shape = getattr(value, "shape", None)
         event = BackendOpEvent(
             raw_label=reserved.label_raw,

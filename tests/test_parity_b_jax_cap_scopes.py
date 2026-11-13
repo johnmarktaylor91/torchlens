@@ -42,10 +42,9 @@ def test_keep_only_selects_capture_indexes() -> None:
     """``keep_only`` keeps exactly the listed indexes; ``KEEP_NONE`` keeps none."""
 
     class Session:
-        pass
+        jax_retention = _retention.keep_only([0, 3])
 
     session = Session()
-    _retention.set_retention(session, _retention.keep_only([0, 3]))
     keep = _retention.retention_policy(session)
     assert [keep(i) for i in range(5)] == [True, False, False, True, False]
     assert not _retention.KEEP_NONE.keeps(0)
