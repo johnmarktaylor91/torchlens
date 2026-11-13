@@ -1,8 +1,8 @@
 """Native backward capture on TensorFlow, checked against TensorFlow itself.
 
-The fixture stands in for the two pieces other lanes own: the TensorFlow
-capture's calls into ``backward_ready_scope`` / ``retain_backward_state`` and
-the registry's ``backward_capture`` entry for ``tf``. Every recorded pass is
+The fixture captures with ``backward_ready=True``, so the TensorFlow capture
+itself enters ``backward_ready_scope``, keeps the live forward tensors the
+frame linker reads, and retains the backward state. Every recorded pass is
 checked by the native backward validator (node, sum and leaf checks), its leaf
 gradients against a plain ``tape.gradient``, and the forward against a run with
 no tape.
@@ -20,14 +20,9 @@ import pytest
 tf = pytest.importorskip("tensorflow")
 
 import torchlens as tl  # noqa: E402
-from torchlens.backends import registry  # noqa: E402
-from torchlens.backends._backward_native import (  # noqa: E402
-    native_backward_surface,
-    tf as native_tf,
-)
+from torchlens.backends._backward_native import tf as native_tf  # noqa: E402
 from torchlens.backends._replay_adapters import get_adapter  # noqa: E402
 from torchlens.backends._reverse_engine import graph_from_recipes  # noqa: E402
-from torchlens.backends.tf.op_callback_capture import TFEagerCaptureSession  # noqa: E402
 from torchlens.errors import RunCapabilityUnavailableError  # noqa: E402
 from torchlens.validation._backward_neutral import (  # noqa: E402
     BackwardCheckResult,
@@ -75,34 +70,12 @@ def _square_sum(output: Any) -> Any:
 
 
 @pytest.fixture
-def backward_ready(monkeypatch: pytest.MonkeyPatch) -> Callable[..., tl.Trace]:
-    """Capture backward-ready the way the TensorFlow capture will once wired."""
-
-    sessions: list[Any] = []
-    original = TFEagerCaptureSession.run
-
-    def run(self: Any) -> Any:
-        with native_tf.backward_ready_scope(self):
-            result = original(self)
-        sessions.append(self)
-        return result
-
-    monkeypatch.setattr(TFEagerCaptureSession, "run", run)
-    spec = registry.get_backend_spec("tf")
-    replaced = dataclasses.replace(
-        spec,
-        capabilities=dataclasses.replace(spec.capabilities, backward_capture=True),
-        capability_implementations={
-            **(spec.capability_implementations or {}),
-            "backward_capture": lambda: native_backward_surface("tf"),
-        },
-    )
-    monkeypatch.setitem(registry._REGISTRY, "tf", replaced)
+def backward_ready() -> Callable[..., tl.Trace]:
+    """Capture backward-ready through the TensorFlow capture's own wiring."""
 
     def capture(model: Any, example: Any) -> tl.Trace:
-        trace = tl.trace(model, example, backend="tf")
-        native_tf.retain_backward_state(trace, sessions[-1])
-        return trace
+        options = tl.options.CaptureOptions(backward_ready=True)
+        return tl.trace(model, example, backend="tf", capture=options)
 
     return capture
 
