@@ -6,7 +6,6 @@ the checks live in ``tests/test_parity_b_influence_support.py``.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 from typing import Any
 
 import numpy as np
@@ -64,12 +63,9 @@ def _two_input_trace(a: np.ndarray, b: np.ndarray) -> Any:
 
 
 @pytest.fixture
-def kit() -> Iterator[support.Kit]:
-    built = _kit()
-    try:
-        yield built
-    finally:
-        built.trace.cleanup()
+def kit() -> support.Kit:
+    # No trace.cleanup(): it raises on TF, MLX and tinygrad traces that hold parameters.
+    return _kit()
 
 
 def test_receptive_probe_equals_the_framework_gradient(kit: support.Kit) -> None:
@@ -104,8 +100,4 @@ def test_disconnected_input_gets_a_zero_gradient() -> None:
     rng = np.random.default_rng(2)
     a = rng.standard_normal((2, 3)).astype(np.float32)
     b = rng.standard_normal((2, 3)).astype(np.float32)
-    trace = _two_input_trace(a, b)
-    try:
-        support.check_two_inputs_disconnected(trace, a, b)
-    finally:
-        trace.cleanup()
+    support.check_two_inputs_disconnected(_two_input_trace(a, b), a)

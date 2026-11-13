@@ -18,7 +18,11 @@ import numpy as np
 import torch
 from torch import nn
 
-from torchlens.receptive_field._gradient import _backward_event_count, gradient_for_unit
+from torchlens.receptive_field._gradient import (
+    _backward_event_count,
+    _input_ops_by_role,
+    gradient_for_unit,
+)
 from torchlens.receptive_field._gradient_forward import projective_gradient_for_unit
 
 #: The two output units of the subject's dense head.
@@ -162,7 +166,8 @@ def check_twin_matches_torch(kit: Kit) -> None:
     import torchlens as tl
 
     capture = tl.options.CaptureOptions(backward_ready=True, save_mode="reference")
-    twin = tl.trace(kit.twin, torch.as_tensor(kit.x), capture=capture)
+    x = torch.tensor(kit.x, requires_grad=True)
+    twin = tl.trace(kit.twin, x, capture=capture)
     try:
         target, source = _output(kit.trace), _input(kit.trace)
         twin_target, twin_source = _output(twin), _input(twin)
@@ -216,27 +221,27 @@ def _same_state(left: Any, right: Any) -> bool:
     return bool(np.array_equal(kit_np(left), kit_np(right)))
 
 
-def check_two_inputs_disconnected(trace: Any, a: np.ndarray, b: np.ndarray) -> None:
-    """``f(a, b) = (a * a, b + 1)``: each output's other input gets an all-zero gradient."""
+def check_two_inputs_disconnected(trace: Any, a: np.ndarray) -> None:
+    """``f(a, b) = (a * a, b + 1)``: as on PyTorch, each output's input probe covers only
+    the input that reaches it, and naming the other input returns an all-zero gradient."""
 
+    roles = tuple(_input_ops_by_role(trace))
     outputs = [trace[label] for label in trace.output_layers]
-    assert len(outputs) == 2
-    seen = set()
+    assert len(roles) == 2 and len(outputs) == 2
+    expected = {roles[0]: 2 * a[0, 0], roles[1]: 1.0}
     for output in outputs:
         unit = tuple(0 for _ in output.shape)
         by_role = gradient_for_unit(output, unit)
-        assert len(by_role) == 2
-        zero_roles = [role for role, item in by_role.items() if not item.support_mask.any()]
-        live_roles = [role for role, item in by_role.items() if item.support_mask.any()]
-        assert len(zero_roles) == 1 and len(live_roles) == 1, by_role.keys()
-        assert not _np(by_role[zero_roles[0]].signed_grad).any()
-        live = _np(by_role[live_roles[0]].signed_grad)
-        assert np.count_nonzero(live) == 1 and live[unit] != 0
-        value = float(live[unit])
-        if np.isclose(value, 1.0):
-            seen.add("b")
-        else:
-            np.testing.assert_allclose(value, 2 * a[unit], rtol=1e-6)
-            seen.add("a")
-    assert seen == {"a", "b"}
-    del b
+        (live_role,) = by_role
+        live = _np(by_role[live_role].signed_grad)
+        assert np.count_nonzero(live) == 1
+        np.testing.assert_allclose(live[unit], expected[live_role], rtol=1e-6)
+        (other,) = (role for role in roles if role != live_role)
+        named = gradient_for_unit(output, unit, input_op=other)
+        assert named.io_role == other
+        assert not _np(named.signed_grad).any() and not named.support_mask.any()
+        assert tuple(named.signed_grad.shape) == live.shape
+    live_roles = {
+        next(iter(gradient_for_unit(output, tuple(0 for _ in output.shape)))) for output in outputs
+    }
+    assert live_roles == set(roles)
