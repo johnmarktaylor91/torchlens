@@ -22,6 +22,7 @@ import pytest
 
 import torchlens as tl
 from torchlens.backends._replay_adapters import has_adapter
+from torchlens.intervention._backend_adapter_lookup import trace_backend
 from torchlens.intervention._backend_replay import verify_backend_replay
 from torchlens.intervention.errors import HookValueError
 
@@ -174,7 +175,7 @@ def test_edited_fork_equals_capture_of_edited_code(backend: str) -> None:
     clean = _capture(backend, build, value, _identity)
     edited = clean.fork().do(_rectifier(clean).label, _double)
     reference = _capture(backend, build, value, lambda r: r * 2.0)
-    assert edited.last_run["backend"] == backend
+    assert trace_backend(edited) == backend
     assert np.array_equal(_host(adapter, _output(edited)), _host(adapter, _output(reference)))
     assert not np.array_equal(_host(adapter, _output(edited)), _host(adapter, _output(clean)))
 

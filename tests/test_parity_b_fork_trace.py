@@ -134,7 +134,7 @@ def test_edited_fork_equals_live_intervene(fake_backend: ModuleType) -> None:
     live = _capture(intervene=tl.when(tl.func("relu"), tl.zero_ablate()))
     fork = _as_fake(_capture()).fork()
     edited = fork.do(tl.func("relu"), tl.zero_ablate())
-    assert edited.last_run["backend"] == "fake"
+    assert _backend_adapter_lookup.trace_backend(edited) == "fake"
     assert torch.equal(_output(edited), _output(live))
 
 

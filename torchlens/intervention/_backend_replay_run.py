@@ -129,7 +129,7 @@ def _refuse_entry(trace: Trace, adapter: Any, entry: NormalizedHookEntry, value:
         raise refuse(
             f"the {helper.name!r} helper has no replay application on the "
             f"{trace_backend(trace)} backend yet",
-            code="backend_replay_helper_unsupported",
+            code="backend_replay_edit_helper_unsupported",
             remedy="write the edit as a callable on the backend's arrays: "
             "fork.do(site, lambda out, ctx: ...)",
         )
@@ -272,5 +272,4 @@ def run_backend_replay(request: BackendReplay, services: ReplayServices) -> Trac
     hook_names = tuple(services.hook_name(entry) for entry in request.hook_entries)
     summary = ReplaySummary(tuple(request.origins), hook_names, tuple(cone), request.strict)
     finish_replay(log, summary, started_at, services.record_params)
-    log.last_run = {**log.last_run, "backend": trace_backend(log)}
     return log
