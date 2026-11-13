@@ -90,7 +90,9 @@ def _seed_label(trace: Any, halt_call_id: int | None) -> str:
     if halt_call_id is not None:
         found = [op for op in ops if record_member(op, "func_call_id", None) == halt_call_id]
     else:
-        found = [op for op in ops if record_member(op, "is_output", False)]
+        by_label = getattr(trace, "_layer_dict_all_keys", {})
+        labels = dict.fromkeys(getattr(trace, "output_layers", ()) or ())
+        found = [by_label[label] for label in labels if label in by_label]
     if len(found) != 1:
         raise _backward_refusal(
             "paddle tl.grad(...) edits with derived gradients need a single tensor model "

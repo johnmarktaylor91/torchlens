@@ -63,6 +63,11 @@ def _options(**kwargs: Any) -> Any:
 
 
 def _close(actual: Any, expected: Any) -> None:
+    """Equal values; a missing gradient (``None``) equals zeros of the other's shape."""
+
+    assert actual is not None or expected is not None
+    actual = paddle.zeros_like(expected) if actual is None else actual
+    expected = paddle.zeros_like(actual) if expected is None else expected
     assert paddle.allclose(actual, expected, rtol=1e-5, atol=1e-6), (actual, expected)
 
 
@@ -74,7 +79,7 @@ def _by_hand(net: Any, loss_of_output: Callable[[Any], Any], x: Any) -> tuple[An
     params = [net.first.weight, net.first.bias, net.second.weight, net.second.bias]
     for param in params:
         param.stop_gradient = False
-    return tuple(paddle.grad(loss_of_output(net(x)), [x, *params]))
+    return tuple(paddle.grad(loss_of_output(net(x)), [x, *params], allow_unused=True))
 
 
 _PATHS = (
@@ -86,9 +91,16 @@ _PATHS = (
 )
 
 
+def _derived(trace: Any, path: str) -> Any:
+    """The derived gradient at ``path``, or ``None`` when the trace has no record for it."""
+
+    grads = trace.autograd.derived_grads
+    return grads[path].grad if path in grads else None
+
+
 def _assert_derived(trace: Any, expected: tuple[Any, ...]) -> None:
     for path, grad in zip(_PATHS, expected, strict=True):
-        _close(trace.autograd.derived_grads[path].grad, grad)
+        _close(_derived(trace, path), grad)
 
 
 _EDITS: dict[str, tuple[Any, Callable[[Any], Any]]] = {
@@ -112,8 +124,8 @@ def test_edited_capture_derived_grads_equal_the_edited_program(name: str) -> Non
     expected = _by_hand(_Net(by_hand), _loss, _x())
     _assert_derived(trace, expected)
     unedited = _by_hand(_Net(), _loss, _x())
-    if name != "callable":
-        assert not paddle.allclose(expected[1], unedited[1])
+    edited_weight = paddle.zeros_like(unedited[1]) if expected[1] is None else expected[1]
+    assert not paddle.allclose(edited_weight, unedited[1])
 
 
 def test_module_exit_edit_derived_grads_equal_the_edited_program() -> None:
@@ -146,11 +158,12 @@ def test_halted_capture_derived_grads_differentiate_the_frontier() -> None:
             return paddle.nn.functional.relu(self.first(x))
 
     expected = _by_hand(_Frontier(), _loss, _x())
+    assert expected[3] is None and expected[4] is None
     for path, grad in zip(_PATHS[:3], expected[:3], strict=True):
-        _close(trace.autograd.derived_grads[path].grad, grad)
+        _close(_derived(trace, path), grad)
     for path in _PATHS[3:]:
-        record = trace.autograd.derived_grads[path]
-        assert record.grad is None or not bool(paddle.any(record.grad != 0))
+        grad = _derived(trace, path)
+        assert grad is None or not bool(paddle.any(grad != 0))
 
 
 def _site_edited_by_hand(scale: float) -> tuple[Any, Any, Any]:
@@ -179,8 +192,8 @@ def test_grad_site_edit_derived_grads_equal_the_edit_by_hand() -> None:
         capture=_options(intermediate_grads=True),
     )
     grad_x, grad_w, edited = _site_edited_by_hand(0.5)
-    _close(trace.autograd.derived_grads["inputs.0"].grad, grad_x)
-    _close(trace.autograd.derived_grads["params.first.weight"].grad, grad_w)
+    _close(_derived(trace, "inputs.0"), grad_x)
+    _close(_derived(trace, "params.first.weight"), grad_w)
     relu = next(op for op in trace._layer_list if "relu" in str(op.func_name))
     _close(trace.autograd.intermediate_derived_grads[relu.label].grad, edited)
 
@@ -200,7 +213,7 @@ def test_grad_site_and_activation_edit_in_one_spec() -> None:
     leaf.stop_gradient = False
     (grad_hidden,) = paddle.grad(_loss(net.second(leaf) * 2.0), [leaf])
     (grad_x,) = paddle.grad([hidden], [x], grad_outputs=[grad_hidden * 0.5])
-    _close(trace.autograd.derived_grads["inputs.0"].grad, grad_x)
+    _close(_derived(trace, "inputs.0"), grad_x)
 
 
 def test_autograd_node_selector_refuses_typed() -> None:
@@ -214,9 +227,16 @@ def test_autograd_node_selector_refuses_typed() -> None:
 
 
 def _with_dropout(net: Any) -> Callable[[Any], Any]:
+    """A training-mode dropout the replay adapter refuses, whose output is still reproducible.
+
+    The dropout acts on zeros, so the derived-gradient re-run reproduces the captured
+    output whatever mask it draws; the gradient pass still reaches the dropout op.
+    """
+
     def run(x: Any) -> Any:
         hidden = paddle.nn.functional.relu(net.first(x))
-        return net.second(paddle.nn.functional.dropout(hidden, p=0.5, training=True))
+        dropped = paddle.nn.functional.dropout(hidden * 0.0, p=0.5, training=True)
+        return net.second(hidden + dropped)
 
     return run
 
