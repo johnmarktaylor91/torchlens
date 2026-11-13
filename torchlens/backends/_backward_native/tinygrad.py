@@ -56,7 +56,6 @@ from ..._ir.events import (
     OpGradObserved,
     ParamGradObserved,
 )
-from ..._runnable import RunnableErrorCode
 from ...errors import RunCapabilityUnavailableError
 from .._backward_neutral import (
     PayloadPolicy,
@@ -65,13 +64,13 @@ from .._backward_neutral import (
     set_pass_roots,
 )
 
-__all__ = [
+__all__ = (
     "PAYLOADS",
     "BackwardScope",
     "backward_ready_scope",
     "record_backward",
     "retain_backward_state",
-]
+)
 
 STATE_KEY = "_tinygrad_backward_state"
 """``trace.__dict__`` key of the retained backward state."""
@@ -79,6 +78,8 @@ STATE_KEY = "_tinygrad_backward_state"
 RULE_QUALNAME_PREFIX = "tinygrad.gradient.pm_gradient."
 """Qualified-name prefix of tinygrad's per-UOp gradient rules."""
 
+_CODE = "run_capability_unavailable"  # RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE
+_DETECTION_STAGE = "native_backward_capture"
 _CALL_UOPS = frozenset({"FUNCTION", "CALL", "GETTUPLE"})
 
 
@@ -508,14 +509,6 @@ def _refusal_reason(
     )
 
 
-def _refuse(problem: str) -> RunCapabilityUnavailableError:
-    return RunCapabilityUnavailableError(
-        f"backward() is unavailable on this tinygrad trace: {problem}.",
-        code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
-        detection_stage="native_backward_capture",
-    )
-
-
 def _start(pass_index: int, stamp: float) -> BackwardPassStart:
     return BackwardPassStart(
         pass_index=pass_index,
@@ -618,7 +611,11 @@ def record_backward(trace: Any, loss: Any = None, **backward_kwargs: Any) -> Non
     state = trace.__dict__.get(STATE_KEY)
     reason = _refusal_reason(state, loss, backward_kwargs)
     if reason is not None:
-        raise _refuse(reason)
+        raise RunCapabilityUnavailableError(
+            f"backward() is unavailable on this tinygrad trace: {reason}.",
+            code=_CODE,
+            detection_stage=_DETECTION_STAGE,
+        )
     pass_index = next_backward_pass_index(trace)
     events = [
         _start(pass_index, state.timestamp),
