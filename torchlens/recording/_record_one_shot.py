@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Any
 
 from torch import nn
@@ -16,13 +16,15 @@ from .._input_coerce import _coerce_inputs
 from .._output_slot import returned as output_returned
 from .._robustness import check_model_and_input_variants
 from ..backends.registry import (
-    TORCH_BACKEND_NAME,
     BackendName,
     get_backend_spec,
     require_capability_implementation,
 )
 from ..intervention._predicates import InterventionPredicate
 from ..options import CaptureOptions, StorageOptions, _merge_grouped_options
+from ._backend_events import is_backend_record_producer
+from ._backend_options import refuse_record_option
+from ._backend_recorder import backend_recorder_factory
 from ._generation import GenerationRecording, enrich_generation, record_generation
 from ._generation_options import GenerationOptions
 from ._options import HaltPredicateFn, PredicateFn, RecordingOptions
@@ -117,50 +119,77 @@ def _require_generate_kwargs(
         )
 
 
-def _require_torch_fastlog_backend(backend: Any) -> None:
-    """Refuse unless the resolved backend binds the torch one-shot Recorder as fastlog."""
+def _fastlog_recorder_factory(
+    backend: Any, generate_kwargs: Mapping[str, Any] | None, recording: RecordingOptions | None
+) -> Callable[..., Any]:
+    """Return the recorder ``tl.record`` runs for the resolved backend.
 
-    # The capability table gates this surface for EVERY resolution, including
-    # the default torch path: flipping torch's fastlog flag False must refuse
-    # instead of silently running the Recorder anyway.
+    The capability table gates this surface for every resolution, including the
+    default torch path, and the flag alone never opens it: the spec must bind
+    the fastlog implementing surface. Torch binds the ``Recorder`` class; any
+    other backend binds a :class:`BackendRecordProducer`, which runs through
+    ``BackendRecorder``. Any other binding refuses typed.
+    """
+
+    from ..backends._backend_protocol import refusal_code_for_capability
+
     backend_spec = get_backend_spec(str(backend) if backend is not None else "torch")
-    if not backend_spec.capabilities.fastlog:
-        from ..backends._backend_protocol import refusal_code_for_capability
-
-        if str(backend_spec.name) == TORCH_BACKEND_NAME:
-            raise BackendUnsupportedError(
-                "tl.record() refuses: the resolved 'torch' backend declares "
-                "capabilities.fastlog=False, and the registered capability "
-                "table is the load-bearing gate for this surface.",
-                code=refusal_code_for_capability("fastlog"),
-                backend=TORCH_BACKEND_NAME,
-            )
-        raise BackendUnsupportedError(
-            "tl.record() is torch-only in backend v1. Use tl.trace(..., backend='jax') "
-            "for full-save JAX capture.",
-            code=refusal_code_for_capability("fastlog"),
-            backend=str(backend_spec.name),
+    name = str(backend_spec.name)
+    if backend_spec.capabilities.fastlog:
+        implementation = require_capability_implementation(backend_spec, "fastlog")
+        if implementation is Recorder:
+            return Recorder
+        if is_backend_record_producer(implementation):
+            _refuse_torch_only_record_doors(name, generate_kwargs, recording)
+            return backend_recorder_factory(implementation)
+        problem = (
+            f"tl.record() cannot dispatch backend {name!r}: its registered fastlog "
+            "implementation is neither the torch Recorder nor a backend record producer, "
+            "so record() has no non-torch dispatch path for it."
         )
-    # The flag alone never opens the gate: the spec must bind the fastlog
-    # implementing surface, and this entry only runs the torch Recorder —
-    # a foreign implementation cannot be silently substituted with it.
-    fastlog_implementation = require_capability_implementation(backend_spec, "fastlog")
-    if fastlog_implementation is not Recorder:
-        raise BackendUnsupportedError(
-            f"tl.record() cannot dispatch backend {backend_spec.name!r}: its "
-            "registered fastlog implementation is not the torch one-shot "
-            "Recorder, and backend v1 record() has no non-torch dispatch path."
+    else:
+        problem = (
+            f"tl.record() refuses: the resolved {name!r} backend declares "
+            "capabilities.fastlog=False, and the registered capability table is the "
+            "load-bearing gate for this surface (tl.record is torch-only on a backend "
+            "that binds no record producer). Use tl.trace(..., backend=...) instead."
         )
+    raise BackendUnsupportedError(
+        problem, code=refusal_code_for_capability("fastlog"), backend=name
+    )
 
 
-def _checked_inputs(model: nn.Module, inputs: Any, input_kwargs: Any) -> tuple[Any, Any]:
+def _refuse_torch_only_record_doors(
+    name: str, generate_kwargs: Mapping[str, Any] | None, recording: RecordingOptions | None
+) -> None:
+    """Refuse the one-shot doors that run only on the torch path."""
+
+    if generate_kwargs is not None:
+        refuse_record_option(
+            name, "generate_kwargs (a torch generate() loop)", code="record_generation_unsupported"
+        )
+    if (
+        recording is not None
+        and recording._is_field_explicit("postprocess")  # noqa: SLF001
+        and recording.postprocess != "none"
+    ):
+        refuse_record_option(name, "recording=RecordingOptions(postprocess=...)")
+
+
+def _checked_inputs(
+    recorder_factory: Any, model: nn.Module, inputs: Any, input_kwargs: Any
+) -> tuple[Any, Any]:
     """Coerce ``inputs`` and ``input_kwargs`` and run trace()'s up-front tensor-variant guard on them.
 
     Fail fast on tensor variants the logging pipeline cannot handle (meta tensors have no
     storage, sparse layouts break copy/print/FLOPs paths, symbolic shapes break metadata).
     record() shares trace()'s decorated hot path, so it must enforce the SAME up-front guard
-    instead of crashing deep in capture with an opaque torch error.
+    instead of crashing deep in capture with an opaque torch error. A backend
+    producer takes its inputs as given and checks them itself.
     """
+
+    if recorder_factory is not Recorder:
+        return inputs, input_kwargs
 
     coerced, coerced_kwargs = _coerce_inputs(model, inputs, input_kwargs)
     check_model_and_input_variants(model, coerced, coerced_kwargs)
@@ -246,8 +275,8 @@ def record(
         grouped ``tl.options.NarrationOptions``. Narration and retention are fully
         independent ("narrate everything, keep nothing" is legal).
     backend:
-        Optional backend selector. ``tl.record`` is torch-only in backend v1;
-        non-torch backends raise a canonical unsupported error.
+        Optional backend selector. A backend that binds a record producer records
+        through it; any other non-torch backend refuses with ``fastlog_unsupported``.
     generate_kwargs:
         DOCUMENTED-UNSTABLE. When given (``{}`` for the model's defaults), run the model's own
         ``generate(*inputs, **input_kwargs, **generate_kwargs)`` once instead of one forward, and
@@ -287,13 +316,13 @@ def record(
 
     """
 
-    _require_torch_fastlog_backend(backend)
+    recorder_factory = _fastlog_recorder_factory(backend, generate_kwargs, recording)
     model = unwrap_compiled_model(model)
     refuse_episode_on_record(episode)
     knobs = _unfold_recording_options(recording, lean)
     postprocess = knobs.pop("postprocess")
     validate_postprocess(postprocess)
-    inputs, input_kwargs = _checked_inputs(model, inputs, input_kwargs)
+    inputs, input_kwargs = _checked_inputs(recorder_factory, model, inputs, input_kwargs)
     _require_generate_kwargs(generation, generate_kwargs)
     recorder_kwargs: dict[str, Any] = {
         "save": save,
@@ -310,7 +339,7 @@ def record(
         )
         object.__setattr__(generated.recording, "_output", output_returned(output))
         return enrich_generation(generated, postprocess)
-    with Recorder(model, **recorder_kwargs) as recorder:
+    with recorder_factory(model, **recorder_kwargs) as recorder:
         recorder(inputs, input_kwargs)
     result = recorder.recording
     if postprocess != "none":
