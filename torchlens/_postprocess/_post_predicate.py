@@ -20,16 +20,31 @@ from __future__ import annotations
 
 __tl_layer__ = "L3"
 
-import warnings
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any, Final
 
 from .._utils._record_group_table import record_member
-from ..recording._exceptions import PredicateError
+from ..recording._exceptions import PredicateError, warn_followed_by_parent_outside_window
 
 #: Torch's predicate history size when ``lookback`` is 0 (``_configure_predicate_options``).
 _DEFAULT_HISTORY: Final = 8
+
+#: Selector kinds evaluated on the finished ``Op`` (label, func, module, ...);
+#: every other leaf is evaluated on the rebuilt ``RecordContext``.
+_STATIC_SELECTOR_KINDS = frozenset(
+    {
+        "label",
+        "func",
+        "module",
+        "output",
+        "contains",
+        "in_module",
+        "and",
+        "or",
+        "not",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -45,11 +60,9 @@ def post_save_keep_labels(
     trace: Any,
     predicate: Any,
     *,
-    static_kinds: frozenset[str],
     split: tuple[Any, Any] | None,
     build_context: Callable[..., Any],
-    lookback: int = 0,
-    lookback_payload_policy: str = "metadata_only",
+    lookback_options: tuple[int, str] = (0, "metadata_only"),
 ) -> set[str]:
     """Return the op labels a value-dependent or lookback predicate saves.
 
@@ -59,20 +72,17 @@ def post_save_keep_labels(
         Finished full-save trace.
     predicate:
         Callable or selector tree of post-evaluable kinds.
-    static_kinds:
-        Selector kinds evaluated on the finished ``Op`` (label, func, module,
-        ...); every other leaf is evaluated on the rebuilt ``RecordContext``.
     split:
         ``split_followed_by_conjunction(predicate)``: ``(followed_by, candidate)``
         for ``candidate & tl.followed_by(successor)``, else ``None``.
     build_context:
         Torch's ``RecordContext`` builder (``_capture.projections._build_record_context``),
         passed in so this module stays below the capture layer's import cycle.
-    lookback:
-        Predicate history size for ``tl.preceded_by`` / ``tl.followed_by``
-        (0 means torch's default of 8).
-    lookback_payload_policy:
-        Torch lookback payload policy; ``"metadata_only"`` retains no candidate.
+    lookback_options:
+        ``(lookback, lookback_payload_policy)``: the predicate history size for
+        ``tl.preceded_by`` / ``tl.followed_by`` (0 means torch's default of 8)
+        and torch's lookback payload policy (``"metadata_only"`` retains no
+        candidate).
 
     Returns
     -------
@@ -80,8 +90,10 @@ def post_save_keep_labels(
         Final labels of the ops whose payloads stay public.
     """
 
+    lookback, lookback_payload_policy = lookback_options
     history_size = lookback if lookback > 0 else _DEFAULT_HISTORY
     events = _rebuild_events(trace, history_size, build_context)
+    static_kinds = _STATIC_SELECTOR_KINDS
     if split is not None:
         return _followed_by_keep(trace, events, split, lookback_payload_policy, static_kinds)
     return {event.op.label for event in events if _matches(predicate, event, static_kinds)}
@@ -205,18 +217,7 @@ def _followed_by_keep(
         for parent in event.ctx.parent_labels:
             prior_event = by_raw.get(parent)
             if parent not in recent or prior_event is None:
-                _warn_outside_window(parent)
+                warn_followed_by_parent_outside_window(parent, stacklevel=3)
             elif _matches(candidate, prior_event, static_kinds):
                 keep.add(prior_event.op.label)
     return keep
-
-
-def _warn_outside_window(parent: str) -> None:
-    """Warn like torch when a successor's parent left the lookback window."""
-
-    warnings.warn(
-        f"followed_by parent {parent!r} is outside the lookback window; "
-        "increase lookback to make this dependency queryable.",
-        RuntimeWarning,
-        stacklevel=4,
-    )

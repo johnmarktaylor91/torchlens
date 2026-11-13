@@ -16,23 +16,9 @@ from .._selection.selectors import BaseSelector
 from .._utils._record_group_table import record_member
 from ..backends.registry import BackendUnsupportedError
 from ._post_plan import BackendPostPlan, split_post_options
-from ._post_predicate import post_save_keep_labels
+from ._post_predicate import _STATIC_SELECTOR_KINDS, post_save_keep_labels
 from ._post_shaping import apply_save_shaping, reshapes_payloads
 from .saved_summary import refresh_pinned_autograd_memory, refresh_saved_module_call_count
-
-_STATIC_SELECTOR_KINDS = frozenset(
-    {
-        "label",
-        "func",
-        "module",
-        "output",
-        "contains",
-        "in_module",
-        "and",
-        "or",
-        "not",
-    }
-)
 
 #: Selector kinds a finished capture can evaluate after the fact: the static
 #: kinds plus value-dependent ``tl.where`` and the lookback selectors.
@@ -145,11 +131,9 @@ def apply_static_label_save_policy(
         keep = post_save_keep_labels(
             trace,
             predicate,
-            static_kinds=_STATIC_SELECTOR_KINDS,
             split=split_followed_by_conjunction(predicate),
             build_context=_build_record_context,
-            lookback=lookback,
-            lookback_payload_policy=lookback_payload_policy,
+            lookback_options=(lookback, lookback_payload_policy),
         )
     apply_save_keep_set(trace, keep, backend_name=backend_name)
 
