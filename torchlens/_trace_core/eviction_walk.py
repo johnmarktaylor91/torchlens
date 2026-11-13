@@ -43,16 +43,21 @@ class _EvictTypes(set[type]):
     Starts as the builtin scalars and grows with every opaque type the sweep
     meets (see ``_opaque_to_eviction``); ``refused`` remembers the types
     checked and found not opaque, so each type is checked once per sweep.
-    Membership tests stay the builtin ``set`` lookup.
+    ``whole`` holds the ids of the exact lists and dicts the sweep has walked as
+    a cell's own value (depth 0): such a walk reaches everything any later walk
+    of the same object could, so a container shared by many cells is walked
+    once per sweep. Every cell stays alive during the sweep, so the ids are
+    stable. Membership tests stay the builtin ``set`` lookup.
     """
 
-    __slots__ = ("refused",)
+    __slots__ = ("refused", "whole")
 
     def __init__(self) -> None:
-        """Seed with the builtin scalar types; nothing refused yet."""
+        """Seed with the builtin scalar types; nothing refused or walked yet."""
 
         super().__init__(_EVICT_INERT_TYPES)
         self.refused: set[type] = set()
+        self.whole: set[int] = set()
 
 
 def _opaque_to_eviction(cls: type, tensor_cls: type) -> bool:
@@ -110,11 +115,13 @@ def _evict_payloads_in_cell(
     if cls is list or cls is dict:
         if depth >= _EVICT_WALK_DEPTH_CEILING:
             return value
+        key = id(value)
+        if key in inert.whole or (seen is not None and key in seen):
+            return value
         if seen is None:
             seen = set()
-        key = id(value)
-        if key in seen:
-            return value
+        if not depth:  # a cell's own value: walked whole, once per sweep
+            inert.whole.add(key)
         seen.add(key)
         if cls is list:
             _evict_payloads_in_list(value, tensor_cls, depth + 1, seen, inert)

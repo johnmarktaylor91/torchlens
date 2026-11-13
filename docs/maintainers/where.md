@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1853 modules, 730070 lines, 0 modules without a docstring.
+85 packages, 1853 modules, 730077 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -39,7 +39,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._semantic` | Semantic facet views for TorchLens records. | 18 | 7566 |
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 3073 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2141 |
-| `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 23 | 6911 |
+| `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 23 | 6918 |
 | `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 86 | 25710 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 19 | 6674 |
 | `torchlens._visualization` | Computational graph visualization via Graphviz. | 112 | 50023 |
@@ -964,7 +964,7 @@ Live narration for TorchLens captures (the torchsnooper niche, better). (10 modu
 
 ### `torchlens._trace_core`
 
-Private per-trace semantic store substrate (trace_core_design.md). (23 modules, 6911 lines)
+Private per-trace semantic store substrate (trace_core_design.md). (23 modules, 6918 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -975,7 +975,7 @@ Private per-trace semantic store substrate (trace_core_design.md). (23 modules, 
 | `cell_states` | Cell states of the row stores: stored, default-omitted, derived and deleted. | 392 |
 | `columns` | Typed chunked column builders and frozen columns. | 167 |
 | `core` | TraceCore: per-trace ownership and cross-domain coordination. | 364 |
-| `eviction_walk` | Payload eviction walk: replace every tensor reachable from a store cell with ''None''. | 306 |
+| `eviction_walk` | Payload eviction walk: replace every tensor reachable from a store cell with ''None''. | 313 |
 | `fact_blocks` | Shared-fact column blocks: the FunctionCall / ParamAlias group tables. | 224 |
 | `field_table` | Capture event schema and the stored-field table (pure data). | 371 |
 | `groups` | Label-membership group tables with cached immutable views. | 98 |
