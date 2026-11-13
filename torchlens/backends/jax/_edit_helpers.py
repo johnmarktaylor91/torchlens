@@ -29,19 +29,20 @@ JAX_SUPPORTED_HELPER_NAMES = (
 _OPTION_CODE = "trace_option_unsupported"
 
 
-def _refuse_helper(message: str) -> BackendUnsupportedError:
+def _jax_helper_refusal(message: str, *, code: str) -> BackendUnsupportedError:
     """Return the typed refusal for an intervention helper shape JAX cannot honor."""
 
-    return BackendUnsupportedError(message, code=_OPTION_CODE, option="intervene")
+    return BackendUnsupportedError(message, code=code, option="intervene")
 
 
 def _reject_foreign_value(value: Any, helper_name: str) -> None:
     """Refuse a torch tensor passed to a JAX intervention helper."""
 
     if type(value).__module__.split(".", maxsplit=1)[0] == "torch":
-        raise _refuse_helper(
+        raise _jax_helper_refusal(
             f"JAX intervention helper {helper_name!r} received a torch.Tensor argument; "
-            "pass a jax.Array, a NumPy array or a Python scalar."
+            "pass a jax.Array, a NumPy array or a Python scalar.",
+            code=_OPTION_CODE,
         )
 
 
@@ -53,14 +54,16 @@ def _mean_ablate(spec: Any) -> Callable[[Any], Any]:
     kwargs = dict(spec.kwargs)
     source = spec.args[0] if spec.args else kwargs.get("source")
     if source is not None or "population_identity" in kwargs:
-        raise _refuse_helper(
+        raise _jax_helper_refusal(
             "JAX tl.mean_ablate(...) interventions support the self form (source=None); "
-            "tensor, op and population sources are torch-side semantics."
+            "tensor, op and population sources are torch-side semantics.",
+            code=_OPTION_CODE,
         )
     dim = kwargs.get("dim")
     if dim is not None and not isinstance(dim, (int, tuple)):
-        raise _refuse_helper(
-            f"JAX tl.mean_ablate(dim={dim!r}) is unsupported; pass None, an int or a tuple."
+        raise _jax_helper_refusal(
+            f"JAX tl.mean_ablate(dim={dim!r}) is unsupported; pass None, an int or a tuple.",
+            code=_OPTION_CODE,
         )
 
     def _apply(out: Any) -> Any:
@@ -127,11 +130,12 @@ def resolve_helper_applier(spec: Any) -> Callable[[Any], Any]:
         return _mean_ablate(spec)
     if name == "replace_with":
         return _replace_with(spec)
-    raise _refuse_helper(
+    raise _jax_helper_refusal(
         f"JAX backend has no native application for intervention helper {name!r}; "
         f"supported helpers are {', '.join(JAX_SUPPORTED_HELPER_NAMES)}, plus callable "
         "hooks written against jax.Array. The torch helper factories build torch-only "
-        "hooks that reject JAX arrays."
+        "hooks that reject JAX arrays.",
+        code=_OPTION_CODE,
     )
 
 

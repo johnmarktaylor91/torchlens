@@ -19,7 +19,6 @@ the saved (edited) output. Parent sensitivity is checked on the raw replay.
 from __future__ import annotations
 
 import time
-import warnings
 from collections import Counter
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, fields, replace
@@ -32,6 +31,7 @@ from ..._ir.selector_eval import selector_contains_kind
 from ..._selection.selectors import BaseSelector
 from ...intervention._predicates import as_intervention_decision
 from ...intervention._types import Edit, FireRecord, InterventionDecision, TargetSpec
+from ...intervention._zero_fire import settle_capture_zero_fire
 from ...intervention.hooks import make_hook_context, normalize_hook, split_site_branches
 from ...recording._exceptions import PredicateError
 from ..registry import BackendUnsupportedError
@@ -45,7 +45,7 @@ _ALIAS_RETRY_KINDS = ("label", "contains", "regex")
 _REGION_LAYER_TYPES = {"region": "jax_region", "region_output": "jax_region_out"}
 
 
-def _refuse(message: str, *, option: str = "intervene", code: str = _OPTION) -> Exception:
+def _jax_edit_refusal(message: str, *, code: str, option: str = "intervene") -> Exception:
     """Return a typed JAX intervention refusal."""
 
     if code != _OPTION:
@@ -81,12 +81,13 @@ def _validate_intervene(intervene: Any, grad_options: Any) -> None:
     """Refuse ``intervene`` shapes the JAX capture path cannot honor."""
 
     if not callable(intervene):
-        raise _refuse(
+        raise _jax_edit_refusal(
             "JAX backend trace(intervene=...) requires a callable predicate such as "
-            f"tl.when(condition, action); got {type(intervene).__name__}."
+            f"tl.when(condition, action); got {type(intervene).__name__}.",
+            code=_OPTION,
         )
     if grad_options is not None:
-        raise _refuse(
+        raise _jax_edit_refusal(
             "JAX backend trace(intervene=...) cannot be combined with grad_options: "
             "derived gradients differentiate the unedited jaxpr.",
             code="intervention_with_derived_grads_unsupported",
@@ -95,20 +96,21 @@ def _validate_intervene(intervene: Any, grad_options: Any) -> None:
     if not isinstance(selector, BaseSelector):
         return
     if any(universe != "activation" for universe, _ in split_site_branches(selector)):
-        raise _refuse(
+        raise _jax_edit_refusal(
             f"JAX backend supports forward interventions only; the site {selector!r} "
             "addresses a gradient, which needs backward capture. Use the PyTorch backend.",
             code="backward_capture_unsupported",
         )
     if selector_contains_kind(selector, "module"):
-        raise _refuse(
+        raise _jax_edit_refusal(
             "JAX backend trace(intervene=...) edits equation outputs; tl.module(...) "
             "addresses a module's output boundary, which the jaxpr does not carry. "
-            "Use tl.in_module(...) with tl.func(...) or tl.label(...)."
+            "Use tl.in_module(...) with tl.func(...) or tl.label(...).",
+            code=_OPTION,
         )
     for kind in ("followed_by", "preceded_by"):
         if selector_contains_kind(selector, kind):
-            raise _refuse(
+            raise _jax_edit_refusal(
                 f"JAX backend trace(intervene=...) does not support {kind} selectors, "
                 "which need later or earlier sites at fire time.",
                 code="followed_by_unsupported",
@@ -162,9 +164,10 @@ class JaxEditRuntime:
             return outputs, None
         applier = _resolve_applier(decision)
         if len(outputs) != 1:
-            raise _refuse(
+            raise _jax_edit_refusal(
                 f"JAX backend trace(intervene=...) matched {ctx.label_raw!r}, a "
-                f"{len(outputs)}-output equation; only single-output equations are editable."
+                f"{len(outputs)}-output equation; only single-output equations are editable.",
+                code=_OPTION,
             )
         original = outputs[0]
         replacement = checked_replacement(ctx.label_raw, original, applier.apply(original))
@@ -177,23 +180,26 @@ def _resolve_applier(decision: InterventionDecision) -> JaxEditApplier:
     """Resolve one decision to a JAX-native applier, refusing torch-only semantics."""
 
     if decision.keep_grad or decision.isolate:
-        raise _refuse(
+        raise _jax_edit_refusal(
             "JAX backend interventions do not support keep_grad or isolate; both are "
             "torch-autograd semantics with no jaxpr equivalent.",
             option="isolate" if decision.isolate else "keep_grad",
+            code=_OPTION,
         )
     if decision.action not in {"add_hook", "transform"}:
-        raise _refuse(
+        raise _jax_edit_refusal(
             f"JAX backend interventions do not support action {decision.action!r}; "
-            "supported actions are hook helpers and callable hooks."
+            "supported actions are hook helpers and callable hooks.",
+            code=_OPTION,
         )
     hook = decision.hook
     if isinstance(hook, Edit):
         return JaxEditApplier(f"helper:{hook.name}", resolve_helper_applier(hook))
     if not callable(hook):
-        raise _refuse(
+        raise _jax_edit_refusal(
             "JAX backend intervention decisions must carry a builtin helper or a "
-            f"callable hook; got {type(hook).__name__}."
+            f"callable hook; got {type(hook).__name__}.",
+            code=_OPTION,
         )
     normalized = normalize_hook(hook)
     identity = f"callable:{getattr(hook, '__qualname__', type(hook).__name__)}"
@@ -378,15 +384,14 @@ def _record_fired_spec(trace: Any, target_label: str, decision: InterventionDeci
 
 
 def _warn_zero_matches(intervene: Any) -> None:
-    """Warn when a selector-conditioned predicate never fired."""
+    """Settle a selector-conditioned predicate that never fired (code ``trace_zero_fire``)."""
 
     selector = getattr(intervene, "selector", None)
     if isinstance(selector, BaseSelector):
-        warnings.warn(
+        settle_capture_zero_fire(
             f"Capture-time intervention selector {selector!r} matched zero sites; "
             "no intervention fired.",
-            UserWarning,
-            stacklevel=4,
+            selector=repr(selector),
         )
 
 
