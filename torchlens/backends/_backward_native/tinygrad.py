@@ -3,13 +3,19 @@
 tinygrad differentiates its lazy UOp graph itself: ``compute_gradient`` walks
 the graph from the loss and applies one rule per UOp (``pm_gradient``). The
 capture records the forward as the UOps the forward built, realized once; the
-backward follows the same rule. Before that one realize, the gradient of the
-loss is built on the forward's own pre-realize UOps, and every gradient value
-(each recorded op's incoming gradient and each node's gradient to each parent
-occurrence) is listed in the same ``realize_once`` call, wrapped in
-``CONTIGUOUS`` as the forward values are, so no forward value is computed
-twice and random state is drawn once. Realizing the gradient after the
-capture would recompute the forward from regenerated UOps instead.
+backward runs the same sweep with the same rules. Before that one realize, the
+gradient of the loss is built on the forward's own pre-realize UOps, and every
+gradient value (each recorded op's incoming gradient and each node's gradient
+to each parent occurrence) is listed in the same ``realize_once`` call,
+wrapped in ``CONTIGUOUS`` as the forward values are, so no forward value is
+computed twice and random state is drawn once. Realizing the gradient after
+the capture would recompute the forward from regenerated UOps instead.
+
+As a PyTorch backward reads saved tensors, each recorded op's rule reads the
+stored forward values and the stored incoming gradient, and each recorded
+contribution is stored before it is summed. Without that, tinygrad fuses the
+whole gradient program and recomputes forward values inside it, and its
+rounding would differ from the recorded payloads by an ulp.
 
 The records keep PyTorch's meanings (``backends/_backward_neutral.py``): one
 ``GradFn`` per recorded op that sent a gradient to a recorded parent, named by
@@ -161,39 +167,31 @@ def _flat_tensors(value: Any) -> list[Any]:
     return []
 
 
-def _walked(root: Any, targets: set[Any]) -> set[int]:
-    """``id()`` of the UOps whose rule ``compute_gradient`` applies.
+def _walk(root: Any, targets: set[Any]) -> list[Any]:
+    """The UOps ``compute_gradient`` applies a rule to, in forward order.
 
     tinygrad differentiates a UOp only when one of its sources leads to a
     target, and never through ``DETACH``: the gradient a ``DETACH`` receives
-    stops there. A recorded op outside this set gets its gradient recorded
-    and no backward node, as a PyTorch tensor without a ``grad_fn``.
+    stops there (``tinygrad.gradient._deepwalk``). A recorded op outside this
+    walk gets its gradient recorded and no backward node, as a PyTorch tensor
+    without a ``grad_fn``.
     """
 
     on_path: set[int] = set()
-    walked: set[int] = set()
+    walk: list[Any] = []
     for uop in root.toposort():
         if any(id(src) in on_path or src in targets for src in uop.src):
             on_path.add(id(uop))
             if _uop_name(uop) != "DETACH":
-                walked.add(id(uop))
-    return walked
+                walk.append(uop)
+    return walk
 
 
-def _on_realized(uop: Any, labelled: set[int]) -> Any:
-    """``uop`` reading its recorded sources from the copies the realize stores.
-
-    The leaf gradients come from ``compute_gradient`` unchanged. A node's
-    recorded outgoing gradients instead apply its rule to the stored forward
-    values and the stored incoming gradient (each a ``CONTIGUOUS`` UOp the
-    same realize materializes), so the record is the rule evaluated on the
-    recorded payloads, as the backward validator replays it. Sources that are
-    not recorded differentiable values (shape arguments, constants, indices)
-    stay as they are.
-    """
+def _on_realized(uop: Any, recorded: set[int]) -> Any:
+    """``uop`` reading its recorded differentiable sources from their stored copies."""
 
     sources = tuple(
-        src.contiguous() if id(src) in labelled and _differentiable(src) else src for src in uop.src
+        src.contiguous() if id(src) in recorded and _differentiable(src) else src for src in uop.src
     )
     if all(new is old for new, old in zip(sources, uop.src, strict=True)):
         return uop
@@ -271,58 +269,89 @@ class BackwardScope:
         return loss
 
     def _target(self, uop: Any) -> Any:
-        """List ``uop`` once in the realize as ``CONTIGUOUS(uop)``; return ``uop``."""
+        """List ``uop`` once in the realize as ``CONTIGUOUS(uop)``; return that UOp."""
 
         from tinygrad import Tensor
 
-        if id(uop) not in self.targets:
-            contiguous = uop.contiguous()
-            self.targets[id(uop)] = (uop, Tensor(contiguous), contiguous is not uop)
-        return uop
+        contiguous = uop.contiguous()
+        if id(contiguous) not in self.targets:
+            self.targets[id(contiguous)] = (uop, Tensor(contiguous), contiguous is not uop)
+        return contiguous
 
     def _prepare(
         self, recorded: tuple[Any, ...], sources: tuple[Any, ...], raw_output: Any
     ) -> None:
+        """Run tinygrad's reverse sweep with every recorded gradient materialized.
+
+        The sweep is ``compute_gradient``'s: reverse forward order, one
+        ``pm_gradient`` rule per walked UOp, contributions summed in that
+        order. At each recorded op it reads what the realize stores, as a
+        PyTorch backward reads saved tensors: the rule runs on the stored
+        forward values (:func:`_on_realized`) and the stored incoming
+        gradient, and each contribution to a recorded parent is stored before
+        it is summed. So every recorded gradient is the rule evaluated on
+        recorded values, and every recorded incoming gradient is the sum of
+        the recorded contributions it received. UOps the capture did not
+        record (shape arguments, constants) flow through unstored.
+        """
+
         from tinygrad import Tensor
 
-        compute_gradient, rules = _gradient_api()
+        rules = _gradient_api()[1]
         loss = self._loss(raw_output)
-        labelled = {id(uop) for uop in (*sources, *recorded)}
         ordered = list({id(uop): uop for uop in (*sources, *recorded)}.values())
+        labelled = {id(uop) for uop in ordered}
         wanted = {uop for uop in ordered if _differentiable(uop)}
         seed = Tensor(1.0, dtype=loss.dtype, device=loss.device)
-        grads = compute_gradient(loss.uop, seed.uop, wanted)
-        walked = _walked(loss.uop, wanted)
-        for uop in ordered:
-            grad = grads.get(uop) if uop in wanted else None
+        grads: dict[int, Any] = {id(loss.uop): seed.uop}
+        for uop in reversed(_walk(loss.uop, wanted)):
+            grad = grads.get(id(uop))
             if grad is None or _uop_name(grad) == "NOOP":
                 continue
-            self.op_grads.append((uop, self._target(grad)))
-            if id(uop) in walked:
-                self._prepare_node(uop, grad, rules, labelled, wanted)
+            self._sweep_step(uop, grad, rules, labelled, wanted, grads)
+        for uop in ordered:
+            grad = grads.get(id(uop)) if uop in wanted else None
+            if grad is not None and _uop_name(grad) != "NOOP":
+                self.op_grads.append((uop, self._target(grad)))
+        self.nodes.reverse()
         output_ids = {id(tensor.uop) for tensor in _flat_tensors(raw_output)}
         self.root_uops = [node.uop for node in self.nodes if id(node.uop) in output_ids]
 
-    def _prepare_node(
-        self, uop: Any, grad: Any, rules: Any, labelled: set[int], targets: set[Any]
+    def _sweep_step(
+        self,
+        uop: Any,
+        grad: Any,
+        rules: Any,
+        labelled: set[int],
+        wanted: set[Any],
+        grads: dict[int, Any],
     ) -> None:
-        """The rule's gradient to each labelled parent occurrence of ``uop``."""
+        """Apply ``uop``'s rule and add its contributions to its sources' gradients."""
 
-        positions = [pos for pos, src in enumerate(uop.src) if id(src) in labelled]
-        if not positions:
-            return
         if _uop_name(uop) in _CALL_UOPS:
-            raise _Unavailable(f"a recorded {_uop_name(uop)} UOp has no per-op gradient rule")
-        local = rules.rewrite(_on_realized(uop, labelled), ctx=grad.contiguous())
+            raise _Unavailable(f"a {_uop_name(uop)} UOp has no per-op gradient rule")
+        recorded = id(uop) in labelled
+        if recorded:
+            local = rules.rewrite(_on_realized(uop, labelled), ctx=self._target(grad))
+        else:
+            local = rules.rewrite(uop, ctx=grad)
         if local is None or len(local) != len(uop.src):
             raise _Unavailable(f"tinygrad has no gradient rule for UOp {_uop_name(uop)}")
         outgoing = []
-        for pos in positions:
-            value = local[pos]
-            usable = value is not None and _uop_name(value) != "NOOP"
-            usable = usable and uop.src[pos] in targets
-            outgoing.append((pos, self._target(value) if usable else None))
-        self.nodes.append(_PreparedNode(uop=uop, outgoing=tuple(outgoing)))
+        for pos, (src, value) in enumerate(zip(uop.src, local, strict=True)):
+            if value is None or _uop_name(value) == "NOOP":
+                value = None
+            elif recorded and src in wanted:
+                value = self._target(value)
+            if recorded and id(src) in labelled:
+                outgoing.append((pos, value if src in wanted else None))
+            if value is None:
+                continue
+            prior = grads.get(id(src))
+            usable = prior is not None and _uop_name(prior) != "NOOP"
+            grads[id(src)] = prior + value if usable else value
+        if outgoing:
+            self.nodes.append(_PreparedNode(uop=uop, outgoing=tuple(outgoing)))
 
 
 @contextmanager
