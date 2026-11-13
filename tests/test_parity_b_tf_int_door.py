@@ -19,6 +19,7 @@ from tests.test_parity_b_gradsites_support import _replay_values  # noqa: E402
 from torchlens.backends._replay_adapters import get_adapter  # noqa: E402
 from torchlens.errors import RunCapabilityUnavailableError  # noqa: E402
 from torchlens.intervention._grad_site_neutral import (  # noqa: E402
+    GradSitePass,
     armed_grad_sites,
     clear_grad_sites,
     edited_gradients_for_backend,
@@ -58,8 +59,7 @@ def _replayed_input_grad(trace: Any, x: Any) -> np.ndarray:
         "tf",
         graph_ops,
         values.__getitem__,
-        {loss: tf.ones_like(values[loss])},
-        armed_grad_sites(trace),
+        GradSitePass({loss: tf.ones_like(values[loss])}, edits=armed_grad_sites(trace)),
     )
     label = next(name for name in source if name in result.grads)
     return np.asarray(adapter.to_host(result.grads[label]), dtype=np.float64)
