@@ -15,7 +15,7 @@ from __future__ import annotations
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from .._capture._episode_coupling import quarantine_episode_after_perturbed_replay
 from .._data_classes._trace_grad_sites import (
@@ -36,6 +36,7 @@ from .._selection.selectors import CompositeSelector, NotSelector, label
 from ..options import ReplayOptions
 from ._audit import record_intervention_event, site_keys_for_labels
 from ._edit_guards import detach_handles, internal_mutation
+from ._grad_site_neutral import do_signal_plan_off_torch
 from ._replay import _reset_backward_projection, gradient_edit_replay_text
 from ._rerun_predicate import raw_live_labels
 from ._runtime import apply_live_gradient_hooks
@@ -192,6 +193,9 @@ def do_signal_plan(trace: Trace, plan: _SignalPlan, request: _SignalDoRequest) -
         the optional loss callable of the returned trace (which runs the
         backward here).
 
+    A non-torch trace goes to its backend's door through
+    ``_grad_site_neutral.do_signal_plan_off_torch`` before any torch-only step.
+
     Returns
     -------
     Trace
@@ -199,6 +203,9 @@ def do_signal_plan(trace: Trace, plan: _SignalPlan, request: _SignalDoRequest) -
         ``set_only``.
     """
 
+    backend = getattr(trace, "_provenance_backend", None) or "torch"
+    if backend != "torch":
+        return cast("Trace", do_signal_plan_off_torch(trace, plan, request, backend))
     preflight_txn = _preflight_signal_do(trace, plan, request)
     if preflight_txn.engine == "rerun":
         result = trace._fork_trace(name=None)

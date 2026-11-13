@@ -51,6 +51,7 @@ __all__ = (
     "build_grad_site_edits",
     "clear_grad_sites",
     "disagreeing_labels",
+    "do_signal_plan_off_torch",
     "edited_gradients",
     "edited_gradients_for_backend",
     "grad_site_targets",
@@ -58,6 +59,8 @@ __all__ = (
 )
 
 _CODE = "run_capability_unavailable"  # RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE
+_DOOR_MODULE = "torchlens.backends.{backend}._grad_site_door"
+"""Where a backend's ``-int`` lane puts ``do_signal_plan(trace, plan, request)``."""
 _DETECTION_STAGE = "grad_site_neutral"
 
 
@@ -452,3 +455,32 @@ def run_armed_grad_sites(
     return edited_gradients_for_backend(
         trace, backend, ops, value, seeds, armed_grad_sites(trace), pass_index=pass_index
     )
+
+
+def do_signal_plan_off_torch(trace: Any, plan: Any, request: Any, backend: str) -> Any:
+    """Run ``Trace.do`` with a ``tl.grad`` site on a non-torch trace.
+
+    ``intervention._grad_site_plan.do_signal_plan`` routes here before any
+    torch-only step. The backend's door module
+    (``torchlens/backends/<backend>/_grad_site_door.py``, owned by its
+    ``-int`` lane) takes the whole plan: it lowers the activation half the way
+    its finished-trace edits do, arms the gradient half with
+    :func:`build_grad_site_edits` and :func:`arm_grad_sites`, runs
+    ``request.loss`` when given, and returns the armed trace.
+
+    Raises
+    ------
+    RunCapabilityUnavailableError
+        When the backend has no door module yet.
+    """
+
+    from importlib import import_module
+
+    name = _DOOR_MODULE.format(backend=backend)
+    try:
+        door = import_module(name)
+    except ModuleNotFoundError as exc:
+        if exc.name not in (name, name.rpartition(".")[0]):
+            raise
+        raise _refuse(f"Trace.do with a tl.grad site is not open on the {backend} backend") from exc
+    return door.do_signal_plan(trace, plan, request)

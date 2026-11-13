@@ -7,6 +7,8 @@ their slot, and the module refuses what it cannot do.
 
 from __future__ import annotations
 
+import sys
+from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
@@ -21,7 +23,7 @@ from torchlens.backends._reverse_engine import (
     reverse_gradients,
 )
 from torchlens.errors import RunCapabilityUnavailableError
-from torchlens.intervention import _grad_site_neutral as neutral
+from torchlens.intervention import _grad_site_neutral as neutral, _grad_site_plan
 from torchlens.intervention._grad_site_neutral import GradSiteEdit, edited_gradients
 
 _A = np.array([0.5, -1.25, 2.0])
@@ -235,3 +237,19 @@ def test_disagreeing_labels_uses_the_adapter_comparison() -> None:
     native["a"] = native["a"] + 1.0
     del native["b"]
     assert neutral.disagreeing_labels(fake, result, native) == ("a", "b")
+
+
+def test_do_signal_plan_routes_a_non_torch_trace_to_its_backend_door(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Off torch, ``Trace.do`` with a gradient site reaches the backend door or refuses typed."""
+
+    trace = SimpleNamespace(_provenance_backend="gsdoor")
+    plan = _grad_site_plan.signal_plan(tl.grad("relu_1"), tl.scale(0.5))
+    with pytest.raises(RunCapabilityUnavailableError, match="not open on the gsdoor backend"):
+        _grad_site_plan.do_signal_plan(trace, plan, None)
+    calls: list[Any] = []
+    door = SimpleNamespace(do_signal_plan=lambda t, p, r: calls.append((t, p, r)) or t)
+    monkeypatch.setitem(sys.modules, "torchlens.backends.gsdoor._grad_site_door", door)
+    assert _grad_site_plan.do_signal_plan(trace, plan, "request") is trace
+    assert calls == [(trace, plan, "request")]
