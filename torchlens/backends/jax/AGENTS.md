@@ -54,10 +54,15 @@ Jaxpr-first JAX backend. It fills the backend protocol (no `capture_backend`); i
   called inside a loop iteration or a jit bind one runtime call per run, as on
   PyTorch (`module_call_renumbering` on the result moves later trace-time calls;
   `_module_return_probe.split_outputs` applies it to forward args and the ledger).
-  Leaf module.
+  Leaf module. A module capture with an imported region (scan or while over the
+  unroll cap, or `jax_control_flow="region"`) refuses typed in `split_outputs`:
+  `backend._finish_trace` pairs module params with `result.equations`, which has no
+  region captures, so a region would misalign them; passing `result.captures`
+  there lifts it.
 - `_jit_consts.py`: `derive_closed_jaxpr` hoists the closure constants of top-level
   jit calls (a module's weights read inside `jax.jit`) to top-level constants, so
-  they are recorded `constant` sources and module params. A jit inside a cond,
+  their reads are recorded parents (module params, or `constant` sources outside a
+  module). A jit inside a cond,
   scan or while body that closes over constants still refuses (purity gate).
 - `_halt.py`: `JaxStop`, the `stop_after=` site for `capture_trace` (selector or
   callable, matched on the equation context at hook time; halted traces get
