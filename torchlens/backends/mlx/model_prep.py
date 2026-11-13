@@ -1,4 +1,4 @@
-"""MLX model preparation helpers for technical-preview capture."""
+"""MLX model preparation helpers for MLX capture."""
 
 from __future__ import annotations
 

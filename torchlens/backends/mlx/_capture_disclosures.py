@@ -1,4 +1,4 @@
-"""Capture-time honesty disclosures for the MLX preview backend.
+"""Capture-time honesty disclosures for the MLX backend.
 
 Two conditions leave an MLX capture looking complete when it is not: a model
 holding ``mx.compile`` or traced-transform attributes whose interiors are never

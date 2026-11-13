@@ -1,6 +1,6 @@
 # backends/tf/ - Implementation Guide
 
-TensorFlow backend. It fills the backend protocol (`maturity="preview"`, no `capture_backend`); its
+TensorFlow backend. It fills the backend protocol (no `capture_backend`); its
 `BackendSpec` in `../default_specs.py` and its protocol shell in
 `../_protocols/tf.py` are the capability truth (contract: `../AGENTS.md`).
 

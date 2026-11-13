@@ -1,4 +1,4 @@
-"""Registry-backed capability exports for the technical-preview MLX backend."""
+"""Registry-backed capability exports for the MLX backend."""
 
 from __future__ import annotations
 

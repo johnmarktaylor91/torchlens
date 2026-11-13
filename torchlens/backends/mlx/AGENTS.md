@@ -1,7 +1,7 @@
 # backends/mlx/ - Implementation Guide
 
-MLX preview backend: eager wrapper capture with live per-op replay validation.
-It fills the backend protocol (`maturity="preview"`, no `capture_backend`); its
+MLX backend: eager wrapper capture with live per-op replay validation.
+It fills the backend protocol (no `capture_backend`); its
 `BackendSpec` in `../default_specs.py` and its protocol shell in
 `../_protocols/mlx.py` are the capability truth (contract: `../AGENTS.md`).
 

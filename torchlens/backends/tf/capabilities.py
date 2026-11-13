@@ -1,4 +1,4 @@
-"""Registry-backed capability exports for the TensorFlow backend preview."""
+"""Registry-backed capability exports for the TensorFlow backend."""
 
 from __future__ import annotations
 

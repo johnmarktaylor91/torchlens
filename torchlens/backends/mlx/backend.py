@@ -1,4 +1,4 @@
-"""Technical-preview MLX implementation of the capture backend Protocol."""
+"""MLX implementation of the capture backend Protocol."""
 
 from __future__ import annotations
 
@@ -952,7 +952,7 @@ class MLXBackend:
         )
         if seed is not None:
             raise BackendUnsupportedError(
-                "MLX backend preview does not support random_seed; pass explicit MLX RNG "
+                "The MLX backend does not support random_seed; pass explicit MLX RNG "
                 "state through the model/input surface instead.",
                 code="explicit_seed_unsupported",
             )
@@ -1722,7 +1722,7 @@ class MLXBackend:
                 f"MLX intervention {plan.applier.identity!r} changed the output "
                 f"from shape={self._shape(leaf)} dtype={self._dtype(leaf)} to "
                 f"shape={self._shape(replacement)} dtype={self._dtype(replacement)}; "
-                "the MLX preview supports shape- and dtype-preserving interventions only.",
+                "the MLX backend supports shape- and dtype-preserving interventions only.",
                 code="intervention_result_invalid",
             )
         return replacement

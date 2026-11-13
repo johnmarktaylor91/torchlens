@@ -174,7 +174,7 @@ def _value_site(plan_id: str, predicate: Any) -> TFInterventionSite:
 
 
 def _reject_gradient_site(selector: BaseSelector) -> None:
-    """Refuse a site outside the activation universe: the tf preview is forward-only."""
+    """Refuse a site outside the activation universe: the tf backend is forward-only."""
 
     from ...intervention.hooks import split_site_branches
 
@@ -182,7 +182,7 @@ def _reject_gradient_site(selector: BaseSelector) -> None:
         raise BackendUnsupportedError(
             "tf backend interventions are forward-only; the site "
             f"{selector!r} addresses a gradient, which needs true backward capture "
-            "that the tf preview does not declare. Use the PyTorch backend for gradient edits.",
+            "that the tf backend does not declare. Use the PyTorch backend for gradient edits.",
             code=_TF_REFUSAL_BACKWARD,
         )
 

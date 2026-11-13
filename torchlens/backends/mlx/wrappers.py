@@ -1,4 +1,4 @@
-"""MLX function-call interception for technical-preview capture."""
+"""MLX function-call interception for MLX capture."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Live replay validation for the technical-preview MLX backend.
+"""Live replay validation for the MLX backend.
 
 The oracle mirrors the Paddle/tinygrad pattern: every captured operation is
 re-invoked with arguments reconstructed from its DECLARED parents' saved

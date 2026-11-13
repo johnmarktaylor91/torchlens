@@ -1,4 +1,4 @@
-"""TensorFlow backend preview with eager op-callback capture."""
+"""TensorFlow backend with eager op-callback capture."""
 
 from __future__ import annotations
 
@@ -85,7 +85,7 @@ class TFCallPlan:
 
 
 class TFBackend:
-    """TensorFlow eager op-callback backend preview."""
+    """TensorFlow eager op-callback backend."""
 
     name = "tf"
     supports_backward_capture = False
@@ -230,7 +230,7 @@ class TFBackend:
             )
         if random_seed is not None:
             raise BackendUnsupportedError(
-                "tf backend preview does not support random_seed; use tf.random.set_seed(...) "
+                "the tf backend does not support random_seed; use tf.random.set_seed(...) "
                 "outside tl.trace or pass explicit RNG state through the model/input surface."
             )
         _reject_unsupported_options(

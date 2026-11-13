@@ -1,4 +1,4 @@
-"""TensorFlow backend preview exports."""
+"""TensorFlow backend exports."""
 
 from __future__ import annotations
 

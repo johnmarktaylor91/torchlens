@@ -1,4 +1,4 @@
-"""Technical-preview MLX backend for TorchLens.
+"""MLX backend for TorchLens.
 
 Eager wrapper capture with live per-op replay validation, static-label
 ``save=`` filtering, static-label ``intervene=``/``halt=`` dispatch, and

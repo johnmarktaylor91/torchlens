@@ -1,4 +1,4 @@
-"""Backend-local MLX settings (no public trace option grows for a preview).
+"""Backend-local MLX settings (no public trace option grows for one backend).
 
 The one setting today is the unwrapped-op policy: what a capture does when
 the forward produced an output or intermediate that no wrapped operation made
