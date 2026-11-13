@@ -68,7 +68,8 @@ class ReplayStep:
 
     ``kind`` is ``"op"`` (re-run through the adapter), ``"source"`` (an input
     or buffer record: its value is captured, never recomputed) or
-    ``"passthrough"`` (a module-edit replacement op: its value is its parent's).
+    ``"passthrough"`` (a module-edit replacement op or a single-parent output
+    record: its value is its parent's).
     """
 
     op: Any
@@ -106,11 +107,21 @@ def _is_guard(adapter: Any, site: Op) -> bool:
     return shape == () and dtype == "bool"
 
 
+def _is_boundary_output(site: Op) -> bool:
+    """Whether a site is a single-parent output record, which mirrors its parent's value.
+
+    The PyTorch engine replays a boundary output node the same way: its value
+    is its parent's resolved slot, never a re-run of the op that made it.
+    """
+
+    return bool(record_member(site, "is_output", False)) and len(tuple(site.parents or ())) == 1
+
+
 def _step_for_site(trace: Trace, adapter: Any, site: Op) -> ReplayStep:
     """Describe one cone site as a replay step, refusing an op the adapter cannot replay."""
 
     key = _replay_site_key(site)
-    if _is_passthrough_replacement(site):
+    if _is_passthrough_replacement(site) or _is_boundary_output(site):
         parent = _resolve_key(trace, tuple(site.parents)[0], owner=key)
         return ReplayStep(site, (key,), (parent,), "passthrough", False)
     if _is_source_record(site) or not tuple(getattr(site, "parents", ()) or ()):
@@ -192,6 +203,12 @@ def _step_outputs(walk: ReplayWalk, step: ReplayStep) -> tuple[Any, ...]:
         # Nothing upstream changed: the captured values are the replay values
         # exactly, so an edit that changes nothing reproduces the trace bit for bit.
         return tuple(walk.payload(slot) for slot in step.slots)
+    return forward_step(walk, step)
+
+
+def forward_step(walk: ReplayWalk, step: ReplayStep) -> tuple[Any, ...]:
+    """Run one op step through the adapter on its current parent values, checking arity."""
+
     parents = tuple(walk.value(parent) for parent in step.occurrences)
     try:
         outputs = tuple(walk.adapter.forward(walk.trace, step.op, parents))
@@ -307,9 +324,10 @@ def verify_backend_replay(trace: Trace, labels: Sequence[str] | None = None) -> 
     walk = ReplayWalk(trace, adapter, _payload_reader(trace), _no_edit, frozenset())
     failures: list[str] = []
     for step in trace_steps(trace, adapter, sites):
-        if step.kind != "op" or all(_is_edit_marked(trace, slot) for slot in step.slots):
+        if step.kind == "source" or all(_is_edit_marked(trace, slot) for slot in step.slots):
             continue
-        outputs = _step_outputs(walk, step)
+        passthrough = step.kind == "passthrough"
+        outputs = _step_outputs(walk, step) if passthrough else forward_step(walk, step)
         for slot, value in zip(step.slots, outputs):
             if not _is_edit_marked(trace, slot) and not adapter.close(walk.payload(slot), value):
                 failures.append(slot)

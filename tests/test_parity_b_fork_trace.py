@@ -216,6 +216,17 @@ def test_corrupted_payload_fails_the_replay_check(fake_backend: ModuleType) -> N
     assert tanh in _backend_replay.verify_backend_replay(edited)
 
 
+def test_corrupted_output_record_fails_the_replay_check(fake_backend: ModuleType) -> None:
+    edited = _as_fake(_capture()).fork().do(tl.func("relu"), tl.zero_ablate())
+    output = next(op for op in edited._layer_list if op.is_output)
+    output._internal_set("out", output.out * 0.0 + 7.0)
+    assert output.label in _backend_replay.verify_backend_replay(edited)
+
+
+def test_clean_capture_passes_the_replay_check(fake_backend: ModuleType) -> None:
+    assert _backend_replay.verify_backend_replay(_as_fake(_capture())) == []
+
+
 def test_removed_edit_record_fails_the_replay_check(fake_backend: ModuleType) -> None:
     edited = _as_fake(_capture()).fork().do(tl.func("relu"), tl.zero_ablate())
     relu = _first(edited, "relu")
