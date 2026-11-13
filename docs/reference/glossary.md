@@ -2482,7 +2482,7 @@ code outside the registry fails the backend's `c0_refusal_codes_registered` cell
 | `live_payloads_required` | tinygrad replay validation or derived gradients were asked of an audit-only trace, which has no live realized-copy payloads |
 | `mid_capture_execution_unsupported` | the traced tinygrad callable realizes a tensor or runs a `TinyJit` function during capture |
 | `traced_transform_entry_unsupported` | the MLX capture entry is an `mx.compile`, `mx.grad` or `mx.vmap` wrapper rather than the eager module or callable |
-| `intervention_with_derived_grads_unsupported` | MLX `grad_options=` combined with `intervene=` or `stop_after=` in one call |
+| `intervention_with_derived_grads_unsupported` | MLX `grad_options=` with a `tl.module` edit, a `tl.grad` site without `grad_options=`, or a derived-gradient rerun that does not reproduce the capture |
 | `intervention_result_invalid` | an MLX intervention returned something other than an `mx.array`, or changed the output's shape or dtype |
 
 Codes the backends already raised before the registry (`value_dependent_branch_unsupported`,

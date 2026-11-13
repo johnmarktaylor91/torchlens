@@ -133,6 +133,18 @@ captured operations between the two units and differentiate them with `mx.vjp` /
 A trace saved with `level="executable_with_callables"` also stores one replay recipe per op, so
 after `tl.load` it validates by real replay, also in a fresh process without the model.
 
+## Selective save and recording
+
+- `save=` with a static selector is a payload filter at capture time: selected ops keep their
+  payloads, and every other value is spilled to a temporary directory for validation and
+  removed when the trace is collected, so peak memory falls. Selectors that cannot be decided
+  during the forward keep every value in memory and filter after capture.
+- `capture=CaptureOptions(structure_only=True)` keeps the full graph with no payloads; value
+  validation refuses.
+- `tl.record(..., backend="mlx")` emits lean per-op events and keeps values only for the
+  selected ops, with `stop_after=`; `storage=` writes them to disk with bounded held bytes.
+  `tl.trace(storage=...)` streaming is not available on MLX.
+
 ## Can and cannot
 
 The rows are the backend's capability table in the scorecard's vocabulary: `supported` (the
@@ -166,6 +178,7 @@ named code), `not yet proven` (False, refusal not yet pinned by a passing suite 
 | An intervention that returns a non-`mx.array` or changes shape or dtype | unsupported | `intervention_result_invalid` |
 | `intervene=` as a raw decision callable (not `tl.when`) | unsupported | `backend_unsupported` |
 | A module selector combined with a non-module condition | unsupported | `interventions_unsupported` |
+| Replay validation of a selective `save=` capture (torch gap) | passes where torch does not | MLX keeps every unselected value as a replay witness and returns `passed` after a full replay; torch reports the same options as unverified (`parent_payload_missing`) or raises `PayloadUnavailableError` |
 | `ctx.tensor_requires_grad` in a condition | no MLX value | raises `MLXValueUnavailableError` |
 | Ops outside the wrapped surface | flagged (`unwrapped_op_in_capture`) or refused under `unwrapped_policy("refuse")` | `unwrapped_op_in_capture` |
 | Arrays constructed inside the forward (`mx.array(...)`) | flagged as unwrapped (build constants outside the forward) | `unwrapped_op_in_capture` |

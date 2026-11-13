@@ -185,15 +185,6 @@ These stay refused, each with a typed code:
 
 A condition that matches nothing warns, as on torch, and returns the plain capture.
 
-## Backward pass
-
-`trace.backward(loss_fn)` records one backward pass per capture. Its gradient UOps are the
-ones tinygrad builds on the forward's own UOps, computed in the capture's single
-realization; the loss is `GradOptions(loss_fn=...)`. Leaf and parameter gradients equal
-eager `Tensor.backward`. tinygrad fuses its whole gradient program and recomputes forward
-values inside it, so a recorded gradient can differ from a replay of its op on the stored
-payloads by float32 rounding where the gradient cancels toward zero.
-
 ## Scorecard
 
 `torchlens/backends/tinygrad/scorecard.json` is written by the pinned CI leg
