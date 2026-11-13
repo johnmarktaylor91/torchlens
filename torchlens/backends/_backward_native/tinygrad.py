@@ -179,6 +179,26 @@ def _walked(root: Any, targets: set[Any]) -> set[int]:
     return walked
 
 
+def _on_realized(uop: Any, labelled: set[int]) -> Any:
+    """``uop`` reading its recorded sources from the copies the realize stores.
+
+    The leaf gradients come from ``compute_gradient`` unchanged. A node's
+    recorded outgoing gradients instead apply its rule to the stored forward
+    values and the stored incoming gradient (each a ``CONTIGUOUS`` UOp the
+    same realize materializes), so the record is the rule evaluated on the
+    recorded payloads, as the backward validator replays it. Sources that are
+    not recorded differentiable values (shape arguments, constants, indices)
+    stay as they are.
+    """
+
+    sources = tuple(
+        src.contiguous() if id(src) in labelled and _differentiable(src) else src for src in uop.src
+    )
+    if all(new is old for new, old in zip(sources, uop.src, strict=True)):
+        return uop
+    return uop.replace(src=sources)
+
+
 @dataclass(frozen=True)
 class _PreparedNode:
     """One gradient rule before the realize: its forward UOp and outgoing gradients."""
@@ -292,7 +312,7 @@ class BackwardScope:
             return
         if _uop_name(uop) in _CALL_UOPS:
             raise _Unavailable(f"a recorded {_uop_name(uop)} UOp has no per-op gradient rule")
-        local = rules.rewrite(uop, ctx=grad)
+        local = rules.rewrite(_on_realized(uop, labelled), ctx=grad.contiguous())
         if local is None or len(local) != len(uop.src):
             raise _Unavailable(f"tinygrad has no gradient rule for UOp {_uop_name(uop)}")
         outgoing = []
