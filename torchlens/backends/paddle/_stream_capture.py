@@ -241,15 +241,17 @@ class PaddleStream:
             ``ref`` with the blob reference, and no payload unless ``retain_in_memory``.
         """
 
-        on_save = getattr(self.storage, "on_save", None)
-        if callable(on_save):
-            with _state.pause_logging():
+        # Every torch call the writer makes (transport, snapshot, validation) must stay
+        # out of the capture journal: torch's wrappers log while a capture is active.
+        with _state.pause_logging():
+            on_save = getattr(self.storage, "on_save", None)
+            if callable(on_save):
                 on_save(label, payload)
-        writer = self.writer(trace)
-        if writer is None:
-            return ref
-        blob_id = writer.next_blob_id()
-        writer.submit_blob(blob_id, payload, kind="out", label=label)
+            writer = self.writer(trace)
+            if writer is None:
+                return ref
+            blob_id = writer.next_blob_id()
+            writer.submit_blob(blob_id, payload, kind="out", label=label)
         kept = payload if bool(getattr(self.storage, "retain_in_memory", False)) else None
         return replace(ref, payload=kept, blob_ref=BlobRef(blob_id=blob_id, kind="out"))
 
@@ -337,7 +339,7 @@ class PaddleCodecWrites:
             with _state.pause_logging():
                 encoded = codec.to_numpy(value)
                 fields = dict(codec.manifest_fields(value, encoded))
-            transport = numpy_to_transport_tensor(encoded.array)
+                transport = numpy_to_transport_tensor(encoded.array)
         except Exception as exc:
             reason = (
                 f"Unsupported Paddle payload for streaming at {label} (blob_id={blob_id}): {exc}"
@@ -346,6 +348,31 @@ class PaddleCodecWrites:
             raise ArtifactError(reason) from exc
         self._paddle_codec_fields[blob_id] = (fields, str(encoded.logical_device))
         return transport
+
+    def _validate_blob_submission(
+        self, blob_id: str, tensor: Any, *, kind: str, label: str
+    ) -> None:
+        """Validate a submission; a Paddle transport skips the torch save-dtype gate.
+
+        The transport is the codec's NumPy array wrapped as a CPU torch tensor,
+        so its dtype is the codec's carrier (bfloat16 travels as uint16), which
+        the torch dtype gate refuses although ``Trace.save`` writes it the same
+        way. The writable and duplicate-id checks still apply.
+        """
+
+        if blob_id not in self._paddle_codec_fields:
+            super()._validate_blob_submission(  # type: ignore[misc]
+                blob_id, tensor, kind=kind, label=label
+            )
+            return
+        self._ensure_writable()  # type: ignore[attr-defined]
+        with self._entries_lock:  # type: ignore[attr-defined]
+            duplicate = blob_id in self._known_blob_ids  # type: ignore[attr-defined]
+            self._known_blob_ids.add(blob_id)  # type: ignore[attr-defined]
+        if duplicate:
+            reason = f"Duplicate streaming blob_id={blob_id} for {label}."
+            self.abort(reason)  # type: ignore[attr-defined]
+            raise ArtifactError(reason)
 
     def _write_prepared_blob(self, *, blob_id: str, prepared: Any, kind: str, label: str) -> Any:
         """Queue a prepared payload; Paddle transports go to the NumPy-codec chunk."""

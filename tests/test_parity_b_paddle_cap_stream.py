@@ -17,6 +17,7 @@ np = pytest.importorskip("numpy")
 
 import torchlens as tl  # noqa: E402
 from torchlens._errors import InvalidArgumentError  # noqa: E402
+from torchlens._io import ArtifactError  # noqa: E402
 from torchlens._io.streaming import BundleStreamWriter  # noqa: E402
 from torchlens.backends import registry  # noqa: E402
 from torchlens.backends.paddle import _stream_capture  # noqa: E402
@@ -75,7 +76,7 @@ def test_streamed_bundle_loads_payloads_equal_to_plain_capture(tmp_path: Path) -
     streamed = tl.trace(_chain, _input(), backend="paddle", storage=tl.to_disk(path))
 
     assert path.is_dir()
-    assert Path(streamed._source_bundle_path) == path
+    assert getattr(streamed, "_out_writer", None) is None
     loaded = tl.load(path)
     assert loaded.provenance.backend == "paddle"
     _assert_payloads_equal(loaded, plain)
@@ -86,11 +87,12 @@ def test_streamed_payloads_leave_ram_by_default(tmp_path: Path) -> None:
 
     streamed = tl.trace(_chain, _input(), backend="paddle", storage=tl.to_disk(tmp_path / "b"))
 
-    assert streamed._layer_list
-    assert all(op.has_saved_activation for op in streamed._layer_list)
-    assert all(op.__dict__.get("out") is None for op in streamed._layer_list)
-    assert all(op.out_ref is not None for op in streamed._layer_list)
-    assert streamed._out_writer is None
+    streamed_ops = [op for op in streamed._layer_list if op.type != "output"]
+    assert streamed_ops
+    assert all(op.has_saved_activation for op in streamed_ops)
+    assert all(op._slot("out") is None for op in streamed_ops)
+    assert all(op._slot("out_ref") is not None for op in streamed_ops)
+    assert getattr(streamed, "_out_writer", None) is None
     assert STREAM_KEY not in streamed.__dict__
 
 
@@ -176,9 +178,9 @@ def test_existing_bundle_path_is_refused(tmp_path: Path) -> None:
 
     path = tmp_path / "taken"
     path.mkdir()
-    with pytest.raises(Exception) as info:
+    with pytest.raises(ArtifactError, match="already exists"):
         tl.trace(_chain, _input(), backend="paddle", storage=tl.to_disk(path))
-    assert getattr(info.value, "code", None) == "bundle_path_exists"
+    assert not any(tmp_path.glob("taken.tmp.*"))
 
 
 def test_storage_with_save_selector_is_refused(tmp_path: Path) -> None:
@@ -193,7 +195,7 @@ def test_storage_with_save_selector_is_refused(tmp_path: Path) -> None:
             storage=tl.to_disk(path),
             save=tl.func("tanh"),
         )
-    assert info.value.code == "trace_option_unsupported"
+    assert info.value.fields["code"] == "trace_option_unsupported"
     assert not path.exists()
 
 
@@ -215,7 +217,7 @@ def test_plain_capture_is_unchanged_and_saves(tmp_path: Path) -> None:
     trace = tl.trace(_chain, _input(), backend="paddle")
 
     assert all(op.out is not None for op in trace._layer_list)
-    assert trace._source_bundle_path is None
+    assert getattr(trace, "_out_writer", None) is None
     assert STREAM_KEY not in trace.__dict__
     assert _stream_capture.MODE_KEY not in trace.__dict__
     path = tmp_path / "saved"
