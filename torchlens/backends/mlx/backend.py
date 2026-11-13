@@ -74,6 +74,7 @@ from .._invariants import run_metadata_invariants
 from .._options import MLX_PREVIEW_TRACE_OPTION_POLICY, reject_unsupported_trace_options
 from . import capabilities
 from ._capture_disclosures import _disclose_compiled_attributes, _disclose_unfired_selectors
+from ._capture_hooks import forward_hooks, retain_backward_state
 from ._grad_oracle import (
     _eval_mlx_tree,
     _has_mlx_array_leaf,
@@ -944,7 +945,7 @@ class MLXBackend:
             trace._provenance_start_time = time.time()
             halt_signal: StopSignal | None = None
             try:
-                with self.active_logging(trace):
+                with self.active_logging(trace), forward_hooks(trace) as hooks:
                     output = cast(Any, model)(*args, **kwargs)
             except StopSignal as signal:
                 # Save-then-halt ordering: the frontier op's events were
@@ -990,6 +991,7 @@ class MLXBackend:
                     captured_output=output,
                     grad_options=grad_options,
                 )
+            retain_backward_state(trace, hooks)
             if hasattr(trace, "_mlx_module_stack"):
                 delattr(trace, "_mlx_module_stack")
             freeze_trace_relation_views(trace)
