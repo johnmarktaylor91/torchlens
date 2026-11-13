@@ -15,9 +15,9 @@ from __future__ import annotations
 
 import time
 import warnings
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ... import _state
 from ..._capture._stop_after_policy import settle_unfired_stop_after
@@ -35,14 +35,25 @@ from ...intervention._types import Edit, FireRecord, InterventionDecision, Targe
 from ...recording._exceptions import PredicateError
 from .._protocols.paddle import (
     PADDLE_REFUSAL_BACKWARD,
-    PADDLE_REFUSAL_FOREIGN,
     PADDLE_REFUSAL_OPTION,
     PADDLE_REFUSAL_PREDICATE,
 )
 from ..registry import BackendUnsupportedError
+from ._edit_helpers import _replace_leaves, resolve_paddle_helper
+from ._grad_sites import grad_site_neutral
 
-_PADDLE_SUPPORTED_HELPER_NAMES = ("add", "replace_with", "scale", "zero_ablate")
-"""Builtin helper specs with a Paddle-native adapter, sorted."""
+if TYPE_CHECKING:
+    from ...intervention._grad_site_neutral import GradSiteCall
+
+_PADDLE_SUPPORTED_HELPER_NAMES = (
+    "add",
+    "clamp",
+    "mean_ablate",
+    "replace_with",
+    "scale",
+    "zero_ablate",
+)
+"""Builtin helper specs with a Paddle-native adapter, sorted (``_edit_helpers`` applies them)."""
 
 
 @dataclass(frozen=True)
@@ -110,23 +121,31 @@ class PaddleInterventionRuntime:
                 code=PADDLE_REFUSAL_OPTION,
                 option="halt",
             )
-        from ...intervention.hooks import split_site_branches
-
-        selector = getattr(intervene, "selector", None)
-        _validate_module_selector(selector)
-        if selector is not None and any(
-            universe != "activation" for universe, _branch in split_site_branches(selector)
-        ):
-            raise BackendUnsupportedError(
-                "the paddle backend supports forward interventions only; the site "
-                f"{selector!r} addresses a gradient, which needs true backward capture "
-                "that paddle does not declare. Use the PyTorch backend for gradient edits.",
-                code=PADDLE_REFUSAL_BACKWARD,
-            )
+        # tl.grad(site) clauses cannot fire during the forward: they are split
+        # off here and armed on the finished trace (``arm_gradient_sites``).
+        intervene, self.grad_rules = _split_gradient_rules(intervene)
+        _validate_module_selector(getattr(intervene, "selector", None))
         self._backend = backend
         self.intervene = intervene
         self.halt = halt
         self.fire_count = 0
+        # The effective edited program, for derived-gradient replay
+        # (``_edit_replay``): replacing hooks by wrapped-call ordinal and output
+        # path, and the ordinal of the call whose output halted the forward.
+        self.fired_edits: dict[int, tuple[tuple[tuple[Any, ...], Callable[[Any], Any]], ...]] = {}
+        self.halt_call_id: int | None = None
+
+    def arm_gradient_sites(self, trace: Any) -> None:
+        """Arm this capture's ``tl.grad`` clauses on the finished trace (``_grad_sites``).
+
+        Parameters
+        ----------
+        trace
+            Finished Paddle trace with materialized ops.
+        """
+
+        if self.grad_rules:
+            _arm_paddle_grad_sites(trace, self.grad_rules, self._backend.paddle)
 
     def evaluate_intervene(self, ctx: RecordContext) -> InterventionDecision | None:
         """Return the normalized intervention decision for one output site.
@@ -207,6 +226,8 @@ class PaddleInterventionRuntime:
             )
         replaced = replacement is not tensor
         self.fire_count += 1
+        if replaced:
+            self._record_fired_edit(ctx.func_call_id, container_path, hook_fn)
         fire_record = _fire_record(ctx, container_path, helper_spec, replaced)
         fire_result = FireResult(
             plan_id=f"paddle-intervene-{self.fire_count}",
@@ -220,6 +241,14 @@ class PaddleInterventionRuntime:
             fire_record=fire_record,
         )
         return replacement, fire_result
+
+    def _record_fired_edit(
+        self, call_id: int | None, path: tuple[Any, ...], hook_fn: Callable[[Any], Any]
+    ) -> None:
+        """Remember a replacing hook by call ordinal and path for derived-gradient replay."""
+
+        if call_id is not None:
+            self.fired_edits[call_id] = (*self.fired_edits.get(call_id, ()), (path, hook_fn))
 
     def evaluate_halt(self, ctx: RecordContext) -> bool:
         """Return whether the halt predicate fired for one output site.
@@ -246,6 +275,8 @@ class PaddleInterventionRuntime:
                 result=result,
                 code="predicate_return_invalid",
             )
+        if result:
+            self.halt_call_id = ctx.func_call_id
         return result
 
     def record_fired_spec(
@@ -345,77 +376,9 @@ class PaddleInterventionRuntime:
         )
 
     def _resolve_helper_hook(self, helper: Edit) -> Callable[[Any], Any]:
-        """Return the Paddle adapter for one builtin helper spec.
+        """Return the Paddle adapter for one builtin helper spec (``_edit_helpers``)."""
 
-        The builtin helper factories build torch hooks, so each supported
-        helper is re-expressed with Paddle ops from its portable args/kwargs.
-        Unsupported helpers refuse typed rather than silently not intervening.
-
-        Parameters
-        ----------
-        helper
-            Builtin helper spec from ``tl.zero_ablate()`` and friends.
-
-        Returns
-        -------
-        Callable[[Any], Any]
-            Paddle-native replacement function.
-        """
-
-        paddle = self._backend.paddle
-        name = helper.name
-        args = tuple(helper.args)
-        if name == "zero_ablate":
-            return lambda out: paddle.zeros_like(out)
-        if name == "scale":
-            factor = args[0]
-            return lambda out: out * factor
-        if name == "add":
-            delta = args[0]
-            self._reject_foreign_tensor(delta, helper_name=name)
-            return lambda out: out + delta
-        if name == "replace_with":
-            value = args[0]
-            if not callable(value):
-                self._reject_foreign_tensor(value, helper_name=name)
-
-            def _replace(out: Any) -> Any:
-                """Return the replacement, refusing a foreign tensor and casting to ``out``'s dtype."""
-
-                replacement = value() if callable(value) else value
-                self._reject_foreign_tensor(replacement, helper_name=name)
-                if not self._backend.is_tensor(replacement):
-                    return replacement
-                return replacement.astype(out.dtype)
-
-            return _replace
-        supported = ", ".join(_PADDLE_SUPPORTED_HELPER_NAMES)
-        raise BackendUnsupportedError(
-            f"the paddle backend has no adapter for intervention helper "
-            f"{name!r}; supported builtin helpers: {supported}. Pass a callable "
-            "hook operating on paddle.Tensor values, or use the PyTorch backend.",
-            code=PADDLE_REFUSAL_OPTION,
-            option="intervene",
-        )
-
-    def _reject_foreign_tensor(self, value: Any, *, helper_name: str) -> None:
-        """Refuse torch-tensor helper arguments on the Paddle backend.
-
-        Parameters
-        ----------
-        value
-            Helper argument value.
-        helper_name
-            Helper name for the diagnostic.
-        """
-
-        module_root = type(value).__module__.split(".", maxsplit=1)[0]
-        if module_root == "torch":
-            raise BackendUnsupportedError(
-                f"paddle backend intervention helper {helper_name!r} received a "
-                "torch.Tensor argument; pass a paddle.Tensor or Python scalar.",
-                code=PADDLE_REFUSAL_FOREIGN,
-            )
+        return resolve_paddle_helper(helper, self._backend.paddle)
 
 
 __all__ = [
@@ -473,29 +436,18 @@ def _apply_module_exit(trace: Any, frame: Any, output: Any) -> Any:
     backend = runtime._backend
     by_id = {}
     replacements = {}
+    replay = getattr(trace, "_paddle_edit_replay_tap", None)
     for path, tensor in backend._iter_tensors_with_paths(output):
         if id(tensor) not in by_id:
-            by_id[id(tensor)] = _emit_module_leaf(trace, runtime, tensor)
+            # Derived-gradient replay re-runs the boundary call through the replay
+            # tap, which applies the edit fired at this call ordinal during capture.
+            by_id[id(tensor)] = (
+                _emit_module_leaf(trace, runtime, tensor)
+                if replay is None
+                else replay.call(_copy_leaf, "interventionreplacement", (tensor,), {})
+            )
         replacements[path] = by_id[id(tensor)]
     return _replace_leaves(output, replacements)
-
-
-def _replace_leaves(output: Any, replacements: dict[Any, Any], path: tuple[Any, ...] = ()) -> Any:
-    """Rebuild the supported output containers with edited leaves."""
-
-    if path in replacements:
-        return replacements[path]
-    if isinstance(output, tuple):
-        return tuple(
-            _replace_leaves(item, replacements, (*path, i)) for i, item in enumerate(output)
-        )
-    if isinstance(output, list):
-        return [_replace_leaves(item, replacements, (*path, i)) for i, item in enumerate(output)]
-    if isinstance(output, dict):
-        return {
-            key: _replace_leaves(item, replacements, (*path, key)) for key, item in output.items()
-        }
-    return output
 
 
 @dataclass(frozen=True)
@@ -567,3 +519,174 @@ def _emit_module_leaf(trace: Any, runtime: Any, tensor: Any) -> Any:
             )
         )
     return replacement
+
+
+GradRule = tuple[Any, Any]
+"""One gradient clause: ``(gradient site, edit)``."""
+
+
+def _backward_refusal(message: str) -> BackendUnsupportedError:
+    """Return the typed refusal for a gradient address Paddle cannot arm."""
+
+    return BackendUnsupportedError(message, code=PADDLE_REFUSAL_BACKWARD)
+
+
+def _intervention_hooks() -> Any:
+    """The site-branch helpers of ``torchlens.intervention.hooks`` (imported on first use)."""
+
+    from ...intervention import hooks  # deferred: L4 vocabulary, used only with tl.grad clauses
+
+    return hooks
+
+
+def _split_rule(rule: Any) -> tuple[list[Any], list[GradRule]]:
+    """Split one rule into its live activation rule (if any) and its gradient clauses."""
+
+    live: list[Any] = []
+    grads: list[GradRule] = []
+    for universe, branch in _intervention_hooks().split_site_branches(rule.target):
+        if universe == "gradient":
+            grads.append((branch, rule.edit))
+        elif universe == "activation":
+            live.append(rule if branch is rule.target else replace(rule, target=branch))
+        else:
+            raise _backward_refusal(
+                f"the paddle backend cannot arm {branch!r}: autograd-node selectors "
+                "(tl.grad_fn, tl.grad_input, ...) address recorded backward nodes, which "
+                "paddle does not record. tl.grad(site) addresses are supported."
+            )
+    return live, grads
+
+
+def _split_gradient_rules(intervene: Any) -> tuple[Any, tuple[GradRule, ...]]:
+    """Split ``intervene`` into its live forward predicate and its gradient clauses.
+
+    Parameters
+    ----------
+    intervene
+        Public ``trace(intervene=...)`` value: a ``tl.when`` recipe or another
+        callable predicate.
+
+    Returns
+    -------
+    tuple[Any, tuple[GradRule, ...]]
+        The predicate that runs live during the forward (``None`` when every
+        clause addresses a gradient) and the ``(site, edit)`` gradient clauses.
+    """
+
+    rules = getattr(intervene, "rules", None)
+    if intervene is None or rules is None:
+        return intervene, ()
+    live: list[Any] = []
+    grads: list[GradRule] = []
+    for rule in rules:
+        rule_live, rule_grads = _split_rule(rule)
+        live.extend(rule_live)
+        grads.extend(rule_grads)
+    if not grads:
+        return intervene, ()
+    if not live:
+        return None, tuple(grads)
+    return replace(intervene, rules=tuple(live)), tuple(grads)
+
+
+def _gradient_edit_function(edit: Any, paddle: Any) -> Callable[[Any], Any]:
+    """Return the Paddle-native function one gradient clause applies to a gradient.
+
+    Parameters
+    ----------
+    edit
+        The clause's action: a built-in helper spec, a callable taking the
+        gradient, or an ``InterventionDecision`` carrying either.
+    paddle
+        Imported ``paddle`` module.
+
+    Returns
+    -------
+    Callable[[Any], Any]
+        Function mapping the gradient arriving at the site to its replacement.
+    """
+
+    try:
+        decision = as_intervention_decision(edit)
+    except TypeError as exc:
+        raise BackendUnsupportedError(
+            f"paddle tl.grad(...) edits must be a builtin helper or a callable; got "
+            f"{type(edit).__name__!s}.",
+            code=PADDLE_REFUSAL_OPTION,
+            option="intervene",
+        ) from exc
+    hook = None if decision is None else decision.hook
+    if isinstance(hook, Edit):
+        return resolve_paddle_helper(hook, paddle)
+    if callable(hook):
+        return hook
+    raise BackendUnsupportedError(
+        f"paddle tl.grad(...) edits must be a builtin helper or a callable; got "
+        f"{type(hook).__name__!s}.",
+        code=PADDLE_REFUSAL_OPTION,
+        option="intervene",
+    )
+
+
+def _edit_name(edit: Any) -> str:
+    """Display name of a gradient edit for fire records."""
+
+    name = getattr(edit, "name", None)
+    if isinstance(name, str):
+        return name
+    return str(getattr(edit, "__name__", type(edit).__name__))
+
+
+def _resolve_raw_labels(trace: Any, selector: Any) -> tuple[str, ...]:
+    """Raw graph labels of the ops ``selector`` names on a finished Paddle trace.
+
+    Parameters
+    ----------
+    trace
+        Finished Paddle trace.
+    selector
+        Forward selector inside a ``tl.grad(...)`` address.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Raw (capture-identity) labels in trace order, without repeats.
+    """
+
+    sites = trace._resolve_sites(selector, strict=False, max_fanout=len(trace._layer_list) + 1)
+    labels = (getattr(site, "_label_raw", None) for site in sites)
+    return tuple(dict.fromkeys(label for label in labels if isinstance(label, str)))
+
+
+def _arm_paddle_grad_sites(trace: Any, grad_rules: Sequence[GradRule], paddle: Any) -> None:
+    """Resolve each gradient clause on the finished trace and arm it there.
+
+    Parameters
+    ----------
+    trace
+        Finished Paddle trace (ops materialized).
+    grad_rules
+        ``(site, edit)`` gradient clauses from :func:`_split_gradient_rules`.
+    paddle
+        Imported ``paddle`` module.
+    """
+
+    neutral = grad_site_neutral()
+    for site, edit in grad_rules:
+        function = _gradient_edit_function(edit, paddle)
+
+        def _apply(grad: Any, call: GradSiteCall, function: Any = function) -> Any:
+            """Apply the clause's Paddle function to one gradient."""
+
+            del call
+            return function(grad)
+
+        edits = neutral.build_grad_site_edits(
+            site,
+            _apply,
+            lambda inner: _resolve_raw_labels(trace, inner),
+            operands=_intervention_hooks()._target_operands,
+            name=_edit_name(edit),
+        )
+        neutral.arm_grad_sites(trace, edits)

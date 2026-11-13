@@ -22,6 +22,7 @@ from ..._data_classes.derived_grad import (
 from ..._data_classes.param import Param, ParamAccessor
 from ..._data_classes.trace import Trace
 from ..._deprecations import MISSING, MissingType
+from ..._io.streaming import BundleStreamWriter
 from ..._ir.capture_events import CaptureEvents
 from ..._ir.events import (
     ArgTemplateRef,
@@ -39,8 +40,10 @@ from ..._output_slot import returned, stopped
 from ..._postprocess._materialize import materialize_from_events
 from ..._postprocess._selective_save import (
     apply_static_label_save_policy,
+    needs_post_save_predicate,
     pop_static_label_save_predicate,
 )
+from ..._postprocess.finalization import _finalize_streamed_bundle
 from ..._quantities import Duration
 from ..._trace_core.relation_views import freeze_trace_relation_views
 from ..._validation_status import ValidationReplaySource, ValidationStatus
@@ -74,12 +77,12 @@ from .._options import (
 from .._protocols.paddle import (
     PADDLE_REFUSAL_IDENTITY_MODE,
     PADDLE_REFUSAL_INTERMEDIATE_GRADS,
-    PADDLE_REFUSAL_OPTION,
     PADDLE_REFUSAL_RUNTIME_MODE,
     PADDLE_REFUSAL_SEED,
 )
 from .._root_frames import strip_root_frames
 from .._validation_shared import replay_payload
+from . import _retention, _stream_capture
 from ._capture_helpers import (
     _alias_to_primary,
     _append_intervention_events,
@@ -87,6 +90,9 @@ from ._capture_helpers import (
     _paddle_facet_snapshot,
     paddle_layer_type,
 )
+from ._capture_scopes import PaddleCaptureHooks
+from ._edit_replay import run_derived_grad_forward as _replay_forward
+from ._grad_sites import paddle_grad_site_records
 from ._param_writes import PARAMETER_WRITE_MARKER, ParameterWriteGuard
 from .constants_rule import constant_labels, is_constant_capture, is_literal_producer_capture
 from .derived_grads import (
@@ -128,7 +134,7 @@ from .validation_decisions import (
     public_label,
     with_failure_message,
 )
-from .wrappers import is_alias_allowed_op, paddle_tap_observer, unwrap_paddle, wrap_paddle
+from .wrappers import is_alias_allowed_op, unwrap_paddle, wrap_paddle
 
 
 @dataclass(frozen=True)
@@ -387,18 +393,6 @@ class PaddleBackend:
         module_identity_mode = _resolve_optional_capture_field(
             capture, "module_identity_mode", module_identity_mode
         )
-        # keep_orphans/output_device/detach_saved_activations/save_arg_values/
-        # save_code_context/save_rng_states/recurrence_detection/verbose/
-        # compute_input_output_distances/backward_ready/save_raw_input/batch_render/
-        # save_transformed_output/save_visualizations are CaptureOptions-native fields: the
-        # ``capture_options.<field>`` reads above already resolved each one to
-        # its concrete (non-MISSING) default via ``merge_capture_options``,
-        # with the same backend-local defaults this block used to re-apply.
-        # Re-running ``_default_if_missing`` on an already-concrete value was
-        # a no-op at runtime, but it widened mypy's view of the variable back
-        # to its MISSING-including parameter type (``_default_if_missing``
-        # returns ``Any``, which does not narrow); resolving once at the
-        # merge boundary is the fix, not a second pass here.
         activation_transform = _default_if_missing(activation_transform, None)
         save_raw_activations = _default_if_missing(save_raw_activations, True)
         save_grads = _default_if_missing(save_grads, None)
@@ -415,21 +409,12 @@ class PaddleBackend:
         intervene = _default_if_missing(extra_kwargs.pop("intervene", None), None)
         halt = pop_stop_directive(extra_kwargs)
         facet_recipes = _default_if_missing(extra_kwargs.pop("facets", None), None)
-        if grad_options is not None and (intervene is not None or halt is not None):
-            raise BackendUnsupportedError(
-                "the paddle backend cannot combine grad_options with trace(intervene=...) "
-                "or trace(stop_after=...): derived-gradient replay re-executes the forward "
-                "without interventions, so the matched intermediates would misrepresent the "
-                "intervened capture. Capture derived gradients in a separate plain trace.",
-                code=PADDLE_REFUSAL_OPTION,
-                option="grad_options",
-            )
         intervention_runtime = (
             PaddleInterventionRuntime(self, intervene=intervene, halt=halt)
             if intervene is not None or halt is not None
             else None
         )
-        _reject_extra_kwargs(extra_kwargs)
+        capture_mode = _reject_extra_kwargs(extra_kwargs, capture, save_predicate, grad_options)
         if random_seed is not None:
             raise BackendUnsupportedError(
                 "the paddle backend does not support random_seed; use paddle.seed(...) "
@@ -505,6 +490,7 @@ class PaddleBackend:
         trace._paddle_alias_annotations = []
         trace._paddle_capture_gap_markers = []
         trace._paddle_intervention_runtime = intervention_runtime
+        _stream_capture.start_capture_mode(trace, capture_mode, BundleStreamWriter)
         if facet_recipes is not None:
             trace.facet_functions = _paddle_facet_snapshot(facet_recipes)
         trace._provenance_backend_version = str(getattr(self.paddle, "__version__", ""))
@@ -536,8 +522,12 @@ class PaddleBackend:
         # not been entered yet. ``unwrap_paddle`` on a partially-installed (or
         # empty) registry is safe, and the hook cleanup follows a completed
         # ``prepare_model_session``.
+        hooks = PaddleCaptureHooks(
+            self.tensor_store, trace, backward_ready=bool(backward_ready) or bool(save_grads)
+        )
         try:
             wrap_paddle(self)
+            hooks.open()
             self._label_source_tensors(trace, args, kwargs)
             trace._provenance_start_time = time.time()
             halt_signal: StopSignal | None = None
@@ -564,12 +554,16 @@ class PaddleBackend:
                 trace.transformed_output = (
                     output_transform(output) if callable(output_transform) else None
                 )
+            hooks.see_output(output)
             self._mark_outputs(trace, output)
             materialize_from_events(trace, trace.capture_events)
             delattr(trace, "capture_events")
             _attach_paddle_param_logs(trace, module_tree if use_object_module else None)
             self._finish_trace(trace, module_tree if use_object_module else None)
-            apply_static_label_save_policy(trace, save_predicate, backend_name="paddle")
+            hooks.retain(trace)
+            _retention.apply_save(trace, save_predicate, apply_static_label_save_policy)
+            if intervention_runtime is not None:
+                intervention_runtime.arm_gradient_sites(trace)
             if grad_options is not None:
                 self._attach_derived_grads(
                     trace=trace,
@@ -586,6 +580,8 @@ class PaddleBackend:
                 delattr(trace, "_paddle_intervention_runtime")
             freeze_trace_relation_views(trace)
         finally:
+            hooks.close()
+            _stream_capture.end_capture_mode(trace)
             self._param_address_by_id = {}
             self._param_write_guard = ParameterWriteGuard()
             self._source_leaves = PaddleSourceLeaves()
@@ -600,7 +596,7 @@ class PaddleBackend:
         # Settlement is the LAST act, after ALL teardown (the path-20 stamp
         # contract): a teardown raise escapes productless -- the object
         # derives UNATTESTED, never carrying a COMPLETE/HALTED stamp.
-        stamp_backend_finalized(trace)
+        _stream_capture.settle(trace, stamp_backend_finalized, _finalize_streamed_bundle)
         return trace
 
     def validate_entry(self, *args: Any, **kwargs: Any) -> bool:
@@ -696,11 +692,7 @@ class PaddleBackend:
             # could clobber a concurrent capture's _active_trace and republish
             # a stale trace on restore); concurrent capture refuses typed.
             with _state.publish_active_trace(trace), _state.pause_logging():
-                if observer is not None:
-                    with paddle_tap_observer(observer):
-                        replay_output = model(*args, **dict(kwargs))
-                else:
-                    replay_output = model(*args, **dict(kwargs))
+                replay_output = _replay_forward(self, trace, observer, model, (args, kwargs))
                 loss = (
                     grad_options.loss_fn(replay_output) if grad_options.loss_fn else replay_output
                 )
@@ -733,6 +725,10 @@ class PaddleBackend:
                     )
                 else:
                     leaf_grads = ()
+                edited = paddle_grad_site_records(
+                    self, trace, replay_output, grad_options, ((*leaves, *param_leaves), leaf_grads)
+                )
+                intermediate_accessor = intermediate_accessor if edited is None else edited
             records = _records_for_paddle_leaf_grads(
                 leaves=(*leaves, *param_leaves),
                 grads=leaf_grads,
@@ -861,26 +857,26 @@ class PaddleBackend:
         *_args
             Ignored compatibility arguments.
         **kwargs
-            Compatibility keyword arguments. ``validate_metadata`` controls
-            whether backend-neutral invariant checks run.
+            ``validate_metadata`` runs the backend-neutral invariant checks.
 
         Returns
         -------
         bool or ValidationStatus
-            True for a verified live pass, False for a verified live failure,
-            or an explicit unavailable status for loaded payload-stripped traces.
+            True or False for a verified live pass or failure, else the
+            unavailable or unverified status of a loaded trace.
         """
 
         status = trace.validation_replay_status
-        if not status.is_available or _paddle_loaded_replay_unavailable(trace):
+        if not status.is_available:  # a loaded trace's replay recipe status is kept as is
+            return status
+        payload_load_status = getattr(trace, "payload_load_status", None)
+        if _paddle_loaded_replay_unavailable(trace):
             status_result = ValidationStatus.unavailable_loaded_runtime_stripped(
-                backend=self.name,
-                payload_load_status=getattr(trace, "payload_load_status", None),
+                backend=self.name, payload_load_status=payload_load_status
             )
             setattr(trace, "_validation_replay_status", status_result)
             return status_result
         source = _validation_source(trace)
-        payload_load_status = getattr(trace, "payload_load_status", None)
         try:
             from ..._validation_status import count_importer_region_annotations
 
@@ -1398,14 +1394,8 @@ class PaddleBackend:
     def _capture_policy(self, session: object) -> CapturePolicy:
         """Return the Paddle capture policy for one event."""
 
-        return CapturePolicy(
-            # Paddle preview is full-save only: entry policy refuses
-            # save_raw_activations=False, so payload saving is unconditional
-            # here (a dynamic read would be dead code implying a capability
-            # the entry gate denies).
-            save_payload=True,
-            save_grad=False,
-        )
+        # Entry policy refuses save_raw_activations=False; only structure-only drops payloads.
+        return CapturePolicy(save_payload=_stream_capture.saves_payloads(session), save_grad=False)
 
     def _build_source_event(
         self,
@@ -1469,9 +1459,7 @@ class PaddleBackend:
     ) -> OpEvent:
         """Build one topology-complete Paddle operation event."""
 
-        tensor_ref = self.tensor_ref(
-            session, output, output if policy.save_payload else None, policy
-        )
+        tensor_ref = _retention.saved_ref(self, session, reserved, func_event_input, output, policy)
         input_ancestors = frozenset(
             edge.parent_label_raw for edge in parents if edge.parent_label_raw.startswith("input.")
         )
@@ -2282,14 +2270,20 @@ def _replace_paddle_tensors_at_paths(
     return output
 
 
-def _reject_extra_kwargs(extra_kwargs: dict[str, Any]) -> None:
-    """Reject explicit unsupported public kwargs that reach Paddle capture."""
+def _reject_extra_kwargs(
+    extra_kwargs: dict[str, Any], capture: Any, save_predicate: object, grad_options: object
+) -> _stream_capture.PaddleCaptureMode:
+    """Take the admitted payload modes (retention: static save= selectors), reject the rest."""
 
+    static = save_predicate is not None and not needs_post_save_predicate(save_predicate)
+    retained = save_predicate if static and grad_options is None else None
+    mode = _stream_capture.pop_capture_mode(capture, extra_kwargs, retained, save_predicate)
     reject_extra_trace_kwargs(
         extra_kwargs,
         PADDLE_EXTRA_KWARG_POLICY,
         spec=get_backend_spec("paddle"),
     )
+    return mode
 
 
 class _PaddleIntermediateTapObserver:
