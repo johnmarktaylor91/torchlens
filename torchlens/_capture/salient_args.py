@@ -69,7 +69,7 @@ def _build_arg_name_map(
     if argnames is _NO_NAMES:
         argnames = _ARG_NAME_FALLBACKS.get(normalized_func_name, ())
     result = dict(kwargs)
-    for name, val in zip(argnames, args):
+    for name, val in zip(argnames, args, strict=False):  # fewer args than names: defaults
         if name not in result:  # kwargs take precedence
             result[name] = val
     return result
