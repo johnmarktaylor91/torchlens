@@ -68,10 +68,12 @@ print(status.state)
   multi-rule or value-dependent spec whose clause needs a module boundary refuses with
   `trace_option_unsupported`; pass module clauses as their own `tl.when` entry.
 - Op callbacks are read-only, so edits land through a writable layer that wraps every
-  generated python op wrapper (the `gen_*_ops` modules) plus a curated set of public
-  entry points. On the TensorFlow conformance roster this layer reaches about
-  99.8% of recorded compute ops (1535 of 1538; the curated entry points alone reached 17.4%). Ops that bypass the
-  python wrappers, such as `tf.raw_ops.*` calls and ops inside a `tf.function` body,
+  generated python op wrapper (the `gen_*_ops` modules), the variable read
+  (`ReadVariableOp`, so a Keras weight read is editable), unary minus and a curated
+  set of public entry points. On the TensorFlow conformance roster this layer
+  reaches 2173 of 2174 recorded ops (99.95%, variable reads included). The one
+  op it misses is the `Erfc` inside exact `tf.nn.gelu`, which TensorFlow calls
+  through an internal dispatch path. Ops that bypass the python wrappers, such as `tf.raw_ops.*` calls and ops inside a `tf.function` body,
   stay read-only: an edit whose condition matches one of them refuses with a typed
   unreachable error rather than silently not editing.
 - Source lines record the user frames between the `tl.trace` call and each op,
@@ -108,6 +110,11 @@ print(status.state)
   `edit(grad, *, ctx)`. A single site that mixes gradient and activation addresses,
   or names autograd nodes TensorFlow does not record, refuses with
   `backward_capture_unsupported`; pass gradient sites as their own `tl.when` clause.
+- `trace.do(tl.grad(selector), edit)` on a finished TensorFlow trace arms the
+  gradient edit on that trace and returns it; the derived-gradient replay then
+  applies it. A `do()` call that also edits activations, or passes `loss=`, refuses
+  with `run_capability_unavailable`: make the activation edit a separate `do()`
+  call and compute edited gradients with `grad_options=` at capture.
 
 ### Known gaps
 
