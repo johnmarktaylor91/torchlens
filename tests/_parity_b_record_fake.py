@@ -152,6 +152,7 @@ def fake_backend(producer: Any) -> Iterator[Any]:
         aliases=(),
         can_handle=lambda model, args, kwargs: False,
         capability_implementations=implementations,
+        protocol=None,
     )
     tl.backends.register(spec, replace=True)
     try:

@@ -175,7 +175,7 @@ def _boom_on_relu(ctx: RecordContext) -> bool:
     return ctx.kind == "op"
 
 
-@pytest.mark.parametrize("mode", ["accumulate", "fail_fast"])
+@pytest.mark.parametrize("mode", ["accumulate", "fail-fast"])
 def test_predicate_errors_follow_on_predicate_error(mode: str) -> None:
     """A raising save predicate surfaces as torch surfaces it, in both modes."""
 
