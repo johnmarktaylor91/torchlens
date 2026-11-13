@@ -175,19 +175,27 @@ def _boom_on_relu(ctx: RecordContext) -> bool:
     return ctx.kind == "op"
 
 
-@pytest.mark.parametrize("mode", ["accumulate", "fail-fast"])
-def test_predicate_errors_follow_on_predicate_error(mode: str) -> None:
-    """A raising save predicate surfaces as torch surfaces it, in both modes."""
+@pytest.mark.parametrize(
+    ("mode", "expected"),
+    [("accumulate", PredicateError), ("fail-fast", TraceCaptureError)],
+)
+def test_predicate_errors_follow_on_predicate_error(mode: str, expected: type) -> None:
+    """A raising save predicate surfaces as torch surfaces it, in both modes.
+
+    Accumulate raises ``PredicateError`` at the end of the block; fail-fast
+    raises from inside the pass, so the forward-failure door wraps it.
+    """
 
     model, x = _Branchy().eval(), torch.ones(2, 4)
     options = tl.options.RecordingOptions(on_predicate_error=mode)
     errors = []
     with fake_backend(FakeProducer()):
         for kwargs in ({"backend": FAKE_BACKEND}, {}):
-            with pytest.raises(PredicateError) as info:
+            with pytest.raises(expected, match="predicate") as info:
                 tl.record(model, x, save=_boom_on_relu, recording=options, **kwargs)
             errors.append(info.value)
     assert type(errors[0]) is type(errors[1])
+    assert type(errors[0].__cause__) is type(errors[1].__cause__)
     assert errors[0].fields.get("code") == errors[1].fields.get("code")
 
 
