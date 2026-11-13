@@ -93,39 +93,27 @@ class _NotData(ValueError):
 
 @dataclass(frozen=True)
 class _TraceIndex:
-    """Label maps and captures of one trace, rebuilt when either changes."""
+    """Label maps and captures of one trace."""
 
-    layer_list: Any
-    captures: Any
     ops_by_raw: dict[str, Any]
     final_to_raw: dict[str, str]
     raw_to_final: dict[str, str]
+    captures: Any
     captures_by_raw: dict[str, Any]
 
 
-_INDEX_CACHE: list[_TraceIndex] = []
-
-
 def _index(trace: Any) -> _TraceIndex:
-    """The label maps for ``trace``, cached on the identity of its op list and captures."""
+    """The label maps for ``trace``, built per call as the validator builds its own."""
 
-    layer_list = getattr(trace, "_layer_list", ())
     captures = getattr(trace, "tinygrad_uop_captures", None)
-    if _INDEX_CACHE:
-        cached = _INDEX_CACHE[0]
-        if cached.layer_list is layer_list and cached.captures is captures:
-            return cached
-    ops_by_raw = {getattr(op, "_label_raw", ""): op for op in layer_list}
-    index = _TraceIndex(
-        layer_list=layer_list,
-        captures=captures,
+    ops_by_raw = {getattr(op, "_label_raw", ""): op for op in getattr(trace, "_layer_list", ())}
+    return _TraceIndex(
         ops_by_raw=ops_by_raw,
         final_to_raw=_final_to_raw_labels(ops_by_raw),
         raw_to_final={raw: getattr(op, "label", raw) for raw, op in ops_by_raw.items()},
+        captures=captures,
         captures_by_raw={c.label_raw: c for c in (captures or ())},
     )
-    _INDEX_CACHE[:] = [index]
-    return index
 
 
 def _occurrences(capture: Any) -> tuple[tuple[int, str], ...]:
@@ -156,7 +144,7 @@ def can_replay(trace: Any, op: Any) -> str | None:
             "the trace holds no tinygrad replay captures (a loaded trace needs "
             "bind_recipes first; an audit-only trace has no payloads)"
         )
-    capture = index.captures_by_raw.get(getattr(op, "_label_raw", None))
+    capture = index.captures_by_raw.get(getattr(op, "_label_raw", ""))
     if capture is None:
         if getattr(op, "is_input_layer", False) or not getattr(op, "parents", ()):
             return "input source: a value of the capture, not a replayed op"
@@ -178,11 +166,18 @@ def _uop_refusal(capture: Any, op: Any, index: _TraceIndex) -> str | None:
     graph = _graph_positions(op, index)
     if tuple(sorted(graph.items())) != _occurrences(capture):
         return "the op's parent positions no longer match its capture"
+    return _fixed_sources_refusal(capture, index)
+
+
+def _fixed_sources_refusal(capture: Any, index: _TraceIndex) -> str | None:
+    """The refusal for the UOp's fields and the sources the validator keeps, or ``None``."""
+
+    uop = capture.uop
     try:
         _encode_attrs(uop)
         fixed = [uop.src[pos] for pos in _fixed_positions(capture, index)]
     except _NotData as error:
-        return f"tinygrad UOp {name} has a field with no data encoding: {error}"
+        return f"tinygrad UOp {_uop_name(uop)} has a field with no data encoding: {error}"
     except ValueError as error:
         return f"a parent payload is not available for replay: {error}"
     if any(_uop_name(node) in RNG_UOP_NAMES for source in fixed for node in source.toposort()):
@@ -476,10 +471,15 @@ def _capture_fields(
     for occurrence in item.inputs:
         path = occurrence.arg_path
         parent_raw = final_to_raw.get(occurrence.parent_label)
-        bad_path = len(path) != 1 or type(path[0]) is not int
-        if bad_path or parent_raw is None or parent_raw not in ops_by_raw:
+        position = path[0] if len(path) == 1 else None
+        if (
+            not isinstance(position, int)
+            or isinstance(position, bool)
+            or parent_raw is None
+            or parent_raw not in ops_by_raw
+        ):
             raise ReplayRefusal("shape", "bad parent occurrence", op_label=label)
-        occurrences.append((path[0], parent_raw))
+        occurrences.append((position, parent_raw))
     uop = _rebuild_uop(item, occurrences, ops_by_raw)
     occurrences.sort()
     return (
