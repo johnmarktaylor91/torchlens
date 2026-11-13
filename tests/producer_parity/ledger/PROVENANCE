@@ -6059,3 +6059,11 @@ env: py3.11-torch2.15.0
 torch: 2.15.0+cpu
 source: df741df16eeae993174a69c1b0b9fe7e8e4980c0
 recorded: 2026-11-13T01:45:14Z
+---
+generator: scripts/regen_ledgers.py (producer static half)
+flag: none (deterministic ledger step)
+reason: ledger-owner regen at 16ed8e910: static-scan moved
+env: py3.11-torch2.15.0
+torch: 2.15.0+cpu
+source: 16ed8e91016d9ed6bc6405f3c4933170976ec171
+recorded: 2026-11-13T02:31:41Z

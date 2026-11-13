@@ -353,8 +353,8 @@ def test_source_target_caches_reuse_and_drop_across_portable_round_trip(
 
 @pytest.mark.rare
 @pytest.mark.backend_tinygrad
-def test_non_torch_backend_keeps_geometry_and_gates_both_gradients() -> None:
-    """Keep rule-backed geometry backend-neutral and empirical methods torch-only."""
+def test_non_torch_backend_keeps_geometry_and_probes_both_gradients() -> None:
+    """Keep rule-backed geometry backend-neutral; both gradient probes replay the cone."""
 
     tinygrad = pytest.importorskip("tinygrad")
 
@@ -379,7 +379,7 @@ def test_non_torch_backend_keeps_geometry_and_gates_both_gradients() -> None:
     assert projective.status is ReceptiveFieldStatus.EXACT
     assert receptive.axis_roles.axis_kinds == ("pointwise",)
     assert projective.axis_roles.axis_kinds == ("pointwise",)
-    with pytest.raises(tl.errors.BackendUnsupportedError, match="tinygrad"):
-        target.receptive_field.probe_grad((0,))
-    with pytest.raises(tl.errors.BackendUnsupportedError, match="tinygrad"):
-        source.projective_field.probe_grad((0,), target=target)
+    (receptive_probe,) = target.receptive_field.probe_grad((0,)).values()
+    assert receptive_probe.signed_grad.tolist() == [1.0, 0.0, 0.0]
+    projective_probe = source.projective_field.probe_grad((0,), target=target)
+    assert projective_probe.signed_grad.tolist() == [1.0, 0.0, 0.0]

@@ -39,6 +39,7 @@ from .._ir.refs import DeviceRef, DtypeRef
 from .._quantities import Bytes
 from .._utils._display_errors import short_name_message
 from ._accessor_base import Accessor
+from ._backend_capability_guards import live_grad_slot
 from ._lookup_kinds import converted, param_for_key
 from ._runtime_handles import source_model_from_trace
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
@@ -428,13 +429,12 @@ class Param:
         Returns
         -------
         Any | None
-            Live ``nn.Parameter.grad`` value, or a backend-derived gradient
-            payload for non-torch pytree parameters when available.
+            ``nn.Parameter.grad`` on PyTorch, else the backend-derived payload if any.
         """
 
         if self._derived_grad_payload is not None:
             return self._derived_grad_payload
-        param = self._resolve_live_param()
+        param = self._resolve_live_param() if live_grad_slot(self) else None
         return None if param is None else param.grad
 
     @property
@@ -568,7 +568,7 @@ class Param:
             self._has_grad = True
             return
         try:
-            param = self._resolve_live_param()
+            param = self._resolve_live_param() if live_grad_slot(self) else None
         except ParamReleasedError:
             return
         # A non-leaf Parameter (a frozen one written in place with a grad

@@ -62,6 +62,36 @@ def backend_materializes_payloads(name: str) -> bool:
     return get_backend_spec(name).capabilities.payload_materialization
 
 
+def live_grad_slot(param_log: Any) -> bool:
+    """Return whether the live parameter behind ``param_log`` carries a framework gradient slot.
+
+    Only a true-backward backend (``backward_capture=True``) fills a gradient slot on
+    the live parameter (``nn.Parameter.grad``). Every other backend reaches a Param's
+    gradient only as a derived payload (``mirror_param_derived_grads``), so its live
+    arrays and variables are never read for one.
+
+    Parameters
+    ----------
+    param_log:
+        Param record. With no owning trace, or an owning trace that ``cleanup()``
+        husked (its backend fact deleted), the answer is ``True``: the live read then
+        finds no parameter (the source-model reference is gone too) and returns ``None``.
+
+    Returns
+    -------
+    bool
+        The owning trace backend's registered ``backward_capture``; ``False`` for an
+        unregistered backend name.
+    """
+
+    trace = param_log.trace
+    backend = None if trace is None else trace.__dict__.get("_provenance_backend")
+    if backend is None:
+        return True
+    name = str(backend)
+    return registered_backend_named(name) and get_backend_spec(name).capabilities.backward_capture
+
+
 def raise_if_no_backward_capture(trace: Any, *, plural_subject: str) -> None:
     """Raise when ``trace``'s backend cannot expose a true-backward accessor.
 
