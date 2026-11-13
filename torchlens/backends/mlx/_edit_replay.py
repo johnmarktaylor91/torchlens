@@ -27,6 +27,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from ...recording._halt import StopSignal
 from ..registry import BackendUnsupportedError
 from ._tap_observers import _replace_mlx_array_leaves
 
@@ -41,12 +42,8 @@ SiteKey = tuple[str, int]
 """``(op name, per-op-name output index)``: the raw label without its global counter."""
 
 
-class _ReplayHalt(Exception):  # noqa: N818 -- control-flow signal, not an error
-    """Raised at the halt frontier; carries the frontier call's output."""
-
-    def __init__(self, output: Any) -> None:
-        super().__init__("mlx replay reached the halt frontier")
-        self.output = output
+#: ``StopSignal.boundary_kind`` of the replay's own halt, told apart from any other stop.
+_HALT_KIND = "mlx_edit_replay_halt"
 
 
 def site_key(label_raw: str) -> SiteKey:
@@ -181,7 +178,9 @@ class _EditReplayObserver:
             self.depth -= 1
         output = self._edit_gradients(output, keys)
         if self.halt_key is not None and self.halt_key in keys:
-            raise _ReplayHalt(output)
+            raise StopSignal(
+                "mlx replay reached the halt frontier", output, boundary_kind=_HALT_KIND
+            )
         return output
 
     def _delegate(
@@ -333,8 +332,10 @@ class _EditedReplayModel:
         try:
             with taps.mlx_tap_observer(observer):
                 output = self._model(*args, **kwargs)
-        except _ReplayHalt as halt:
-            output = halt.output
+        except StopSignal as halt:
+            if halt.boundary_kind != _HALT_KIND:
+                raise
+            output = halt.frontier_output
         else:
             if self._halt_key is not None:
                 raise BackendUnsupportedError(
