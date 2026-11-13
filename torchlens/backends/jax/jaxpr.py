@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
-from typing import Any, Literal, TypeAlias, cast
+from typing import Any, Literal, NoReturn, TypeAlias, cast
 
 from ..._ir.events import JaxEquationKind
 from .. import _entry_refusals as _refusals
@@ -1488,9 +1488,7 @@ def reject_attributed_module_strict_control_flow(closed_jaxpr: Any) -> None:
             primitive_name = eqn.primitive.name
             if module_stack and eqn.effects:
                 _raise_attributed_strict_error(
-                    primitive_name,
-                    module_stack[-1],
-                    suffix=f"effects={eqn.effects}",
+                    primitive_name, module_stack[-1], effects=eqn.effects
                 )
             if module_stack and _is_strict_rejected_attributed_primitive(eqn):
                 _raise_attributed_strict_error(primitive_name, module_stack[-1])
@@ -1505,7 +1503,11 @@ def reject_attributed_module_strict_control_flow(closed_jaxpr: Any) -> None:
 
 
 def _is_strict_rejected_attributed_primitive(eqn: Any) -> bool:
-    """Return whether an attributed equation is rejected by B2a strict mode.
+    """Return whether an attributed equation is outside the module-attribution surface.
+
+    ``jit``/``pjit`` calls, ``cond``, ``scan`` and ``while`` inside attributed modules are
+    interpreted with the enclosing module scope threaded into their nested jaxprs.
+    Rematerialization, custom-VJP regions and ``shard_map`` stay refused.
 
     Parameters
     ----------
@@ -1515,55 +1517,47 @@ def _is_strict_rejected_attributed_primitive(eqn: Any) -> bool:
     Returns
     -------
     bool
-        True when the primitive is outside the strict attributed-module surface.
+        True when the primitive is outside the attributed-module surface.
     """
 
-    primitive_name = eqn.primitive.name
-    if primitive_name == "jit" and eqn.params.get("name") in SAFE_JIT_NAMES:
-        return False
-    return primitive_name in {
-        "cond",
-        "custom_vjp_call",
-        "jit",
-        "pjit",
-        "remat2",
-        "scan",
-        "shard_map",
-        "while",
-        "while_loop",
-    }
+    return eqn.primitive.name in {"custom_vjp_call", "remat2", "shard_map"}
 
 
 def _raise_attributed_strict_error(
     primitive_name: str,
     module_address: str,
     *,
-    suffix: str | None = None,
-) -> None:
-    """Raise the B2a strict-mode module-attribution error.
+    effects: Any = None,
+) -> NoReturn:
+    """Raise the typed refusal for a primitive outside the attributed-module surface.
 
     Parameters
     ----------
     primitive_name
-        JAX primitive that crossed the strict surface.
+        JAX primitive outside the attributed-module surface.
     module_address
         Deepest owning TorchLens module address.
-    suffix
-        Optional extra diagnostic text.
+    effects
+        The equation's effects, when effects are the cause.
 
     Raises
     ------
-    ValueError
-        Always raised with actionable module guidance.
+    BackendUnsupportedError
+        Always (a ``ValueError`` subclass): code ``jax_effects_unsupported`` for
+        effects, else ``jax_nested_primitive_unsupported``. A note names the module.
     """
 
-    detail = f" ({suffix})" if suffix else ""
-    raise ValueError(
-        "JAX pytree_module strict mode does not support "
-        f"{primitive_name!r} inside attributed module {module_address!r}{detail}. "
-        "Move the transform/control-flow outside the attributed module, capture the raw "
-        "function_root callable, or wait for widened attribution support."
-    )
+    try:
+        if effects is not None:
+            _refusals.refuse_equation_effects(primitive_name, effects)
+        _refusals.refuse_nested_primitive(primitive_name)
+    except BackendUnsupportedError as exc:
+        exc.add_note(
+            f"JAX pytree_module strict mode does not support {primitive_name!r} inside "
+            f"attributed module {module_address!r}; move it outside the attributed module "
+            "or capture the raw function_root callable."
+        )
+        raise
 
 
 def jax_equivalence_key(capture: JaxEquationCapture) -> str:

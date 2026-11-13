@@ -30,9 +30,8 @@ top-level trace. A module called under ``jax.vmap`` returns tracers of the batch
 one trace-time call stands for every batch member, so no single op is its output. Such calls
 are left unrecorded (their ``output_ops`` stay empty and ``Module.out`` raises) and disclosed
 with a ``CaptureGapWarning``, never filled with a guessed op. A module call inside a
-``jax.lax.scan``, ``cond`` or ``while_loop`` body never gets here: the root is itself the
-attributed module ``self``, and the strict module surface refuses control flow inside any
-attributed module.
+``jax.lax.scan``, ``cond`` or ``while_loop`` body returns tracers of the body's trace, and
+loop bodies run once per iteration, so those calls are left unrecorded and disclosed too.
 """
 
 from __future__ import annotations
@@ -182,8 +181,8 @@ def _record_pending(trace: Any, ledger: JaxReturnLedger) -> None:
             warnings.warn(
                 CaptureGapWarning(
                     f"JAX module call '{address}:{call_index}' returned arrays of an inner trace "
-                    "(e.g. jax.vmap: one trace-time call stands for every batch member), so no "
-                    "op is its output; its return is not recorded, so this call has no "
+                    "(jax.vmap, or a scan, cond or while body: one trace-time call stands for "
+                    "every batch member or iteration), so no op is its output; its return is not recorded, so this call has no "
                     "output_ops, output_paths or Module.out. Remedy: read the values through "
                     "the enclosing module's output",
                     code="module_return_unrecorded",

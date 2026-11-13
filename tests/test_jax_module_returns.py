@@ -129,17 +129,20 @@ def _assert_trace_sound(trace: Any, model: Any) -> None:
 
 
 @pytest.mark.parametrize("kind", ["scan", "cond", "while"])
-def test_module_inside_root_control_flow_refuses(kind: str) -> None:
-    """A module call inside a control-flow body refuses instead of being recorded.
+def test_module_inside_root_control_flow_is_captured(kind: str) -> None:
+    """A module call inside a control-flow body is captured with its ops attributed.
 
-    The root module is itself the attributed module ``self``, so its control flow falls
-    under the strict module surface: module mode never reaches a call whose return is an
-    inner-trace tracer of a scan, cond or while body.
+    The call returns an inner-trace tracer of the scan, cond or while body; no single op is
+    its output across loop iterations, so the call stays unrecorded and is disclosed.
     """
 
     model = _ControlFlowRoot(_Linear(1), kind)
-    with pytest.raises(ValueError, match="strict mode does not support"):
-        tl.trace(model, _input(), backend="jax")
+    with pytest.warns(CaptureGapWarning, match=r"'block:1' returned arrays of an inner trace"):
+        trace = tl.trace(model, _input(), backend="jax")
+
+    _assert_trace_sound(trace, model)
+    _assert_unrecorded(trace, "block:1")
+    assert trace[tl.in_module("block")].labels
 
 
 def test_vmapped_child_is_unrecorded_and_parent_recorded() -> None:

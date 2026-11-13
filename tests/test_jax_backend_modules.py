@@ -125,7 +125,7 @@ class JitInsideEquinox(eqx.Module):
         self.core = eqx.nn.Linear(3, 2, key=jax.random.PRNGKey(13))
 
     def __call__(self, x: Any) -> Any:
-        """Return output through an unsupported inner ``jax.jit``."""
+        """Return output through an inner ``jax.jit``."""
 
         def inner(y: Any) -> Any:
             """Return the core layer output for ``y``."""
@@ -146,7 +146,7 @@ class ScanInsideEquinox(eqx.Module):
         self.scale = jnp.asarray(2.0, dtype=jnp.float32)
 
     def __call__(self, x: Any) -> Any:
-        """Return output through an unsupported inner ``lax.scan``."""
+        """Return output through an inner ``lax.scan``."""
 
         def body(carry: Any, item: Any) -> tuple[Any, Any]:
             """Return one scan step."""
@@ -169,7 +169,7 @@ class CondInsideEquinox(eqx.Module):
         self.scale = jnp.asarray(2.0, dtype=jnp.float32)
 
     def __call__(self, x: Any) -> Any:
-        """Return output through an unsupported inner ``lax.cond``."""
+        """Return output through an inner ``lax.cond``."""
 
         return jax.lax.cond(
             jnp.sum(x) > 0,
@@ -190,7 +190,7 @@ class WhileInsideEquinox(eqx.Module):
         self.bias = jnp.asarray(1.0, dtype=jnp.float32)
 
     def __call__(self, x: Any) -> Any:
-        """Return output through an unsupported inner ``lax.while_loop``."""
+        """Return output through an inner ``lax.while_loop``."""
 
         def cond_fn(state: tuple[Any, Any]) -> Any:
             """Return whether iteration should continue."""
@@ -299,7 +299,7 @@ class JitInsideNnx(nnx.Module):
         self.core = nnx.Linear(3, 2, rngs=nnx.Rngs(23))
 
     def __call__(self, x: Any) -> Any:
-        """Return output through an unsupported inner ``jax.jit``."""
+        """Return output through an inner ``jax.jit``."""
 
         def inner(y: Any) -> Any:
             """Return the core layer output for ``y``."""
@@ -544,30 +544,36 @@ def test_jax_nnx_explicit_function_root_keeps_raw_callable_behavior() -> None:
 
 
 @pytest.mark.parametrize(
-    ("model", "primitive_name"),
+    ("model", "owner"),
     (
-        (JitInsideEquinox(), "jit"),
-        (CondInsideEquinox(), "cond"),
-        (ScanInsideEquinox(), "scan"),
-        (WhileInsideEquinox(), "while"),
+        (JitInsideEquinox(), "core"),
+        (CondInsideEquinox(), "self"),
+        (ScanInsideEquinox(), "self"),
+        (WhileInsideEquinox(), "self"),
     ),
 )
-def test_jax_equinox_pytree_module_strict_rejects_inner_transforms(
-    model: Any,
-    primitive_name: str,
-) -> None:
-    """B2a strict mode should reject transforms/control flow inside modules."""
+def test_jax_equinox_pytree_module_attributes_inner_transforms(model: Any, owner: str) -> None:
+    """Ops inside jit, cond, scan and while bodies keep the enclosing module scope."""
 
-    match = f"pytree_module strict mode.*{primitive_name!r}.*attributed module 'self'"
-    with pytest.raises(ValueError, match=match):
-        tl.trace(model, jnp.ones(3, dtype=jnp.float32), backend="jax")
+    trace = tl.trace(model, jnp.ones(3, dtype=jnp.float32), backend="jax")
+
+    labels = trace[tl.in_module(owner)].labels
+    assert labels
+    assert all(f"{owner}:1" in trace[label].modules for label in labels)
+    check_metadata_invariants(trace)
+    assert trace.validate_forward_pass([]) is True
 
 
-def test_jax_nnx_pytree_module_strict_rejects_inner_jit() -> None:
-    """Strict NNX attribution should reject transform-hidden child boundaries."""
+def test_jax_nnx_pytree_module_attributes_inner_jit() -> None:
+    """Ops inside a ``jax.jit`` call in an NNX module belong to the called child module."""
 
-    with pytest.raises(ValueError, match="pytree_module strict mode.*'jit'.*'self'"):
-        tl.trace(JitInsideNnx(), jnp.ones(3, dtype=jnp.float32), backend="jax")
+    trace = tl.trace(JitInsideNnx(), jnp.ones(3, dtype=jnp.float32), backend="jax")
+
+    labels = trace[tl.in_module("core")].labels
+    assert labels
+    assert all("core:1" in trace[label].modules for label in labels)
+    check_metadata_invariants(trace)
+    assert trace.validate_forward_pass([]) is True
 
 
 def test_jax_nnx_pytree_module_rejects_state_rebinding() -> None:
