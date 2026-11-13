@@ -84,8 +84,9 @@ def test_refused_ops_report() -> None:
 
 
 def _output_seed_labels(trace: Any) -> list[str]:
-    ops = _ops_by_label(trace)
-    return [label for label in trace.output_layers if label in ops]
+    """Op labels of the trace outputs (``output_layers`` speaks layer labels)."""
+
+    return [trace[label].label for label in trace.output_layers]
 
 
 def _chain_input_grad(trace: Any) -> np.ndarray:
@@ -93,7 +94,9 @@ def _chain_input_grad(trace: Any) -> np.ndarray:
 
     ops = _ops_by_label(trace)
     grads: dict[str, Any] = {}
-    for label in _output_seed_labels(trace):
+    seeds = _output_seed_labels(trace)
+    assert seeds
+    for label in seeds:
         seed = Tensor.ones(*ops[label].out.shape, dtype=ops[label].out.dtype)
         grads[label] = seed if label not in grads else adapter.add(grads[label], seed)
     for op in reversed(trace._layer_list):
@@ -115,7 +118,7 @@ def _chain_input_grad(trace: Any) -> np.ndarray:
 
 
 def _backward_input_grad(model: Any, value: Any) -> np.ndarray:
-    x = Tensor(value.numpy(), requires_grad=True)
+    x = Tensor(value.numpy())
     out = model(x)
     leaves = out if isinstance(out, (tuple, list)) else (out,)
     loss = leaves[0].sum()
@@ -154,7 +157,7 @@ def test_forward_is_differentiable_by_tinygrad() -> None:
 
     trace = _capture(lambda v: (v + 1.0) * v, Tensor([1.0, -2.0, 3.0]))
     (mul,) = [op for op in trace._layer_list if op.type == "mul"]
-    values = [Tensor(adapter.to_host(v), requires_grad=True) for v in _parent_values(trace, mul)]
+    values = [Tensor(adapter.to_host(v)) for v in _parent_values(trace, mul)]
     (out,) = adapter.forward(trace, mul, values)
     out.sum().backward()
     grads = [adapter.to_host(v.grad) for v in values]
@@ -200,3 +203,13 @@ def test_session_chain_replays_every_roster_op_from_replayed_parents(row: Any) -
     values = ReplaySession(adapter, trace, steps, initial=initial).run()
     for op in trace._layer_list:
         assert adapter.close(op.out, values[op.label]), op.label
+
+
+def test_vjp_gives_no_gradient_through_detach() -> None:
+    """As in tinygrad's own backward, no cotangent flows through a ``DETACH``."""
+
+    trace = _capture(lambda v: v.detach() * v, Tensor([1.0, -2.0, 3.0]))
+    detached = [op for op in trace._layer_list if adapter.recipe(trace, op) is not None]
+    detach = next(op for op in detached if "DETACH" in adapter.recipe(trace, op).op_identity)
+    values = _parent_values(trace, detach)
+    assert adapter.vjp(trace, detach, values, (Tensor([1.0, 1.0, 1.0]),)) == (None,)
