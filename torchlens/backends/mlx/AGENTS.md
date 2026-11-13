@@ -35,8 +35,25 @@ It fills the backend protocol (`maturity="preview"`, no `capture_backend`); its
 
 ## interventions.py
 - `resolve_mlx_intervention_plan()` builds `MLXInterventionPlan` /
-  `MLXHookApplier`; `_reject_non_static_selector()` keeps the surface
-  static-label only (value-dependent predicate fields stay deferred).
+  `MLXHookApplier`; `_reject_non_static_selector()` admits the static-label
+  kinds plus `predicate` (`tl.where` and bare callables, wrapped by
+  `_as_selector()`); module selectors mixed with anything else still refuse.
+- `_match_live_sites()` matches each wrapped call's output leaves against the
+  edit plan and stop selector. When one of them holds a `predicate`,
+  `_value_record_context()` sets `is_scalar_bool` / `bool_value` to `None`,
+  matching torch's live capture contexts. Never evaluate an array in this path:
+  every capture stays realize-once. `tensor_requires_grad` stays deferred (MLX
+  has no per-array flag). If torch's live contexts start carrying values, change
+  both backends together.
+
+## _source_frames.py
+- `mlx_code_context()` fills `Op.code_context` like the torch walk: TorchLens
+  frames skipped, call site first, the op's frame last. The model boundary is
+  the `MLXBackend.capture_trace` frame, matched by code name and the sibling
+  `backend.py` path (`_is_anchor`; rename either and update it), not a
+  `forward` name. Records are cached in
+  `trace._code_context_cache` and adopted into the trace core at finalize
+  (`adopt_code_context_records`).
 - Curated MLX-native helper appliers (`_MLX_SUPPORTED_HELPER_NAMES`):
   `zero_ablate`, `scale`, `add`, `clamp`, `mean_ablate`, `replace_with`;
   anything else refuses typed rather than half-working through torch hooks.

@@ -1,14 +1,16 @@
-"""Static-label live interventions for the technical-preview MLX backend.
+"""Live interventions and stop sites for the MLX backend.
 
 The MLX wrapper sees each concrete lazy output before the caller, and the
 derived-grad tap observer already proved mid-forward output substitution, so
-static-label ``trace(intervene=tl.when(...))`` and ``trace(stop_after=...)`` sites
-apply at the wrapper boundary. Value-dependent predicates stay refused typed:
-predicate-time values would need per-op ``mx.eval``, which would poison lazy
-evaluation.
+``trace(intervene=tl.when(...))`` and ``trace(stop_after=...)`` sites apply at
+the wrapper boundary. Static selectors and value-dependent conditions
+(``tl.where`` predicates and bare callables) are both admitted; a
+value-dependent condition sees torch's live predicate context (value fields
+``None``), so nothing is evaluated at the op and every capture stays
+realize-once (see "Live site matching" below).
 
-Everything here fails closed. A predicate that is not the ``tl.when`` static
-shape, a selector kind outside the static-label set, a non-forward or
+Everything here fails closed. A predicate that is not the ``tl.when`` shape, a
+selector kind outside the admitted set, a non-forward or
 grad-preserving decision, a helper without an MLX-native application, and a
 fired hook that changes shape or dtype all refuse typed instead of silently
 not-intervening.
@@ -17,11 +19,13 @@ not-intervening.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from ... import _state
+from ..._ir.intervention import FireResult
 from ..._ir.op_record import amend_module_exit_intervention
+from ..._ir.predicate import RecordContext
 from ..._ir.selector_eval import (
     first_selector_kind_outside,
     module_address_matches,
@@ -29,7 +33,7 @@ from ..._ir.selector_eval import (
     selector_contains_kind,
 )
 from ..._postprocess._selective_save import _STATIC_INTERVENTION_SELECTOR_KINDS
-from ..._selection.selectors import BaseSelector
+from ..._selection import selectors as _selectors
 from ...intervention._types import Edit, InterventionDecision
 from ...intervention.hooks import make_hook_context, normalize_hook
 from ..registry import BackendUnsupportedError
@@ -44,6 +48,11 @@ MLX_STATIC_INTERVENTION_SELECTOR_KINDS = _STATIC_INTERVENTION_SELECTOR_KINDS
 Alias of the neutral authority table (the ``output`` drop is declared
 there) -- never re-spell the kinds here.
 """
+
+#: Kinds admitted on the live edit and stop surfaces: the static-label kinds
+#: plus ``predicate`` (``tl.where`` and bare callables), whose value fields
+#: ``_live_sites._value_record_context`` fills for the run.
+_MLX_LIVE_SELECTOR_KINDS = MLX_STATIC_INTERVENTION_SELECTOR_KINDS | frozenset({"predicate"})
 
 #: Selector kinds that may target the short ``{layer_type}_{type_index}``
 #: alias, which is only visible through a second evaluation with the label
@@ -92,11 +101,11 @@ class MLXInterventionPlan:
         MLX-native hook application for matched output leaves.
     """
 
-    selector: BaseSelector
+    selector: _selectors.BaseSelector
     applier: MLXHookApplier
 
 
-def selector_matches_capture_context(selector: BaseSelector, ctx: Any) -> bool:
+def selector_matches_capture_context(selector: _selectors.BaseSelector, ctx: Any) -> bool:
     """Evaluate a static selector against one capture-time record context.
 
     Parameters
@@ -129,7 +138,7 @@ def resolve_mlx_intervention_plan(
     intervene: Any | None,
     halt: Any | None,
     mx: Any,
-) -> tuple[MLXInterventionPlan | None, BaseSelector | None]:
+) -> tuple[MLXInterventionPlan | None, _selectors.BaseSelector | None]:
     """Validate and resolve the MLX intervention/halt surface.
 
     Parameters
@@ -143,7 +152,7 @@ def resolve_mlx_intervention_plan(
 
     Returns
     -------
-    tuple[MLXInterventionPlan | None, BaseSelector | None]
+    tuple[MLXInterventionPlan | None, _selectors.BaseSelector | None]
         Resolved intervention plan and halt selector.
 
     Raises
@@ -153,18 +162,19 @@ def resolve_mlx_intervention_plan(
     """
 
     plan: MLXInterventionPlan | None = None
-    halt_selector: BaseSelector | None = None
+    halt_selector: _selectors.BaseSelector | None = None
     if intervene is not None:
-        selector = getattr(intervene, "selector", None)
+        selector = _as_selector(getattr(intervene, "selector", None))
         decision = getattr(intervene, "decision", None)
-        if not isinstance(selector, BaseSelector) or not isinstance(decision, InterventionDecision):
+        if not isinstance(selector, _selectors.BaseSelector) or not isinstance(
+            decision, InterventionDecision
+        ):
             raise BackendUnsupportedError(
-                "MLX backend supports trace(intervene=...) only as "
-                "tl.when(static_selector, action). Value-dependent intervention "
-                "predicates need concrete activation values at predicate time; MLX "
-                "lazy evaluation defers them without per-op mx.eval. Use "
-                "tl.when(tl.func(...) | tl.label(...) | tl.in_module(...), action) "
-                "or the PyTorch backend."
+                "MLX backend supports trace(intervene=...) only as a one-rule "
+                "tl.when(condition, action), where the condition is a selector "
+                "(tl.func, tl.label, tl.module, tl.in_module, tl.where and their "
+                "&, |, ~ composites) or a callable taking the op context. Use "
+                "that shape or the PyTorch backend."
             )
         _reject_gradient_site(selector)
         _reject_non_static_selector(selector, surface="intervene")
@@ -174,19 +184,33 @@ def resolve_mlx_intervention_plan(
             applier=_resolve_decision_applier(decision, mx),
         )
     if halt is not None:
-        if not isinstance(halt, BaseSelector):
+        halt_selector = _as_selector(halt)
+        if not isinstance(halt_selector, _selectors.BaseSelector):
             raise BackendUnsupportedError(
-                "MLX backend supports trace(stop_after=...) only for static-label "
-                "selectors (tl.func, tl.label, tl.label_contains, tl.in_module and "
-                "boolean composites). Value-dependent halt predicates need "
-                "concrete values at predicate time; use the PyTorch backend."
+                "MLX backend supports trace(stop_after=...) for selectors "
+                "(tl.func, tl.label, tl.label_contains, tl.in_module, tl.where and "
+                "boolean composites) and callables taking the op context; got "
+                f"{type(halt).__name__}."
             )
-        _reject_non_static_selector(halt, surface="halt")
-        halt_selector = halt
+        _reject_non_static_selector(halt_selector, surface="halt")
     return plan, halt_selector
 
 
-def _reject_gradient_site(selector: BaseSelector) -> None:
+def _as_selector(condition: Any) -> Any:
+    """Return a bare callable condition as its ``tl.where`` selector.
+
+    A selector passes through; any other value is returned unchanged for the
+    caller's typed refusal.
+    """
+
+    if isinstance(condition, (_selectors.BaseSelector, type)):
+        return condition
+    if callable(condition):
+        return _selectors.WhereSelector(condition)
+    return condition
+
+
+def _reject_gradient_site(selector: _selectors.BaseSelector) -> None:
     """Refuse a site outside the activation universe: MLX has no backward capture."""
 
     from ...intervention.hooks import split_site_branches
@@ -200,8 +224,8 @@ def _reject_gradient_site(selector: BaseSelector) -> None:
         )
 
 
-def _reject_non_static_selector(selector: BaseSelector, *, surface: str) -> None:
-    """Refuse selector trees containing non-static kinds.
+def _reject_non_static_selector(selector: _selectors.BaseSelector, *, surface: str) -> None:
+    """Refuse selector trees containing kinds outside the admitted live set.
 
     Parameters
     ----------
@@ -211,18 +235,14 @@ def _reject_non_static_selector(selector: BaseSelector, *, surface: str) -> None
         Public option name used in diagnostics.
     """
 
-    unsupported = first_selector_kind_outside(
-        selector, allowed=MLX_STATIC_INTERVENTION_SELECTOR_KINDS
-    )
+    unsupported = first_selector_kind_outside(selector, allowed=_MLX_LIVE_SELECTOR_KINDS)
     if unsupported is None:
         return
     raise BackendUnsupportedError(
-        f"MLX backend supports trace({surface}=...) only for static-label "
-        "selectors tl.func, tl.label, tl.label_contains, tl.module, tl.in_module and "
+        f"MLX backend supports trace({surface}=...) for the selectors tl.func, "
+        "tl.label, tl.label_contains, tl.module, tl.in_module, tl.where and "
         f"boolean composites (&, |, ~) of those; unsupported selector kind "
-        f"{unsupported!r}. Value-dependent predicates need concrete activation "
-        "values at predicate time, which MLX lazy evaluation does not expose "
-        "without per-op mx.eval; use the PyTorch backend."
+        f"{unsupported!r}. Use one of those selectors or the PyTorch backend."
     )
 
 
@@ -523,3 +543,134 @@ def _emit_module_leaf(trace: Any, backend: Any, plan: Any, tensor: Any) -> Any:
             )
         )
     return replacement
+
+
+# -- Live site matching -------------------------------------------------------
+# ``MLXBackend.emit_mlx_operation`` hands each wrapped call's output leaves to
+# ``_match_live_sites`` before labeling. A matched edit substitutes the leaf (so
+# the recorded output IS the value downstream ops consume) and records the
+# applier slot the replay oracle re-applies; a matched stop site names the halt
+# frontier.
+#
+# Value-dependent conditions (``tl.where`` predicates and bare callables) see
+# the same predicate context as on torch's live capture path: shape, dtype,
+# labels and module fields are real, and the value fields ``is_scalar_bool``
+# and ``bool_value`` are ``None`` (torch's ``_build_record_context`` leaves them
+# unset during the forward). Nothing is evaluated at the op, so a run with a
+# value-dependent condition stays realize-once and keeps MLX's graph fusion.
+# ``tensor_requires_grad`` stays deferred: MLX arrays carry no per-array
+# gradient flag (gradients come from function transforms), so reading it
+# raises ``MLXValueUnavailableError`` instead of guessing.
+
+
+@dataclass
+class _LiveSiteMatches:
+    """What the edit and stop selectors matched among one call's output leaves."""
+
+    replacements: dict[int, Any] = field(default_factory=dict)
+    fire_results_by_site: dict[int, tuple[FireResult, ...]] = field(default_factory=dict)
+    slots: list[tuple[int, str]] = field(default_factory=list)
+    appliers: list[tuple[int, Any]] = field(default_factory=list)
+    halt_label: str | None = None
+
+
+def _reads_values(selector: Any) -> bool:
+    """Whether a selector tree holds a value-dependent (predicate) condition."""
+
+    return selector is not None and selector_contains_kind(selector, "predicate")
+
+
+def _value_record_context(ctx: RecordContext) -> RecordContext:
+    """Give a predicate context torch's live value fields.
+
+    Parameters
+    ----------
+    ctx
+        Deferred-value context from ``build_record_context``.
+
+    Returns
+    -------
+    RecordContext
+        ``ctx`` with ``is_scalar_bool`` and ``bool_value`` set to ``None``, as on
+        torch's live capture path, so a predicate that reads them sees the same
+        values on both backends and no array is evaluated.
+    """
+
+    return replace(ctx, is_scalar_bool=None, bool_value=None)
+
+
+def _match_live_sites(
+    backend: Any,
+    trace: Any,
+    outputs: tuple[Any, ...],
+    reserved: Any,
+    func_event_input: Any,
+) -> _LiveSiteMatches:
+    """Match the active edit plan and stop selector against one call's leaves.
+
+    Parameters
+    ----------
+    backend
+        Active MLX backend.
+    trace
+        Trace under capture (holds the plan and the stop selector).
+    outputs
+        The call's output array leaves.
+    reserved
+        Reserved labels, one per leaf.
+    func_event_input
+        The call's event input.
+
+    Returns
+    -------
+    _LiveSiteMatches
+        Replacements keyed by leaf identity, fire results and applier slots by
+        leaf index, and the halt frontier label when the stop site matched.
+    """
+
+    plan = trace._mlx_intervention_plan
+    halt_selector = trace._mlx_halt_selector
+    with_values = _reads_values(getattr(plan, "selector", None)) or _reads_values(halt_selector)
+    found = _LiveSiteMatches()
+    for index, (leaf, entry) in enumerate(zip(outputs, reserved, strict=True)):
+        record_ctx = backend.build_record_context(trace, entry, func_event_input, leaf)
+        if with_values:
+            record_ctx = _value_record_context(record_ctx)
+        if plan is not None and selector_matches_capture_context(plan.selector, record_ctx):
+            replacement, fire_result = _apply_edit(backend, plan, leaf, entry)
+            trace._mlx_intervene_fired = True
+            found.replacements[id(leaf)] = replacement
+            found.fire_results_by_site[index] = (fire_result,)
+            found.slots.append((index, plan.applier.identity))
+            found.appliers.append((index, plan.applier.apply))
+        if (
+            halt_selector is not None
+            and found.halt_label is None
+            and selector_matches_capture_context(halt_selector, record_ctx)
+        ):
+            found.halt_label = entry.label_raw
+    return found
+
+
+def _apply_edit(backend: Any, plan: Any, leaf: Any, entry: Any) -> tuple[Any, FireResult]:
+    """Apply the plan to one matched leaf.
+
+    Returns
+    -------
+    tuple[Any, FireResult]
+        The replacement array and the fire result recorded for the leaf's site.
+    """
+
+    replacement = backend._apply_mlx_intervention(plan, leaf)
+    fire_result = FireResult(
+        plan_id="mlx_intervene",
+        site_label=entry.label_raw,
+        fired_at_capture_index=entry.raw_index,
+        pre_hook_shape=backend._shape(leaf),
+        post_hook_shape=backend._shape(replacement),
+        pre_hook_dtype=backend._dtype(leaf),
+        post_hook_dtype=backend._dtype(replacement),
+        replaced=True,
+        fire_record=None,
+    )
+    return replacement, fire_result

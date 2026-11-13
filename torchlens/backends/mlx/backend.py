@@ -89,6 +89,7 @@ from ._param_tree import (
     _iter_parameter_tree,
     _iter_trainable_parameter_tree,
 )
+from ._source_frames import adopt_code_context_records, mlx_code_context
 from ._tap_observers import (
     _is_float_mlx_array,
     _MLXIntermediateCandidate,
@@ -97,6 +98,7 @@ from ._tap_observers import (
     _replace_mlx_array_leaves,
 )
 from .external_arrays import external_array_ids
+from .interventions import _match_live_sites
 from .model_prep import (
     MLXModuleTree,
     cleanup_model_session,
@@ -1073,7 +1075,7 @@ class MLXBackend:
                 trace._graph_stop_frontier = signal.reason
             _drop_forward_only_state(trace)
             _disclose_unfired_selectors(
-                trace, intervention_plan, halt_selector, halted=halt_signal is not None
+                trace, intervention_plan, halt, halt_selector, halted=halt_signal is not None
             )
             trace._cost_forward_duration = Duration(time.time() - trace._provenance_start_time)
 
@@ -1598,51 +1600,19 @@ class MLXBackend:
         # and payload capture, so the recorded op output IS the value flowing
         # into downstream ops; halt matches after the frontier op is captured
         # (save-then-halt ordering).
-        plan = trace._mlx_intervention_plan
-        halt_selector = trace._mlx_halt_selector
         fire_results_by_site: dict[int, tuple[FireResult, ...]] = {}
         intervention_slots: tuple[tuple[int, str], ...] = ()
         intervention_appliers: tuple[tuple[int, Any], ...] = ()
         halt_label: str | None = None
-        if plan is not None or halt_selector is not None:
-            from .interventions import selector_matches_capture_context
-
-            replacements: dict[int, Any] = {}
-            slots: list[tuple[int, str]] = []
-            appliers: list[tuple[int, Any]] = []
-            for index, (leaf, entry) in enumerate(zip(outputs, reserved, strict=True)):
-                record_ctx = self.build_record_context(trace, entry, func_event_input, leaf)
-                if plan is not None and selector_matches_capture_context(plan.selector, record_ctx):
-                    replacement = self._apply_mlx_intervention(plan, leaf)
-                    trace._mlx_intervene_fired = True
-                    replacements[id(leaf)] = replacement
-                    fire_results_by_site[index] = (
-                        FireResult(
-                            plan_id="mlx_intervene",
-                            site_label=entry.label_raw,
-                            fired_at_capture_index=entry.raw_index,
-                            pre_hook_shape=self._shape(leaf),
-                            post_hook_shape=self._shape(replacement),
-                            pre_hook_dtype=self._dtype(leaf),
-                            post_hook_dtype=self._dtype(replacement),
-                            replaced=True,
-                            fire_record=None,
-                        ),
-                    )
-                    slots.append((index, plan.applier.identity))
-                    appliers.append((index, plan.applier.apply))
-                if (
-                    halt_selector is not None
-                    and halt_label is None
-                    and selector_matches_capture_context(halt_selector, record_ctx)
-                ):
-                    halt_label = entry.label_raw
-            if replacements:
-                output = _replace_mlx_array_leaves(self, output, replacements)
+        if trace._mlx_intervention_plan is not None or trace._mlx_halt_selector is not None:
+            found = _match_live_sites(self, trace, outputs, reserved, func_event_input)
+            fire_results_by_site, halt_label = found.fire_results_by_site, found.halt_label
+            if found.replacements:
+                output = _replace_mlx_array_leaves(self, output, found.replacements)
                 outputs = tuple(self._iter_arrays(output))
                 func_event_input = replace(func_event_input, raw_output=output)
-                intervention_slots = tuple(slots)
-                intervention_appliers = tuple(appliers)
+                intervention_slots = tuple(found.slots)
+                intervention_appliers = tuple(found.appliers)
         op_captures = getattr(trace, "_mlx_op_captures", None)
         if op_captures is None:
             op_captures = []
@@ -1999,7 +1969,7 @@ class MLXBackend:
                 func_name=func_event_input.func_name,
                 func_qualname=func_event_input.func_qualname,
                 func_call_id=func_event_input.func_call_id,
-                code_context=(),
+                code_context=mlx_code_context(session),
                 func_duration=None,
                 flops_forward=None,
                 flops_backward=None,
@@ -2207,6 +2177,7 @@ class MLXBackend:
             count_layers_with_attached_params=True,
             recurrence_detection=bool(trace._options_recurrence_detection),
         )
+        adopt_code_context_records(trace)
 
     def _attach_object_module_logs(self, trace: Trace, tree: MLXModuleTree) -> None:
         """Build public module logs for an MLX object-module trace.

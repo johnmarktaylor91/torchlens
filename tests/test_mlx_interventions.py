@@ -1,10 +1,11 @@
-"""Static-label live interventions and halt on the technical-preview MLX backend.
+"""Live interventions and halt on the MLX backend.
 
-The lifted contract: ``trace(intervene=tl.when(static_selector, action))`` and
-``trace(halt=static_selector)`` genuinely dispatch — the replacement flows into
-downstream ops, the frontier op ends a halted partial trace — while
-value-dependent predicates, backward decisions, unsupported helpers, and recipe
-specs keep typed refusals. The validation oracle treats declared interventions
+The lifted contract: ``trace(intervene=tl.when(selector, action))`` and
+``trace(halt=selector)`` genuinely dispatch — the replacement flows into
+downstream ops, the frontier op ends a halted partial trace — while raw
+decision callables, backward decisions, unsupported helpers, and recipe specs
+keep typed refusals (value-dependent conditions are covered by
+``test_mlx_parity_value_edits.py``). The validation oracle treats declared interventions
 as genuine user substitutions (replay compares against hook(raw)), and
 stripping that declaration from a replay record FAILS instead of mispresenting
 an intervened value as captured-native.
@@ -312,23 +313,24 @@ def test_mlx_intervened_record_with_forged_declaration_fails_validation() -> Non
     assert MLXBackend().validate_trace(trace).state == "failed"
 
 
-def test_mlx_value_dependent_intervene_refuses_typed() -> None:
-    """Non-static intervention predicates keep the typed refusal."""
+def test_mlx_raw_decision_intervene_refuses_typed() -> None:
+    """A raw decision callable (not the tl.when shape) keeps the typed refusal,
+    and so does a module selector mixed with a value-dependent condition."""
 
     model = _TwoLayerMLP()
-    with pytest.raises(BackendUnsupportedError, match="static"):
+    with pytest.raises(BackendUnsupportedError, match="one-rule"):
         tl.trace(
             model,
             _input(),
             backend="mlx",
             intervene=lambda ctx: None,
         )
-    with pytest.raises(BackendUnsupportedError, match="selector kind"):
+    with pytest.raises(BackendUnsupportedError, match="module"):
         tl.trace(
             model,
             _input(),
             backend="mlx",
-            intervene=tl.when(tl.where(lambda ctx: True), tl.zero_ablate()),
+            intervene=tl.when(tl.module("l1") & tl.where(lambda ctx: True), tl.zero_ablate()),
         )
 
 
@@ -392,10 +394,10 @@ def test_mlx_recipes_snapshot_dispatches() -> None:
 
 
 def test_mlx_halt_non_selector_refuses_typed() -> None:
-    """Value-dependent halt predicates keep the typed refusal."""
+    """A stop site that is neither a selector nor a callable keeps the typed refusal."""
 
-    with pytest.raises(BackendUnsupportedError, match="static-label"):
-        tl.trace(_TwoLayerMLP(), _input(), backend="mlx", stop_after=lambda ctx: True)
+    with pytest.raises(BackendUnsupportedError, match="stop_after"):
+        tl.trace(_TwoLayerMLP(), _input(), backend="mlx", stop_after=object())
 
 
 def test_mlx_grad_options_with_intervene_refuses_typed() -> None:
