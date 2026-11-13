@@ -6,8 +6,8 @@ of ``a``) is captured once clean. Editing the rectifier's output on a fork must
 then equal a fresh capture of the same function with the edit written into its
 code, a no-op edit must reproduce every payload exactly, the edited trace must
 pass the replay check, and corrupting a downstream payload must fail it. A
-donor value from a second capture on the same backend patches in; a NumPy
-array (another framework) is refused. On Paddle, which supports live
+donor value from a second capture on the same backend patches in; a PyTorch
+tensor (another framework) is refused. On Paddle, which supports live
 ``intervene=``, the edited fork must also equal a live capture with the same
 edit.
 """
@@ -129,14 +129,18 @@ def _capture(backend: str, build: Builder, value: Any, edit: Callable[[Any], Any
 
 
 def _rectifier(trace: Any) -> Any:
-    """The rectifier op: the edit site, with consumers downstream."""
+    """The rectifier's output: the later-made parent of the final add (the other is ``a``).
 
-    names = ("relu", "maximum")
-    return next(
-        op
-        for op in trace._layer_list
-        if any(name in str(op.func_name).lower() for name in names) and op.parents
-    )
+    Found by graph position, not by name, because backends record the
+    rectifier under different primitives (``relu``, ``max``, ``maximum``, ...).
+    """
+
+    ops = list(trace._layer_list)
+    order = {op.label: n for n, op in enumerate(ops)}
+    final = [op for op in ops if getattr(op, "is_output", False)][-1]
+    while getattr(final, "is_output", False) and len(tuple(final.parents)) == 1:
+        final = trace._layer_dict_all_keys[tuple(final.parents)[0]]
+    return trace._layer_dict_all_keys[max(final.parents, key=order.__getitem__)]
 
 
 def _output(trace: Any) -> Any:
@@ -213,7 +217,9 @@ def test_donor_from_another_framework_is_refused(backend: str) -> None:
     build, value, adapter = _setup(backend)
     clean = _capture(backend, build, value, _identity)
     site = _rectifier(clean)
-    foreign = np.zeros_like(_host(adapter, site.out))
+    import torch
+
+    foreign = torch.zeros(_host(adapter, site.out).shape)
     with pytest.raises(HookValueError) as caught:
         clean.fork().do(site.label, lambda out, *, ctx: foreign)
     assert caught.value.fields["code"] == "intervention_replacement_invalid"

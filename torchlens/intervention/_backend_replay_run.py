@@ -188,7 +188,9 @@ def apply_site_edits(
         )
         previous_notes = tuple(run_ctx.get("ledger_notes", ()))
         current = _fire_entry(request, entry, current, _FireContext(hook_ctx, services.guard))
-        check_native_value(request.log, _replay_site_key(site), original, current)
+        if entry.helper_spec is None or entry.helper_spec.name == "patch_from":
+            # A value user code or a donor trace made; adapter helpers return the backend's own.
+            check_native_value(request.log, _replay_site_key(site), original, current)
         records.append(
             services.fire_record(
                 entry,
