@@ -1,4 +1,4 @@
-"""JAX backend preview exports."""
+"""JAX backend exports."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Registry-backed capability exports for the JAX backend preview."""
+"""Registry-backed capability exports for the JAX backend."""
 
 from __future__ import annotations
 

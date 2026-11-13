@@ -1,4 +1,4 @@
-"""Perturbation candidates for the JAX preview backend's parent-influence oracle.
+"""Perturbation candidates for the JAX backend's parent-influence oracle.
 
 The uniform steps every parent gets, then the probes that run only while an edge
 still looks dead, each mirroring a torch validator rung: the non-uniform

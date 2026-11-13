@@ -1,4 +1,4 @@
-"""Jaxpr-first JAX backend preview."""
+"""Jaxpr-first JAX backend."""
 
 from __future__ import annotations
 
@@ -160,7 +160,7 @@ from .modules import (
 
 @dataclass(frozen=True)
 class GradOptions:
-    """JAX derived-gradient preview options.
+    """JAX derived-gradient options.
 
     Parameters
     ----------
@@ -496,15 +496,15 @@ class JAXBackend:
         output_device
             Must be ``"same"``.
         activation_transform
-            Unsupported for JAX in this preview.
+            Unsupported for JAX.
         save_raw_activations
             Must be true.
         detach_saved_activations
             Must be false.
         save_grads
-            Unsupported for JAX in this preview.
+            Unsupported for JAX.
         random_seed
-            Unsupported for JAX in this preview; stochasticity must be explicit
+            Unsupported for JAX; stochasticity must be explicit
             through params/input PRNG key leaves.
         num_context_lines
             Stored on the returned trace.
@@ -519,11 +519,11 @@ class JAXBackend:
         verbose
             Stored on the returned trace.
         backward_ready
-            Unsupported for JAX in this preview.
+            Unsupported for JAX.
         name
             Trace label.
         transform
-            Unsupported for JAX in this preview.
+            Unsupported for JAX.
         raw_input
             Original user input.
         save_raw_input
@@ -535,9 +535,9 @@ class JAXBackend:
         save_transformed_output
             Transformed-output save policy.
         layer_visualizers
-            Unsupported for JAX in this preview.
+            Unsupported for JAX.
         save_visualizations
-            Unsupported for JAX in this preview.
+            Unsupported for JAX.
         lookback
             Predicate lookback window. Only the default ``0`` is supported.
         lookback_payload_policy
@@ -678,7 +678,7 @@ class JAXBackend:
         call_fn, args = bind_input_kwargs(model, args, input_kwargs)
         if not _is_missing(random_seed) and random_seed is not None:
             raise BackendUnsupportedError(
-                "JAX backend preview requires explicit PRNG keys as params/input leaves; "
+                "The JAX backend requires explicit PRNG keys as params/input leaves; "
                 "random_seed and torch-style RNG replay are unsupported."
             )
         static_argnums = _normalize_static_argnums(jax_static_argnums, len(args))
@@ -2916,7 +2916,7 @@ class JAXBackend:
         return _UNSUPPORTED_CONTAINER_SPEC
 
     def _reject_unsupported_options(self, **options: Any) -> None:
-        """Reject public trace options unsupported by the JAX preview.
+        """Reject public trace options unsupported by the JAX backend.
 
         Parameters
         ----------
@@ -2931,7 +2931,7 @@ class JAXBackend:
 
         if options["save_rng"]:
             raise BackendUnsupportedError(
-                "JAX backend preview requires explicit PRNG keys as params/input leaves; "
+                "The JAX backend requires explicit PRNG keys as params/input leaves; "
                 "save_rng_states and torch-style RNG replay are unsupported."
             )
         reject_unsupported_trace_options(
@@ -3180,7 +3180,7 @@ def _reject_transformed_callable(model: Callable[..., Any]) -> None:
     cls_module = type(model).__module__
     if cls_name in {"PjitFunction", "PmapFunction"} or cls_module.startswith("jaxlib"):
         raise BackendUnsupportedError(
-            "JAX backend preview does not accept a transformed callable as the root model "
+            "The JAX backend does not accept a transformed callable as the root model "
             "(for example jax.jit). Pass the raw function to tl.trace(..., backend='jax') "
             "and let TorchLens derive its own closed jaxpr."
         )
@@ -3196,7 +3196,7 @@ def _reject_transformed_callable(model: Callable[..., Any]) -> None:
     ):
         transform_name = wrapped_qualname.split(".", maxsplit=1)[0]
         raise BackendUnsupportedError(
-            "JAX backend preview does not accept a transformed callable as the root model "
+            "The JAX backend does not accept a transformed callable as the root model "
             f"(detected jax.{transform_name}). Pass the raw function to "
             "tl.trace(..., backend='jax'); nested transform support is a follow-up."
         )
@@ -3224,7 +3224,7 @@ def _reject_tracer_inputs(args: Sequence[Any]) -> None:
         return
     if any(isinstance(leaf, tracer_type) for leaf in leaves):
         raise BackendUnsupportedError(
-            "JAX backend preview cannot run tl.trace from inside jax.jit, jax.vmap, "
+            "The JAX backend cannot run tl.trace from inside jax.jit, jax.vmap, "
             "or jax.grad. Call tl.trace(..., backend='jax') outside the transform on "
             "concrete params/input leaves."
         )

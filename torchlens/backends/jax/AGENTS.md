@@ -1,6 +1,6 @@
 # backends/jax/ - Implementation Guide
 
-Jaxpr-first JAX backend preview. It fills the backend protocol (`maturity="preview"`, no `capture_backend`); its
+Jaxpr-first JAX backend. It fills the backend protocol (no `capture_backend`); its
 `BackendSpec` in `../default_specs.py` and its protocol shell in
 `../_protocols/jax.py` are the capability truth (contract: `../AGENTS.md`).
 

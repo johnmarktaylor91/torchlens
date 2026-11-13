@@ -277,8 +277,8 @@ def reject_undeclared_consts(closed_jaxpr: Any) -> None:
     if consts:
         raise BackendUnsupportedError(
             "JAX backend found closed-jaxpr constants. Pass captured values as explicit "
-            "pytree leaves to fn(params, *inputs); hidden closure constants are unsupported "
-            "in this preview."
+            "pytree leaves to fn(params, *inputs); hidden closure constants are "
+            "unsupported here."
         )
 
 

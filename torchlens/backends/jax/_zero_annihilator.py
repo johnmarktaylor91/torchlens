@@ -1,4 +1,4 @@
-"""Zero-annihilator value proof for the JAX preview backend's perturbation oracle.
+"""Zero-annihilator value proof for the JAX backend's perturbation oracle.
 
 Torch parity (``validation/_exemptions.py``: ``_multiplicative_zero_annihilator_decision``
 and ``_matmul_zero_annihilator_decision``, ledger code ``multiplicative_zero_annihilator``):
