@@ -46,6 +46,7 @@ from ..._ir.events import (
 )
 from ...errors import RunCapabilityUnavailableError
 from .._backward_neutral import journal_backward_event, next_backward_pass_index, set_pass_roots
+from .._validation_shared import ops_by_label
 from ._tf_frames import (
     BackwardRecorder,
     ForwardCall,
@@ -509,14 +510,11 @@ def forward_calls(trace: Any) -> list[ForwardCall]:
     return calls
 
 
-def _final_label(trace: Any, raw: str) -> str:
-    """The op label a raw capture label finalized to."""
+def _public_label(ops: Mapping[str, Any], raw: str) -> str:
+    """Public label of the op a raw capture label belongs to (the replay adapter's reading)."""
 
-    for name in ("_raw_to_final_layer_labels", "_raw_to_final_op_labels"):
-        mapping = getattr(trace, name, None)
-        if isinstance(mapping, dict) and raw in mapping:
-            return str(mapping[raw])
-    return raw
+    label = getattr(ops.get(raw), "label", None)
+    return label if isinstance(label, str) else raw
 
 
 def _parent_slots(call: ForwardCall) -> list[int]:
@@ -550,6 +548,7 @@ class _PassJournal:
         self.seed_ids = {seed_id} if seed_id is not None else set()
         seeds = {loss_id: seed_id} if loss_id is not None and seed_id is not None else {}
         self.calls = forward_calls(trace)
+        self.ops = ops_by_label(trace)
         self.links = link_frames(self.calls, self.frames, recorder.events, seeds)
         self.flowed = flowed_ids(self.frames, recorder.events, self.seed_ids)
         self.consumers = frame_consumers(self.frames, recorder.events)
@@ -586,7 +585,7 @@ class _PassJournal:
             self._op_grads(frame)
         stamp = time.time()
         for (label, _tensor), grad in zip(inputs, grads[: len(inputs)], strict=True):
-            self._op_grad_event(_final_label(self.trace, label), grad, stamp)
+            self._op_grad_event(_public_label(self.ops, label), grad, stamp)
         for (address, _variable), grad in zip(params, grads[len(inputs) :], strict=True):
             self._param_grad_event(address, grad, stamp)
         roots = [
@@ -601,7 +600,7 @@ class _PassJournal:
         op_label = (
             None
             if linked is None
-            else _final_label(self.trace, self.calls[linked].captures[0].label_raw)
+            else _public_label(self.ops, self.calls[linked].captures[0].label_raw)
         )
         topology = tuple(
             self.node_ids[self.consumers[item]]
@@ -654,7 +653,7 @@ class _PassJournal:
             grad = frame.out_grads[slot]
             if tensor_id(grad) in self.flowed:
                 self._op_grad_event(
-                    _final_label(self.trace, capture.label_raw), grad, frame.timestamp
+                    _public_label(self.ops, capture.label_raw), grad, frame.timestamp
                 )
 
     def _op_grad_event(self, label: str, grad: Any, stamp: float) -> None:

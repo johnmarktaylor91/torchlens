@@ -155,9 +155,24 @@ def check_pass(trace: Any, pass_number: int) -> BackwardCheckResult:
     return check_backward_records(trace, ADAPTER, graph, recorded, leaf_grads)
 
 
+def _labels(trace: Any, pass_number: int) -> dict[str, Any]:
+    """What the validator keyed on, for a failure message."""
+
+    recorded = recorded_backward_from_trace(trace, pass_number)
+    return {
+        "calls": sorted(recorded.calls),
+        "grads": sorted(recorded.grads),
+        "grad_fn_labels": sorted(str(fn.op_label) for fn in trace._grad_fn_logs.values()),
+        "ops": [
+            (op.label, op.layer_label, getattr(op, "_label_raw", None)) for op in trace._layer_list
+        ],
+    }
+
+
 def _assert_valid(trace: Any, pass_number: int) -> BackwardCheckResult:
     result = check_pass(trace, pass_number)
-    assert result.passed, [dataclasses.astuple(f) for f in result.findings]
+    findings = [dataclasses.astuple(f) for f in result.findings]
+    assert result.passed, (findings, result.nodes_checked, _labels(trace, pass_number))
     assert result.leaves_checked > 0
     return result
 
