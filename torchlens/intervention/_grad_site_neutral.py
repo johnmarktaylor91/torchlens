@@ -312,7 +312,8 @@ def edited_gradients_for_backend(
     backend:
         Registered backend name with a replay adapter.
     ops:
-        The trace's ops in forward order, graph inputs left out so they are leaves.
+        The trace's ops in forward order, graph inputs left out so they are leaves;
+        records repeating a multi-output op's recipe are folded into one node.
     value:
         Saved value of an output-slot label.
     seeds, edits, pass_index:
@@ -330,8 +331,26 @@ def edited_gradients_for_backend(
         adapter = get_adapter(backend)
     except ReplayRefusal as exc:
         raise _refuse(str(exc)) from exc
-    graph = graph_from_recipes(trace, adapter, ops, value)
+    graph = _one_node_per_op(graph_from_recipes(trace, adapter, ops, value))
     return edited_gradients(trace, adapter, graph, seeds, edits, pass_index=pass_index)
+
+
+def _one_node_per_op(graph: ReplayGraph) -> ReplayGraph:
+    """Keep the first node of each output-slot tuple.
+
+    Backends that list each output of a multi-output op as its own record give
+    every record the op's whole recipe; one node per op keeps the op's
+    derivative from being counted once per output.
+    """
+
+    seen: set[tuple[str, ...]] = set()
+    nodes = []
+    for node in graph.nodes:
+        if node.outputs in seen:
+            continue
+        seen.add(node.outputs)
+        nodes.append(node)
+    return ReplayGraph(nodes=tuple(nodes), value=graph.value)
 
 
 def disagreeing_labels(
