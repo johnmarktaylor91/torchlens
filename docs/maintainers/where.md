@@ -5,34 +5,34 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1800 modules, 713910 lines, 0 modules without a docstring.
+86 packages, 1775 modules, 710144 lines, 0 modules without a docstring.
 
 ## Packages
 
 | Package | What it holds | Modules | Lines |
 | --- | --- | ---: | ---: |
-| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 86 | 35558 |
-| `torchlens._autoroute` | TorchLens auto-routing registries. | 7 | 1560 |
+| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 86 | 35394 |
+| `torchlens._autoroute` | TorchLens auto-routing registries. | 7 | 1527 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
-| `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 56 | 26853 |
+| `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 56 | 26857 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1504 |
-| `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 9 | 4782 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 124 | 43047 |
+| `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 9 | 4777 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 123 | 42901 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives, artifact v2 and model identity. | 4 | 1263 |
 | `torchlens._distributed` | Honest detection of distributed (DTensor / device-mesh / TP / PP) model state. | 5 | 3101 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 602 |
-| `torchlens._extraction` | Private implementation of dataset extraction. | 20 | 11066 |
-| `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 67 | 37312 |
-| `torchlens._io.format3` | The 2.38 saved format: typed JSON records plus safetensors blobs, no pickle. | 26 | 9242 |
-| `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 25 | 12739 |
+| `torchlens._extraction` | Private implementation of dataset extraction. | 20 | 11053 |
+| `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 70 | 37996 |
+| `torchlens._io.format3` | The 2.38 saved format: typed JSON records plus safetensors blobs, no pickle. | 26 | 9245 |
+| `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 25 | 12733 |
 | `torchlens._merged` | Cross-rank trace merging. | 15 | 6005 |
 | `torchlens._observability` | Shared observability substrate. | 22 | 8273 |
 | `torchlens._observe` | Observe kit: memory truth and diagnostics substrates. | 6 | 1520 |
 | `torchlens._partial` | Partial capture helpers for failed TorchLens forward ops. | 1 | 518 |
 | `torchlens._plots` | Pixel plotting helpers (PIL, numpy) shared by the reads packages and ''viz''. | 3 | 2102 |
-| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 49 | 19914 |
-| `torchlens._quickstart` | TorchLens quickstart: input resolution, input provenance and the drawing entry point. | 9 | 2016 |
+| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 46 | 19269 |
+| `torchlens._quickstart` | TorchLens quickstart: one input ladder, one provenance record, one render door. | 9 | 1986 |
 | `torchlens._registry` | Private registry kernel package (never public API). | 3 | 556 |
 | `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 20 | 15063 |
 | `torchlens._selection` | Selection: naming sites and resolving them on a trace. | 23 | 10600 |
@@ -40,9 +40,9 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 3073 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2141 |
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 16 | 4635 |
-| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 75 | 24112 |
+| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 75 | 24008 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 18 | 6456 |
-| `torchlens._visualization` | Computational graph visualization via Graphviz. | 112 | 50023 |
+| `torchlens._visualization` | Computational graph visualization via Graphviz. | 110 | 49959 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1150 |
 | `torchlens._visualization._summary_internal` | Text helpers for ''Trace'' objects: the compact repr and the provenance block. | 3 | 757 |
 | `torchlens._visualization.lenses` | TorchLens semantic lenses: the themes roster and its honesty machinery. | 8 | 2486 |
@@ -54,20 +54,21 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.attribution` | Input-attribution methods for TorchLens. | 31 | 15152 |
 | `torchlens.attribution._graph` | Attribution graphs: direct linear effects between transcoder features, errors, tokens and logits. | 7 | 2550 |
 | `torchlens.attribution._onebackward` | One-backward attribution reads: one backward pass seeded at gradient edges resolved from existing op fields, returned as a :class:'ReadTa... | 11 | 3881 |
-| `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 24 | 7526 |
+| `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 24 | 7552 |
 | `torchlens.backends._protocols` | Per-backend ''BackendProtocol'' objects, kept import-light. | 8 | 928 |
-| `torchlens.backends.jax` | JAX backend exports. | 24 | 10805 |
-| `torchlens.backends.mlx` | MLX backend for TorchLens. | 18 | 7242 |
-| `torchlens.backends.paddle` | Paddle backend. | 16 | 6915 |
-| `torchlens.backends.tf` | TensorFlow backend exports. | 19 | 9370 |
-| `torchlens.backends.tinygrad` | tinygrad backend. | 16 | 5624 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 140 | 59498 |
+| `torchlens.backends._replay_adapters` | Private per-backend replay adapters (see :mod:'._contract'). | 3 | 933 |
+| `torchlens.backends.jax` | JAX backend preview exports. | 17 | 9645 |
+| `torchlens.backends.mlx` | Technical-preview MLX backend for TorchLens. | 17 | 6951 |
+| `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6595 |
+| `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8577 |
+| `torchlens.backends.tinygrad` | tinygrad backend preview. | 11 | 4583 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 138 | 59358 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8876 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2741 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 28 | 9426 |
 | `torchlens.callbacks` | Callback integration namespace with lazy Lightning support. | 2 | 705 |
 | `torchlens.compat` | Compatibility adapters for TorchLens 2.37 and earlier. | 5 | 2035 |
-| `torchlens.debug` | Debugging tools for completed TorchLens traces, grouped by the symptom they answer. | 39 | 13098 |
+| `torchlens.debug` | Debugging tools for completed TorchLens traces, grouped by the symptom they answer. | 38 | 12844 |
 | `torchlens.debug._checks` | Training sanity checks -- the torcheck niche, honestly redefined. | 12 | 4286 |
 | `torchlens.distributed` | Distributed capture opt-in: arming, group lifetime identity, and evidence. | 6 | 423 |
 | `torchlens.errors` | Public TorchLens exception classes. | 6 | 1589 |
@@ -86,26 +87,26 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.preprocessing` | Preprocessing provenance + verification (NeuroAI audience). | 9 | 2811 |
 | `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 33 | 14297 |
 | `torchlens.receptive_field._builtin_rules` | Built-in receptive-field rules and idempotent pack registration. | 10 | 2006 |
-| `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 28 | 7731 |
+| `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 28 | 7708 |
 | `torchlens.repgeom` | Representation-geometry helpers (RDMs, MDS, Procrustes, CKA inputs) that need only NumPy, Torch and PIL. | 9 | 4057 |
-| `torchlens.report` | Reports that describe a completed trace: summary, cost, profile, FLOPs and health. | 39 | 14667 |
+| `torchlens.report` | Reports that describe a completed trace: summary, cost, profile, FLOPs and health. | 38 | 14490 |
 | `torchlens.report._notebook` | Extras-gated notebook namespace with no public objects yet. | 11 | 2236 |
-| `torchlens.stats` | Streaming statistics for aggregating outputs over a dataloader: stat kernels, per-unit quantiles and top-k, and save/load of fitted accum... | 18 | 7246 |
+| `torchlens.stats` | Streaming statistics for aggregating outputs over a dataloader: stat kernels, per-unit quantiles and top-k, and save/load of fitted accum... | 18 | 7241 |
 | `torchlens.trackers` | Experiment-tracker integration: one watch engine produces tensor-free statistics records, and sinks (TensorBoard, Weights & Biases, JSONL... | 15 | 5231 |
 | `torchlens.transformer` | Static transformer pictures: token-labeled attention heatmaps, logit-lens and per-token loss strips, and attention annotated with measure... | 15 | 5407 |
 | `torchlens.transforms` | Built-in activation transforms: one contract, declared not sniffed. | 13 | 6105 |
-| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 87 | 34338 |
+| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 87 | 34336 |
 | `torchlens.viz` | Visualization convenience namespace for TorchLens. | 10 | 2755 |
 
 ## Modules by package
 
 ### `torchlens`
 
-TorchLens - extract outs and metadata from PyTorch models. (86 modules, 35558 lines)
+TorchLens - extract outs and metadata from PyTorch models. (86 modules, 35394 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
-| `__init__` | TorchLens - extract outs and metadata from PyTorch models. | 448 |
+| `__init__` | TorchLens - extract outs and metadata from PyTorch models. | 447 |
 | `__main__` | ''python -m torchlens'': the tiered read-only CLI (torchlens.agent._cli). | 15 |
 | `_architecture` | The layer map: one declared stratum per package/module. | 321 |
 | `_call_fingerprint` | Native-forward twin of the capture-time ordered call fingerprint. | 159 |
@@ -127,7 +128,7 @@ TorchLens - extract outs and metadata from PyTorch models. (86 modules, 35558 li
 | `_episode_spec` | The episode declaration dataclass for ''tl.trace(..., episode=...)''. | 181 |
 | `_errors` | Shared TorchLens exception types. | 970 |
 | `_events` | Engine hook table: callbacks the settle and read layers register at import. | 79 |
-| `_extract_fast` | Fast path for :func:'torchlens.extract' and :func:'torchlens.pluck' on module outputs. | 338 |
+| `_extract_fast` | Fast path for :func:'torchlens.extract' when every request is a module's output. | 194 |
 | `_extract_refusals` | Typed refusals and capture options used by ''extract'' and ''pluck''. | 43 |
 | `_extraction_provenance` | Input-preprocessing provenance seam for dataset extraction (tvscope B4/B5). | 357 |
 | `_fast_live_events` | Nested wrapped-call bookkeeping for the guarded fast live run. | 121 |
@@ -171,7 +172,7 @@ TorchLens - extract outs and metadata from PyTorch models. (86 modules, 35558 li
 | `_trace_state` | Trace-state vocabulary and the capture-state predicates shared across layers. | 48 |
 | `_training_validation` | Shared validation helpers for training-compatible capture modes. | 212 |
 | `_transport` | Device/layout-aware host transport for tensor digest and codec paths. | 103 |
-| `_unrouted_keywords` | Remedies for ''trace'' keywords it does not route. | 148 |
+| `_unrouted_keywords` | Remedies for ''trace'' keywords it does not route. | 129 |
 | `_user_funcs` | Public API entry points for TorchLens. | 598 |
 | `_user_funcs_guards` | Entry-time refusals shared by the public ''trace'' door. | 85 |
 | `_user_public_graph_impls` | Body of the public graph verb ''show_model_graph''. | 161 |
@@ -194,15 +195,15 @@ TorchLens - extract outs and metadata from PyTorch models. (86 modules, 35558 li
 
 ### `torchlens._autoroute`
 
-TorchLens auto-routing registries. (7 modules, 1560 lines)
+TorchLens auto-routing registries. (7 modules, 1527 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | TorchLens auto-routing registries. | 7 |
 | `_builtin_input` | Built-in input auto-route detectors. | 125 |
-| `_builtin_output` | Built-in output auto-route detectors and decoders. | 806 |
-| `_decode_heads` | Torch-only helpers of the output decoders. | 225 |
-| `_decode_refresh` | Keep a trace's automatic decoded output in step with its current output values. | 89 |
+| `_builtin_output` | Built-in output auto-route detectors and decoders. | 807 |
+| `_decode_heads` | Torch-only helpers of the output decoders. | 192 |
+| `_decode_refresh` | Keep a trace's automatic decoded output in step with its current output values. | 88 |
 | `_decode_spellings` | Public spellings of the read-time output decode, declared once. | 30 |
 | `_registry` | Direction-agnostic priority registry for TorchLens auto-routing. | 278 |
 
@@ -224,7 +225,7 @@ Output auto-routing registry namespace. (1 modules, 27 lines)
 
 ### `torchlens._capture`
 
-Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. (56 modules, 26853 lines)
+Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. (56 modules, 26857 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -272,12 +273,12 @@ Real-time tensor operation capture: logging source/output tensors, tracking fami
 | `outcome` | The capture-outcome authority: one typed lattice for every capture product. | 762 |
 | `peak_memory` | Host peak-memory instrumentation helpers (brainpipe). | 400 |
 | `plan` | Compiled, backend-neutral capture intent for the unification spine. | 270 |
-| `predicates` | Predicate evaluation helpers for capture-time fastlog projections. | 548 |
+| `predicates` | Predicate evaluation helpers for capture-time fastlog projections. | 554 |
 | `preflight` | Address preflight: price a selective-save spelling BEFORE the forward (leverage B9). | 300 |
 | `projections` | Fastlog projections over unified capture events. | 1468 |
 | `projectors` | Sibling projections over a sealed capture run core. | 938 |
 | `run` | Forward-pass control for the RUN stage: ''run_and_log_inputs_through_model''. | 761 |
-| `run_entry` | Run entry for the RUN stage: one capture forward from slot claim to ''Trace''. | 679 |
+| `run_entry` | Run entry for the RUN stage: one capture forward from slot claim to ''Trace''. | 677 |
 | `salient_args` | Registry of salient argument extractors for common PyTorch operations. | 523 |
 | `session` | Run-owned capture state and legacy compatibility adapters. | 1279 |
 | `stages` | Private hand-off records between the four capture stages. | 190 |
@@ -298,7 +299,7 @@ FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue
 
 ### `torchlens._capture.prepare`
 
-PREPARE stage of torch capture: request resolution, cache and dispatch. (9 modules, 4782 lines)
+PREPARE stage of torch capture: request resolution, cache and dispatch. (9 modules, 4777 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -306,7 +307,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (9 modul
 | `_cache_pickle` | Pickle reductions that keep a capture-cache entry loadable on every supported torch. | 65 |
 | `cache` | Capture-cache lookup and store for the PREPARE stage. | 787 |
 | `chunked` | Chunked capture fan-out helpers for the PREPARE stage. | 798 |
-| `dispatch` | Backend capability gating and the MLX door for the PREPARE stage. | 716 |
+| `dispatch` | Backend capability gating and the MLX door for the PREPARE stage. | 711 |
 | `door` | Torch door for the PREPARE stage: admission, refusals and request resolution. | 1119 |
 | `recursive_options` | The grouped ''CaptureOptions'' each per-chunk recursive capture receives (PREPARE stage). | 111 |
 | `request` | The torch door's request half: its arguments, resolution state and the packed request. | 347 |
@@ -314,7 +315,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (9 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (124 modules, 43047 lines)
+Core data structures for representing a logged forward pass. (123 modules, 42901 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -329,7 +330,6 @@ Core data structures for representing a logged forward pass. (124 modules, 43047
 | `_conditional_arms` | Derived reads over the arms of a recorded conditional. | 233 |
 | `_container_labels` | Pure value helpers for container views. | 144 |
 | `_doors` | Doors from the records to the packages above them (Rule F). | 142 |
-| `_draw_keywords` | Teaching refusal for keywords ''Trace.draw'' does not take. | 106 |
 | `_familiar_names` | Hints for attribute names that TorchLens objects do not have but users guess. | 109 |
 | `_fork_flat_copy` | Flat copies for the fork builder: ''copy.deepcopy'' results without per-member recursion. | 189 |
 | `_fork_lineage` | Fork lineage: the ''fork'' verb's record-side helpers and the parent-chain test. | 97 |
@@ -392,7 +392,7 @@ Core data structures for representing a logged forward pass. (124 modules, 43047
 | `_trace_components` | Declared Trace field-to-component ownership map. | 630 |
 | `_trace_docs` | Bind the full ''Trace'' method docstrings kept in the ''_trace_docs_*'' tables. | 49 |
 | `_trace_docs_intervention` | Full docstrings of the ''Trace'' intervention verbs, hooks and forks methods. | 189 |
-| `_trace_docs_output` | Full docstrings of the ''Trace'' drawing, summaries, export, stacking and narration methods. | 622 |
+| `_trace_docs_output` | Full docstrings of the ''Trace'' drawing, summaries, export, stacking and narration methods. | 608 |
 | `_trace_docs_stats` | Full docstrings of the ''Trace'' statistics, views and reports methods. | 547 |
 | `_trace_docs_validation` | Full docstrings of the ''Trace'' validation, run and backward verbs methods. | 368 |
 | `_trace_field_spec` | The persisted-field policy table of ''Trace'' (''Trace._PORTABLE_STATE_SPEC''). | 491 |
@@ -421,8 +421,8 @@ Core data structures for representing a logged forward pass. (124 modules, 43047
 | `_value_modules` | Bounded module and module-call record displays. | 107 |
 | `_value_ops` | Operation and pass-aware layer text cards, built from captured facts. | 258 |
 | `_value_params` | Parameter and buffer records: metadata first, explicit value basis. | 120 |
-| `_value_repr` | Record display facade: one-line identities and bounded labelled cards. | 33 |
-| `_value_state` | Resident-payload probes and bounded value facts for record displays. | 211 |
+| `_value_repr` | Record display facade: one-line identities and bounded labelled cards. | 34 |
+| `_value_state` | Resident-payload probes and bounded value facts for record displays. | 184 |
 | `aten_op` | Primitive-operation records for the ATen profile (persisted, tlspec v8). | 220 |
 | `attribute_write` | The record of one plain module attribute a traced forward wrote. | 66 |
 | `backward_pass` | Per-invocation backward pass records and accessors. | 376 |
@@ -477,13 +477,13 @@ TorchLens ecosystem runtime: provider discovery. (2 modules, 602 lines)
 
 ### `torchlens._extraction`
 
-Private implementation of dataset extraction. (20 modules, 11066 lines)
+Private implementation of dataset extraction. (20 modules, 11053 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Private implementation of dataset extraction. | 96 |
 | `_engine_batching` | Pure batching and device-move helpers behind the extraction engine. | 125 |
-| `_front_door` | The extract front door: ''tl.pluck'' and ''tl.extract'' and their helpers. | 384 |
+| `_front_door` | The extract front door: ''tl.pluck'' and ''tl.extract'' and their helpers. | 371 |
 | `callable_identity` | Callable identity for extraction resume. | 717 |
 | `context` | Batch context, row validation, and user-key validation (extract item 4). | 250 |
 | `dtype_policy` | Save-dtype routing: explicit, routed, disclosed. | 218 |
@@ -504,7 +504,7 @@ Private implementation of dataset extraction. (20 modules, 11066 lines)
 
 ### `torchlens._io`
 
-Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (67 modules, 37312 lines)
+Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (70 modules, 37996 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -530,6 +530,8 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (6
 | `_rehydrate_lazy_names` | Pure naming helpers mapping manifest blob kinds to lazy-reference fields. | 53 |
 | `_rehydrate_source_bundle` | Resolve the source bundle a portable-loaded trace was rehydrated from. | 47 |
 | `_replay_diagnostics` | Producer diagnostics for captured values a runnable replay cannot recompute. | 89 |
+| `_replay_recipe_adapter` | Replay recipes built and bound through the backend's replay adapter, around a save and a load. | 397 |
+| `_replay_recipe_codec` | Replay recipe section of a saved non-torch trace: its file, header, parameter values and reader. | 231 |
 | `_root_manifest` | Route a ''.tlspec'' directory by its root manifest before trace-bundle parsing. | 144 |
 | `_runnable_param_identity` | Live-reference identity checks between template tensors and cooked parameters. | 59 |
 | `_runnable_synthetic` | The closed table of TorchLens-owned synthetic callables a runnable artifact may name. | 51 |
@@ -546,6 +548,7 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (6
 | `_tlspec_identity` | Model identity and backend runtime fields of the unified ''.tlspec'' manifest. | 443 |
 | `_tlspec_json_helpers` | Pure value helpers for the unified ''.tlspec'' manifest writer. | 93 |
 | `_torch_symbols` | Load/decode/exec-path re-export of the canonical ''torch_attr'' helper. | 16 |
+| `_trace_sidecars` | Files a trace save writes beside its record tables: the intervention recipe and replay recipes. | 56 |
 | `accessor_rebuild` | Rebuild weakref-backed model accessors after finalization or rehydrate. | 159 |
 | `bundle` | Portable directory-bundle save/load helpers for TorchLens model logs. | 3702 |
 | `bundle_container` | Bundle-container loading for ''tl.load'': ''bundle.json'' and its members. | 360 |
@@ -578,7 +581,7 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (6
 
 ### `torchlens._io.format3`
 
-The 2.38 saved format: typed JSON records plus safetensors blobs, no pickle. (26 modules, 9242 lines)
+The 2.38 saved format: typed JSON records plus safetensors blobs, no pickle. (26 modules, 9245 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -599,7 +602,7 @@ The 2.38 saved format: typed JSON records plus safetensors blobs, no pickle. (26
 | `reader` | Reader of the 2.38 saved format: manifest first, digests, record tables, records. | 780 |
 | `recipe` | The intervention recipe of the 3.0 saved format: ''intervention.json''. | 725 |
 | `recipe_shape` | Structural checks of a recipe document, run before any value is decoded. | 120 |
-| `restore` | Record state restore for the 3.0 reader: one decoded row becomes one record object. | 185 |
+| `restore` | Record state restore for the 3.0 reader: one decoded row becomes one record object. | 188 |
 | `route` | Routing of ''bundle.load'' into the 3.0 saved format: the root test and the door dispatch. | 87 |
 | `runnable` | The 2.38 runnable component: descriptor JSON plus safetensors state, no pickle. | 414 |
 | `runnable_families` | Tensor families of the 3.0 runnable component: safetensors files and tensor references. | 285 |
@@ -611,7 +614,7 @@ The 2.38 saved format: typed JSON records plus safetensors blobs, no pickle. (26
 
 ### `torchlens._ir`
 
-Internal backend-neutral IR for TorchLens capture unification. (25 modules, 12739 lines)
+Internal backend-neutral IR for TorchLens capture unification. (25 modules, 12733 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -639,7 +642,7 @@ Internal backend-neutral IR for TorchLens capture unification. (25 modules, 1273
 | `selector_eval` | The one selector interpreter for capture-time, post-hoc, and live matching. | 1674 |
 | `semantics` | Capture policy and backend semantics records. | 51 |
 | `summary_role` | The non-differentiable summary-transform role (explorer P1). | 250 |
-| `workspaces` | Named per-phase capture/postprocess workspaces. | 192 |
+| `workspaces` | Named per-phase capture/postprocess workspaces. | 186 |
 
 ### `torchlens._merged`
 
@@ -725,7 +728,7 @@ Pixel plotting helpers (PIL, numpy) shared by the reads packages and ''viz''. (3
 
 ### `torchlens._postprocess`
 
-Postprocessing pipeline for cleaning up the model log after the forward pass. (49 modules, 19914 lines)
+Postprocessing pipeline for cleaning up the model log after the forward pass. (46 modules, 19269 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -735,14 +738,14 @@ Postprocessing pipeline for cleaning up the model log after the forward pass. (4
 | `_branch_source` | Source text readers and source-range predicates for the conditional AST indexer. | 179 |
 | `_buffer_addresses` | Buffer-address resolution for postprocess step 0. | 296 |
 | `_buffer_source_wiring` | Step 6 buffer-source wiring and buffer value comparison for ''control_flow''. | 124 |
-| `_call_site_contract` | The call-site grouping contract (''callsite_v1'', ''callsite_v2'') and its in-memory evidence. | 133 |
+| `_call_site_contract` | The call-site grouping contract (''callsite_v1'') and its in-memory evidence. | 133 |
 | `_column_passes` | Postprocess pass bodies that read and write ''Op'' fields through column views. | 76 |
 | `_column_passes_finalize` | Step 15.5 (build aggregate ''Layer'' records) over ''Op'' column views. | 415 |
 | `_column_passes_graph` | Column-view bodies of the graph passes: step 3's orphan flood and step 5's arms. | 597 |
 | `_conditional_child_rename` | Conditional child-label renaming for ''labeling._replace_layer_names_for_layer_entry''. | 84 |
 | `_conditional_records` | Leaf helpers of ''finalization._build_conditional_records''. | 253 |
 | `_executor` | Postprocess step adapters: ''StepContext'' and one function per pipeline step. | 437 |
-| `_grouping_stamp` | The grouping-policy stamp (''grouping_policy_v1''): writer, loader | 292 |
+| `_grouping_stamp` | The grouping-policy stamp (''grouping_policy_v1''): writer, loader | 284 |
 | `_ingest_contract` | Frozen step-0 ingest seam contracts: ''IngestInputs'' v1 / ''Step0Result'' v1. | 152 |
 | `_label_rename` | Raw-to-final label renaming inside replay templates and label-bearing records. | 165 |
 | `_layer_conditional_merge` | Rolled conditional edge-pass indices rebuilt after Step 15.5. | 66 |
@@ -756,15 +759,12 @@ Postprocessing pipeline for cleaning up the model log after the forward pass. (4
 | `_orphan_seeds` | Seeds of the orphan-removal flood (postprocess Step 3). | 163 |
 | `_output_payload` | Whether a model-output row rides its producer's retained payload (HONESTY 13-R1). | 153 |
 | `_pipeline` | Postprocess pipeline: the named ordered step table and ''run_pipeline''. | 610 |
-| `_post_plan` | Backend-neutral post-processing plan for non-torch ''tl.trace'' captures. | 151 |
-| `_post_predicate` | Value-dependent and lookback ''save='' predicates on a finished capture. | 223 |
-| `_post_shaping` | Save shaping for finished non-torch captures, through each backend's payload codec. | 142 |
 | `_pre_hook_provenance` | Pre-hook provenance of one module call, with raw producer labels finalized. | 70 |
 | `_primitive_profile` | Materialize and bind the private wave-0 primitive-operation profile. | 400 |
 | `_recurrence` | Shared preview-backend recurrence grouping feed. | 407 |
 | `_root_module_log` | Module-build-data readers for the root module's calls. | 84 |
 | `_row_ingest` | Step-0 ingest of the exhaustive capture rows (capture C2c). | 316 |
-| `_selective_save` | Post-finalization selective-save helpers for non-torch backends. | 465 |
+| `_selective_save` | Post-finalization selective-save helpers for non-torch backends. | 344 |
 | `_site_join` | Site-key JOIN (guarded, witness-corroborated, verdict-tiered) and the | 294 |
 | `_site_key` | Re-export shim: the site-key minter moved to :mod:'torchlens._data_classes._site_key'. | 34 |
 | `_streamed_tensor_types` | Wire tensor identity and dtype lookup for streamed-reference finalization. | 51 |
@@ -781,14 +781,14 @@ Postprocessing pipeline for cleaning up the model log after the forward pass. (4
 
 ### `torchlens._quickstart`
 
-TorchLens quickstart: input resolution, input provenance and the drawing entry point. (9 modules, 2016 lines)
+TorchLens quickstart: one input ladder, one provenance record, one render door. (9 modules, 1986 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
-| `__init__` | TorchLens quickstart: input resolution, input provenance and the drawing entry point. | 72 |
+| `__init__` | TorchLens quickstart: one input ladder, one provenance record, one render door. | 72 |
 | `_gate` | The non-gold capability gate and the warn-once raw-read machinery. | 171 |
 | `_grammar` | The ''input_shape='' grammar and the deterministic synthesis kernel. | 432 |
-| `_ladder` | The trace entry door for the declared/inferred/kwargs-only rungs. | 152 |
+| `_ladder` | The trace entry door for the declared/inferred/kwargs-only rungs. | 122 |
 | `_plan` | Input-rung law and the normalized pre-capture call description. | 170 |
 | `_primitive` | The private concrete-input capture primitive (quickstart B5). | 216 |
 | `_provenance` | The ONE persistent input-provenance record. | 323 |
@@ -943,14 +943,14 @@ Private per-trace semantic store substrate (trace_core_design.md). (16 modules, 
 
 ### `torchlens._utils`
 
-Shared helpers used by two or more TorchLens packages. (75 modules, 24112 lines)
+Shared helpers used by two or more TorchLens packages. (75 modules, 24008 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Shared helpers used by two or more TorchLens packages. | 46 |
 | `_autograd_view_nodes` | Autograd-node facts for in-place view writes: creation order and view classes. | 92 |
 | `_byte_format` | Human-readable byte counts for budget and capture messages. | 27 |
-| `_call_site` | Call-site keys for layer grouping (step 7, ''detector="callsite_v2"''). | 314 |
+| `_call_site` | Call-site keys for layer grouping (step 7, ''detector="callsite_v1"''). | 258 |
 | `_callable_safety` | Security gate deciding which resolved callables are pure forward/tensor ops. | 1555 |
 | `_compiled_write_guard` | Keep deferred payload aliases out of reach of compiled in-place writes. | 121 |
 | `_cuda_probe` | CUDA availability and initialization probes, cached once per process. | 69 |
@@ -971,7 +971,7 @@ Shared helpers used by two or more TorchLens packages. (75 modules, 24112 lines)
 | `_hop_entry_compile` | Higher-order-operator entry compiles during a forced-eager capture. | 587 |
 | `_input_tree` | Input-tree bounds, refusals and the inert instance-state inspector. | 257 |
 | `_internal_read` | The explicit marker for TorchLens-internal scalar reads during capture. | 78 |
-| `_kernel_probes` | Capability probes that run one real tensor op (or one non-importing lookup) each (a torch-only leaf). | 715 |
+| `_kernel_probes` | Capability probes that run one real tensor op (or one non-importing lookup) each (a torch-only leaf). | 656 |
 | `_lazy_import_warm` | Import the modules a process's first capture would otherwise load in-window. | 59 |
 | `_module_call_dispatch` | Tell ''module(x)'' from a direct ''module.forward(x)'' by the caller frame. | 127 |
 | `_mps_memory` | MPS headroom query behind the ''HAS_MPS_MEMORY_QUERY'' capability flag. | 27 |
@@ -1017,7 +1017,7 @@ Shared helpers used by two or more TorchLens packages. (75 modules, 24112 lines)
 | `fail_open` | The one audited fail-open chokepoint for degrade-not-raise surfaces. | 42 |
 | `hashing` | Barcode generation and graph hash helpers. | 605 |
 | `input_leaves` | Leaf-preserving copies and device moves of grad-tracked model inputs. | 163 |
-| `introspection` | Object introspection: recursive type search, nested attribute access, and call-stack filtering. | 1085 |
+| `introspection` | Object introspection: recursive type search, nested attribute access, and call-stack filtering. | 1096 |
 | `lazy_state` | Shared detection and enumeration of un-materialized lazy module state. | 168 |
 | `tensor_leaves` | Tensor-leaf helpers: walk a nest for tensors and read a tensor's raw payload. | 155 |
 | `tensor_utils` | Tensor utilities: NaN-aware comparison, memory calculation, safe_copy, safe device transfer. | 1858 |
@@ -1050,7 +1050,7 @@ RNG state for reproducible capture and replay, and the host-nondeterminism monit
 
 ### `torchlens._visualization`
 
-Computational graph visualization via Graphviz. (112 modules, 50023 lines)
+Computational graph visualization via Graphviz. (110 modules, 49959 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1072,7 +1072,7 @@ Computational graph visualization via Graphviz. (112 modules, 50023 lines)
 | `_collapse_runs` | Run-fold legality over indexed flow adjacency, de-quadratic. | 349 |
 | `_collapse_signatures` | Structural fingerprints for collapse fold honesty, with the B1 memo cache. | 370 |
 | `_color_sources` | Resolve the non-string ''color_by='' sources of ''Trace.draw''. | 122 |
-| `_condensed_flow` | Child condensed-flow-graph construction for smart module collapse. | 811 |
+| `_condensed_flow` | Child condensed-flow-graph construction for smart module collapse. | 814 |
 | `_container_edges` | Edge labels that name a container slot (dict key, list index, dataclass field). | 148 |
 | `_draw_validation` | Draw-option validation (extracted from ''_render_dot'' per the file-size ratchet). | 186 |
 | `_edge_multiplicity` | Rendered-edge multiplicity disclosure: dedupe registry helpers. | 354 |
@@ -1096,7 +1096,7 @@ Computational graph visualization via Graphviz. (112 modules, 50023 lines)
 | `_frame_penwidth` | Module frame border width, shared by the Trace and bundle renderers. | 30 |
 | `_geometry_audit` | Geometry audit v2: the vizmech wave-3 oracle set (items 18-20). | 973 |
 | `_graph_shell` | The Graphviz graph shell of a forward draw: caption, graph, node and edge defaults. | 92 |
-| `_header_block` | The fixed top-left block of a forward picture: the header, then the key. | 751 |
+| `_header_block` | The fixed top-left block of a forward picture: the header, then the key. | 790 |
 | `_input_photo` | The input photo: an image a trace was captured from, drawn on its input node. | 98 |
 | `_intervention_sites` | Intervention-site lookup shared by the draw path and the interventions view. | 96 |
 | `_label_fields` | The closed vocabulary of ''node_label_fields='' and its refusal. | 41 |
@@ -1106,14 +1106,12 @@ Computational graph visualization via Graphviz. (112 modules, 50023 lines)
 | `_label_width` | Conservative text-width metrics for sizing node labels before Graphviz lays them out. | 114 |
 | `_legend` | Legend helpers: drawn-role detection and the one compact legend table. | 498 |
 | `_loop_edges` | Ports that make a rolled recurrence read as a loop. | 139 |
-| `_module_children` | A module's recorded children, spelled by canonical address. | 25 |
-| `_module_reuse` | The overview header's module-reuse note (collapse 5: disclose, don't switch). | 72 |
 | `_mutated_params` | Source nodes for in-place-mutated ''nn.Parameter'' objects in the forward render. | 696 |
 | `_node_boxes` | Box layout for nodes that carry a picture or a list of labels. | 109 |
 | `_oklab` | sRGB hex <-> OKLab conversion for the colour ramps (Ottosson 2020). | 136 |
 | `_orphan_islands` | Orphan-island selection and render-omission warnings for Graphviz renders. | 56 |
 | `_pass_animation` | The ''trace.animate(site)'' picture: an HTML animation of the repeated ops at one site. | 71 |
-| `_pass_label_placement` | Place rolled ''In''/''Out'' pass labels beside their nodes, clear of everything else. | 649 |
+| `_pass_label_placement` | Place rolled ''In''/''Out'' pass labels beside their nodes, clear of everything else. | 636 |
 | `_pass_marks` | Pass marks: how a drawn node or edge says which passes of a recurrent layer it shows. | 79 |
 | `_ramps` | Sequential colour-ramp stop lists for the encoding channels. | 62 |
 | `_rank_segments` | Segment boxes for the rank backend (collapse, the ''__segment__'' half). | 166 |
@@ -1149,7 +1147,7 @@ Computational graph visualization via Graphviz. (112 modules, 50023 lines)
 | `collapse_estimator` | Deterministic collapse work estimator and admission policy. | 209 |
 | `collapse_fallback` | Deterministic coarse-but-legal fallback collapse planner. | 239 |
 | `collapse_ladder` | Typed collapse event ladder: one truth for auto, floats, and the schedule. | 704 |
-| `collapse_optimizer` | Bounded beam-search tree-cut optimizer for v2 auto collapse. | 4080 |
+| `collapse_optimizer` | Bounded beam-search tree-cut optimizer for v2 auto collapse. | 4084 |
 | `collapse_patterns` | Declarative user-named pattern folding, v1. | 532 |
 | `collapse_plan` | Diagnostic collapse-plan AST and renderer-faithful count helpers. | 623 |
 | `fastlog_live` | Live visualization helpers for fastlog dry-run traces. | 311 |
@@ -1338,15 +1336,15 @@ One-backward attribution reads: one backward pass seeded at gradient edges resol
 
 ### `torchlens.backends`
 
-Backend Protocol and public registry exports for TorchLens adapters. (24 modules, 7526 lines)
+Backend Protocol and public registry exports for TorchLens adapters. (24 modules, 7552 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Backend Protocol and public registry exports for TorchLens adapters. | 84 |
 | `_backend_names` | The canonical default-backend name, split out of :mod:'torchlens.backends.registry'. | 20 |
-| `_backend_protocol` | The one backend protocol every TorchLens backend fills, torch included. | 507 |
+| `_backend_protocol` | The one backend protocol every TorchLens backend fills, torch included. | 521 |
 | `_constants` | The shared constants rule every preview backend's finalize step applies. | 589 |
-| `_default_specs` | Default public backend specs registered by TorchLens. | 1283 |
+| `_default_specs` | Default public backend specs registered by TorchLens. | 1291 |
 | `_default_specs_tf` | TensorFlow / Keras runtime probes used by the default backend specs. | 102 |
 | `_entry_refusals` | Typed, coded refusals raised by the framework backends' public entry points. | 197 |
 | `_errors` | Backend registry error hierarchy (leaf module: no registry import). | 251 |
@@ -1359,13 +1357,13 @@ Backend Protocol and public registry exports for TorchLens adapters. (24 modules
 | `_intervention_evidence` | Which backends write the intervention evidence a Trace's pristine reading uses. | 31 |
 | `_invariants` | Run the metadata-invariant tripwire from a backend's validate path. | 23 |
 | `_module_returns` | Recorded module returns: how a preview backend hands module-call outputs to the finalizer. | 234 |
-| `_options` | Shared backend trace-option defaulting and rejection helpers. | 764 |
+| `_options` | Shared backend trace-option defaulting and rejection helpers. | 790 |
 | `_protocol` | Backend Protocol for unified TorchLens capture. | 354 |
 | `_root_frames` | The root call's frame in preview op module stacks. | 76 |
-| `_scorecard_rows` | ''backend_scorecard:<name>'' rows for ''tl.report.doctor''. | 210 |
+| `_scorecard_rows` | ''backend_scorecard:<name>'' rows for ''tl.report.doctor''. | 206 |
 | `_trace_options` | Per-backend trace-option vocabularies (leaf module: no registry import). | 191 |
-| `_validation_shared` | Backend-neutral helpers shared by the preview backends' validation modules. | 208 |
-| `registry` | Public backend registry for TorchLens capture and validation. | 619 |
+| `_validation_shared` | Backend-neutral helpers shared by the preview backends' validation modules. | 171 |
+| `registry` | Public backend registry for TorchLens capture and validation. | 638 |
 
 ### `torchlens.backends._protocols`
 
@@ -1374,145 +1372,134 @@ Per-backend ''BackendProtocol'' objects, kept import-light. (8 modules, 928 line
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Per-backend ''BackendProtocol'' objects, kept import-light. | 8 |
-| `jax` | JAX ''BackendProtocol'' (delegating; jaxpr-first, eager values). | 127 |
-| `mlx` | MLX ''BackendProtocol'' shell (delegating; lazy, realize-once). | 145 |
+| `jax` | JAX preview ''BackendProtocol'' (delegating; jaxpr-first, eager values). | 125 |
+| `mlx` | MLX preview ''BackendProtocol'' shell (delegating; lazy, realize-once). | 146 |
 | `mlx_wrapped_state` | Import-light probe of the MLX wrapper state for the protocol shell. | 19 |
-| `paddle` | Paddle ''BackendProtocol'' shell (delegating; eager dygraph). | 153 |
-| `tf` | TensorFlow ''BackendProtocol'' (delegating; eager). | 129 |
-| `tinygrad` | tinygrad ''BackendProtocol'' shell (delegating; lazy, realize-once). | 139 |
-| `torch` | Torch's ''BackendProtocol'' object: the reference, by delegation. | 208 |
+| `paddle` | Paddle preview ''BackendProtocol'' shell (delegating; eager dygraph). | 154 |
+| `tf` | TensorFlow preview ''BackendProtocol'' (delegating; eager). | 130 |
+| `tinygrad` | tinygrad preview ''BackendProtocol'' shell (delegating; lazy, realize-once). | 137 |
+| `torch` | Torch's ''BackendProtocol'' object: the reference, by delegation. | 209 |
 
-### `torchlens.backends.jax`
+### `torchlens.backends._replay_adapters`
 
-JAX backend exports. (24 modules, 10805 lines)
+Private per-backend replay adapters (see :mod:'._contract'). (3 modules, 933 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
-| `__init__` | JAX backend exports. | 7 |
+| `__init__` | Private per-backend replay adapters (see :mod:'._contract'). | 97 |
+| `_contract` | Replay adapter contract: the function protocol and the data-only op recipe. | 539 |
+| `_session` | Replay session: owns values, substitutions, last-use counts and cleanup. | 297 |
+
+### `torchlens.backends.jax`
+
+JAX backend preview exports. (17 modules, 9645 lines)
+
+| Module | What it holds | Lines |
+| --- | --- | ---: |
+| `__init__` | JAX backend preview exports. | 7 |
 | `_closure_consts` | Closure-constant readability check for a JAX function-root capture. | 49 |
-| `_converted_grads` | Derived gradients for module roots and closure constants, over the captured jaxpr. | 238 |
-| `_edit_helpers` | JAX-native application of capture-time intervention helpers and hook results. | 187 |
-| `_edits` | Capture-time ''trace(intervene=...)'' for the JAX backend. | 463 |
 | `_equinox_children` | Equinox child discovery: module fields, list and tuple fields, and their containers. | 153 |
-| `_host_state` | Closed-over host-state check for JAX derived gradients. | 40 |
-| `_input_kwargs` | Keyword inputs for JAX capture: array kwargs trace as pytree leaves. | 85 |
-| `_module_frames` | Event-layer module frames for JAX operation events. | 96 |
 | `_module_return_probe` | Recorded module returns for JAX pytree modules (Equinox and Flax NNX). | 268 |
-| `_perturbation_probes` | Perturbation candidates for the JAX backend's parent-influence oracle. | 299 |
+| `_perturbation_probes` | Perturbation candidates for the JAX preview backend's parent-influence oracle. | 299 |
 | `_pytree_param_barcodes` | Param barcodes on JAX pytree-module ops, stamped before recurrence grouping. | 43 |
 | `_raw_relabel` | Raw-label helpers for finishing a JAX trace: lineage relabel, equivalence members, sources. | 79 |
 | `_return_ledger` | Trace-time ledger for JAX module returns (the leaf half of ''_module_return_probe''). | 69 |
-| `_site_dialect` | THE JAX SITE DIALECT for ''site_key_v1'' minting. | 72 |
-| `_source_lines` | Source lines for JAX equations: ''source_info'' tracebacks as torch-style frames. | 163 |
+| `_site_dialect` | THE JAX SITE DIALECT for ''site_key_v1'' minting. | 73 |
 | `_source_path_components` | Source-path component normalization for JAX equation captures. | 44 |
-| `_trace_graph_helpers` | Trace-graph helpers for the JAX backend's validation oracles. | 534 |
+| `_trace_graph_helpers` | Trace-graph helpers for the JAX preview backend's validation oracles. | 535 |
 | `_validation_log` | Per-run validation decision log for the JAX backend. | 153 |
-| `_zero_annihilator` | Zero-annihilator value proof for the JAX backend's perturbation oracle. | 88 |
-| `backend` | Jaxpr-first JAX backend. | 4215 |
-| `capabilities` | Registry-backed capability exports for the JAX backend. | 38 |
-| `jaxpr` | Closed-jaxpr derivation and interpretation for the JAX backend. | 2490 |
+| `_zero_annihilator` | Zero-annihilator value proof for the JAX preview backend's perturbation oracle. | 88 |
+| `backend` | Jaxpr-first JAX backend preview. | 4324 |
+| `capabilities` | Registry-backed capability exports for the JAX backend preview. | 38 |
+| `jaxpr` | Closed-jaxpr derivation and interpretation for the JAX backend. | 2491 |
 | `modules` | JAX module helpers for Equinox and Flax NNX roots. | 932 |
 
 ### `torchlens.backends.mlx`
 
-MLX backend for TorchLens. (18 modules, 7242 lines)
+Technical-preview MLX backend for TorchLens. (17 modules, 6951 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
-| `__init__` | MLX backend for TorchLens. | 31 |
-| `_capture_disclosures` | Capture-time honesty disclosures for the MLX backend. | 92 |
+| `__init__` | Technical-preview MLX backend for TorchLens. | 31 |
+| `_capture_disclosures` | Capture-time honesty disclosures for the MLX preview backend. | 87 |
 | `_capture_records` | Capture records and payload helpers for MLX replay validation. | 235 |
 | `_grad_oracle` | MLX derived-gradient oracle helpers. | 438 |
 | `_param_tree` | Flattened MLX parameter-tree walkers for the backend's parameter logs. | 71 |
 | `_replay_args` | Saved-payload lookup and replay-argument reconstruction for MLX validation. | 216 |
 | `_replay_frames` | Module-call frames for the MLX AD replay observers. | 53 |
-| `_source_frames` | User source lines for MLX operations (''Op.code_context''). | 164 |
 | `_tap_observers` | MLX intermediate-gradient tap observers and the array helpers they share. | 552 |
-| `backend` | MLX implementation of the capture backend Protocol. | 2467 |
-| `capabilities` | Registry-backed capability exports for the MLX backend. | 38 |
+| `backend` | Technical-preview MLX implementation of the capture backend Protocol. | 2496 |
+| `capabilities` | Registry-backed capability exports for the technical-preview MLX backend. | 38 |
 | `external_arrays` | Arrays a forward can reach from outside itself: the closure-constant census. | 147 |
-| `interventions` | Live interventions and stop sites for the MLX backend. | 676 |
-| `model_prep` | MLX model preparation helpers for MLX capture. | 473 |
-| `settings` | Backend-local MLX settings (no public trace option grows for one backend). | 88 |
+| `interventions` | Static-label live interventions for the technical-preview MLX backend. | 525 |
+| `model_prep` | MLX model preparation helpers for technical-preview capture. | 473 |
+| `settings` | Backend-local MLX settings (no public trace option grows for a preview). | 88 |
 | `tensor_store` | External metadata store for MLX arrays. | 82 |
-| `validation` | Live replay validation for the MLX backend. | 648 |
-| `wrappers` | MLX function-call interception for MLX capture. | 771 |
+| `validation` | Live replay validation for the technical-preview MLX backend. | 648 |
+| `wrappers` | MLX function-call interception for technical-preview capture. | 771 |
 
 ### `torchlens.backends.paddle`
 
-Paddle backend. (16 modules, 6915 lines)
+Paddle backend preview. (14 modules, 6595 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
-| `__init__` | Paddle backend. | 7 |
+| `__init__` | Paddle backend preview. | 7 |
 | `_capture_helpers` | Private helpers the Paddle backend's capture path calls (file cap split). | 124 |
-| `_param_writes` | Paddle parameter-write guard for Paddle capture. | 117 |
-| `backend` | Paddle implementation of the capture backend Protocol. | 2650 |
-| `capabilities` | Registry-backed capability exports for the Paddle backend. | 38 |
-| `constants_rule` | The shared constants rule, Paddle side (closure constants and literal producers). | 262 |
+| `_param_writes` | Paddle parameter-write guard for the preview capture. | 106 |
+| `backend` | Technical-preview Paddle implementation of the capture backend Protocol. | 2734 |
+| `capabilities` | Registry-backed capability exports for the Paddle backend preview. | 38 |
+| `constants_rule` | The shared constants rule, Paddle side (closure constants and literal producers). | 261 |
 | `conv_layers` | Layer-level capture of Paddle ''Conv1D'', ''Conv2D'' and ''Conv3D''. | 154 |
-| `derived_grads` | Derived-gradient leaf helpers for the Paddle backend. | 302 |
-| `interventions` | Live intervention runtime for the Paddle backend. | 569 |
-| `model_prep` | Paddle model preparation helpers for Paddle capture. | 412 |
-| `source_frames` | The user source lines of one Paddle op (''Op.source.frames''), recorded like torch. | 160 |
-| `source_leaves` | Pre-forward source leaves of a Paddle capture: registered buffers and closure constants. | 227 |
+| `derived_grads` | Derived-gradient leaf helpers for the technical-preview Paddle backend. | 302 |
+| `interventions` | Live intervention runtime for the technical-preview Paddle backend. | 569 |
+| `model_prep` | Paddle model preparation helpers for technical-preview capture. | 412 |
 | `tensor_store` | External metadata store for Paddle tensors. | 114 |
-| `validation` | Replay-validation helpers for the Paddle backend. | 700 |
-| `validation_decisions` | Per-op validation decisions for the Paddle backend. | 280 |
-| `wrappers` | Paddle function-call interception for Paddle capture. | 799 |
+| `validation` | Replay-validation helpers for the technical-preview Paddle backend. | 698 |
+| `validation_decisions` | Per-op validation decisions for the Paddle preview backend. | 280 |
+| `wrappers` | Paddle function-call interception for technical-preview capture. | 796 |
 
 ### `torchlens.backends.tf`
 
-TensorFlow backend exports. (19 modules, 9370 lines)
+TensorFlow backend preview exports. (13 modules, 8577 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
-| `__init__` | TensorFlow backend exports. | 8 |
-| `_callback_attrs` | TensorFlow op-callback attribute and op-type normalization helpers. | 74 |
-| `_halt` | TensorFlow ''trace(stop_after=...)'': halt the eager forward at a frontier op. | 220 |
-| `_intervention_hooks` | Leaf helpers for the TensorFlow intervention layer (no imports from the capture core). | 153 |
-| `_intervention_plan` | TensorFlow intervention site and plan records (leaf: no capture-core imports). | 74 |
+| `__init__` | TensorFlow backend preview exports. | 8 |
 | `_raw_op_replay` | Raw-op replay kernels for TensorFlow validation. | 457 |
-| `_source_context` | Source lines for TensorFlow eager ops: the user frames that ran each op. | 115 |
 | `_tensor_leaves` | Tensor-leaf helpers shared by the TensorFlow intervention engine (file cap split). | 62 |
-| `_tensor_probe` | TensorFlow tensor probes for the eager op-callback capture (file cap split). | 277 |
-| `_tf_compat` | TensorFlow compatibility probes for private eager-capture APIs. | 224 |
-| `_wrap_registry` | Entry points the TensorFlow intervention layer wraps to present op outputs. | 153 |
-| `backend` | TensorFlow backend with eager op-callback capture. | 1309 |
-| `capabilities` | Registry-backed capability exports for the TensorFlow backend. | 38 |
+| `_tensor_probe` | TensorFlow tensor probes for the eager op-callback capture (file cap split). | 232 |
+| `_tf_compat` | TensorFlow compatibility probes for private eager-capture APIs. | 164 |
+| `backend` | TensorFlow backend preview with eager op-callback capture. | 1360 |
+| `capabilities` | Registry-backed capability exports for the TensorFlow backend preview. | 38 |
 | `derived_grads` | TensorFlow derived-gradient replay (leaf + exact op-level intermediates). | 900 |
 | `funcgraph` | TensorFlow static FuncGraph capture engine. | 1624 |
-| `interventions` | TensorFlow static-label intervention layer. | 775 |
+| `interventions` | TensorFlow static-label intervention layer. | 786 |
 | `modules` | TensorFlow module discovery, call-stack patching, and parameter logs. | 773 |
-| `op_callback_capture` | TensorFlow eager op-callback capture engine. | 1065 |
-| `validation` | Non-vacuous replay validation for the TensorFlow eager backend. | 1069 |
+| `op_callback_capture` | TensorFlow eager op-callback capture engine. | 1097 |
+| `validation` | Non-vacuous replay validation for the TensorFlow eager backend. | 1076 |
 
 ### `torchlens.backends.tinygrad`
 
-tinygrad backend. (16 modules, 5624 lines)
+tinygrad backend preview. (11 modules, 4583 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
-| `__init__` | tinygrad backend. | 7 |
-| `_capture_state` | Per-capture state of the tinygrad backend: call keywords, source lines, edits. | 158 |
-| `_captures` | Capture records the tinygrad backend keeps for validation and derived gradients. | 67 |
-| `_derived_grads` | Derived-gradient helpers for the tinygrad backend. | 280 |
-| `_edit_plan` | Resolution of ''trace(intervene=tl.when(...))'' to a tinygrad edit. | 136 |
-| `_edits` | Static-selector edits applied during a tinygrad capture. | 349 |
-| `_execution_guard` | Execution guard for tinygrad capture. | 78 |
-| `_module_tree` | tinygrad object-module tree, call frames, and the module returns each call records. | 155 |
-| `_observer` | Tensor-API observation for the tinygrad capture. | 160 |
+| `__init__` | tinygrad backend preview. | 7 |
+| `_captures` | Capture records the tinygrad backend keeps for validation and derived gradients. | 61 |
+| `_derived_grads` | Derived-gradient helpers for the tinygrad preview backend. | 268 |
+| `_execution_guard` | Execution guard for tinygrad preview capture. | 78 |
+| `_module_tree` | tinygrad object-module tree, call frames, and the module returns each call records. | 151 |
 | `_raw_labels` | Resolve materialized tinygrad op labels back to their raw capture labels. | 37 |
-| `_realize_once` | Realize-once capture: every recorded tinygrad value comes from one evaluation. | 395 |
+| `_realize_once` | Realize-once capture: every recorded tinygrad value comes from one evaluation. | 379 |
 | `_rules` | tinygrad adoption of the shared backend rules: typed refusals, named verdicts, constants. | 323 |
-| `_source_lines` | User source lines for the ops of a tinygrad capture. | 191 |
-| `_uop_graph` | UOp-graph walks the tinygrad capture records ops from. | 251 |
-| `backend` | UOp-snapshot tinygrad backend. | 2999 |
-| `capabilities` | Registry-backed capability exports for the tinygrad backend. | 38 |
+| `_uop_graph` | UOp-graph walks the tinygrad capture records ops from. | 171 |
+| `backend` | UOp-snapshot tinygrad backend preview. | 3070 |
+| `capabilities` | Registry-backed capability exports for the tinygrad backend preview. | 38 |
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (140 modules, 59498 lines)
+Torch backend implementation package for TorchLens capture. (138 modules, 59358 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1545,7 +1532,6 @@ Torch backend implementation package for TorchLens capture. (140 modules, 59498 
 | `_failed_session` | Torch stopped and failed forward-session cleanup for the FINALIZE stage. | 228 |
 | `_fire_timing` | Per-fire backward timing helpers. | 143 |
 | `_foreign_data` | Foreign data round trips in plain forward code: departures, re-entries, replay. | 798 |
-| `_foreign_data_warning` | Trace-time disclosure of a foreign data round trip TorchLens cannot re-run. | 58 |
 | `_foreign_wrappers` | Foreign wrappers over torchlens wrappers: detection, rebasing, reporting. | 173 |
 | `_function_boundary` | Foreign-kernel boundary for ''torch.autograd.Function'' forwards that leave torch. | 790 |
 | `_function_epilogue` | Credit the alias autograd takes of a custom ''Function'''s output after its forward. | 167 |
@@ -1574,10 +1560,9 @@ Torch backend implementation package for TorchLens capture. (140 modules, 59498 
 | `_module_arg_stubs` | Module-arg payload stubbing for release-at-emission. | 87 |
 | `_module_boundary_adoption` | Module-boundary adoption records and the pre-forward tensor ownership snapshot. | 206 |
 | `_module_class_metadata` | Class-level metadata of a module class, cached per class for one capture. | 175 |
-| `_module_state` | Which modules own state, the fact call-site grouping (''callsite_v2'') scopes on. | 71 |
 | `_op_markers` | Per-call op markers: NVTX ranges + join markers. | 250 |
 | `_opaque_call_advisory` | Name the opaque call behind a completeness-witness gap. | 366 |
-| `_ops_activations` | Output tensor metadata and activation persistence. | 756 |
+| `_ops_activations` | Output tensor metadata and activation persistence. | 752 |
 | `_ops_arg_slots` | One per-op snapshot of the tensor argument slots the shared-fields derivations read. | 273 |
 | `_ops_arguments` | Argument templates, edge uses, and tensor provenance. | 671 |
 | `_ops_autograd` | Autograd saved-tensor statistics and container snapshots. | 444 |
@@ -1590,7 +1575,7 @@ Torch backend implementation package for TorchLens capture. (140 modules, 59498 
 | `_ops_freeze_refs` | Exhaustive freeze ref builders, outside the package's largest import cycle. | 347 |
 | `_ops_interventions` | Legacy and predicate-mode live interventions. | 806 |
 | `_ops_payload_stream` | Forward-time disk streaming of predicate-selected op payloads. | 46 |
-| `_ops_predicate_events` | Predicate event records and graph relationship fields. | 737 |
+| `_ops_predicate_events` | Predicate event records and graph relationship fields. | 736 |
 | `_ops_predicates` | Predicate output replacement and backend semantics. | 549 |
 | `_ops_retention` | Save budgets, predicate payloads, and lookback retention. | 755 |
 | `_ops_row_cells` | Row-direct op cells: the exhaustive draft straight to store cells (capture C2a). | 487 |
@@ -1613,7 +1598,7 @@ Torch backend implementation package for TorchLens capture. (140 modules, 59498 
 | `_same_object_handoff` | Transient handoffs from the op wrapper to activation logging for same-object returns. | 137 |
 | `_script_boundary` | TorchScript call boundary: a ''torch.jit.ScriptFunction'' called from an eager forward. | 253 |
 | `_session_cleanup` | Session-end tensor metadata cleanup for torch capture. | 759 |
-| `_session_forwards` | Session-scoped ''forward'' wrappers for non-root submodules. | 299 |
+| `_session_forwards` | Session-scoped ''forward'' wrappers for non-root submodules. | 293 |
 | `_sources_lazy` | Lazy source-tensor logging for a lean plain ''tl.module'' read. | 69 |
 | `_state_bytes` | Byte views of tensor state: the whole-storage snapshot and the byte-exact state compare. | 102 |
 | `_storage_exports` | Copy out pending payload aliases before a tensor's storage is handed to the host zero-copy. | 291 |
@@ -1763,7 +1748,7 @@ Compatibility adapters for TorchLens 2.37 and earlier. (5 modules, 2035 lines)
 
 ### `torchlens.debug`
 
-Debugging tools for completed TorchLens traces, grouped by the symptom they answer. (39 modules, 13098 lines)
+Debugging tools for completed TorchLens traces, grouped by the symptom they answer. (38 modules, 12844 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1785,7 +1770,7 @@ Debugging tools for completed TorchLens traces, grouped by the symptom they answ
 | `_grad_fn_walk` | Post-hoc ''grad_fn'' walker. | 424 |
 | `_grad_scale_proof` | Prove from a trace that a backward ran without loss scaling. | 191 |
 | `_gradients` | Gradient-flow audit helpers for TorchLens traces. | 743 |
-| `_graph` | Graph lineage, comparison, and activation-analysis helpers. | 697 |
+| `_graph` | Graph lineage, comparison, and activation-analysis helpers. | 696 |
 | `_graph_breaks` | Correlate TorchDynamo graph breaks with eager TorchLens operations. | 470 |
 | `_infer_failure_classify` | Evidence-led probe-diary failure classification. | 99 |
 | `_infer_input_shape` | Input-shape inference helpers for TorchLens debug utilities. | 2091 |
@@ -1799,12 +1784,11 @@ Debugging tools for completed TorchLens traces, grouped by the symptom they answ
 | `_recompute` | Activation recomputation candidate ranking helpers. | 125 |
 | `_rerun` | Isolated reruns: run the same forward more than once under controlled state. | 225 |
 | `_unit_axis` | Pick the unit (feature) axis of an op's activation for ''dead_neurons''. | 105 |
-| `_unit_axis_layout` | Resolve preview-backend unit axes from recorded layouts and parent edges. | 251 |
 | `_xb_calls` | Read a trace's recorded module calls into a backend-neutral form for pairing. | 315 |
 | `_xb_pairing` | Pair the module calls of two traces without looking at any value. | 241 |
 | `_xb_refusals` | Typed refusals of the module-level comparison in ''tl.debug''. | 56 |
 | `_xb_report` | The two public answers of the module-level comparison: a Report and a first row. | 233 |
-| `_xb_tolerance` | Tolerance policy for comparing two recorded values in ''tl.debug'' comparisons. | 202 |
+| `_xb_tolerance` | Tolerance policy for comparing two recorded values in ''tl.debug'' comparisons. | 200 |
 | `_xb_values` | Compare the recorded values of one paired module call. | 251 |
 
 ### `torchlens.debug._checks`
@@ -2181,7 +2165,7 @@ Built-in receptive-field rules and idempotent pack registration. (10 modules, 20
 
 ### `torchlens.recording`
 
-Lightweight predicate-recording namespace for TorchLens. (28 modules, 7731 lines)
+Lightweight predicate-recording namespace for TorchLens. (28 modules, 7708 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -2191,7 +2175,7 @@ Lightweight predicate-recording namespace for TorchLens. (28 modules, 7731 lines
 | `_cook_settle` | Settle a Trace cooked from a Recording at the cook seam (settlement path 9). | 54 |
 | `_dry_run` | The payload-free dry-run view of a predicate pass (''tl.recording.DryRun''). | 120 |
 | `_dry_run_door` | Dry-run tracing API for fastlog predicates. | 83 |
-| `_exceptions` | Exception types for fastlog predicate recording. | 187 |
+| `_exceptions` | Exception types for fastlog predicate recording. | 164 |
 | `_generation` | Record chosen sites across one real Hugging Face ''generate'' call. | 671 |
 | `_generation_options` | Grouped options of the streaming generation recorder (experimental). | 121 |
 | `_generation_stream` | Per-token series, ring buffer, disk spill and cost guard of the generation recorder. | 487 |
@@ -2232,7 +2216,7 @@ Representation-geometry helpers (RDMs, MDS, Procrustes, CKA inputs) that need on
 
 ### `torchlens.report`
 
-Reports that describe a completed trace: summary, cost, profile, FLOPs and health. (39 modules, 14667 lines)
+Reports that describe a completed trace: summary, cost, profile, FLOPs and health. (38 modules, 14490 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -2269,12 +2253,11 @@ Reports that describe a completed trace: summary, cost, profile, FLOPs and healt
 | `_summary_hub` | Hub-name input form for ''tl.summary'' (experimental). | 78 |
 | `_summary_ladder` | The summary auto ladder. | 1283 |
 | `_summary_op_metadata` | Metadata-only join keys for the summary's executed operation rows. | 27 |
-| `_summary_render` | The rebuilt summary renderer. | 568 |
+| `_summary_render` | The rebuilt summary renderer. | 565 |
 | `_summary_report` | The detached immutable summary report layer. | 596 |
 | `_summary_result` | Rebuilt summary result assembly. | 407 |
-| `_topology_text` | The summary's topology words: why layers run more than one pass. | 129 |
 | `_trace_facts` | Trace fact functions reached from the records through ''_data_classes._doors.report''. | 210 |
-| `_trace_summary` | Trace summary, HTML repr and first-nonfinite functions (record rebuild destination). | 494 |
+| `_trace_summary` | Trace summary, HTML repr and first-nonfinite functions (record rebuild destination). | 449 |
 
 ### `torchlens.report._notebook`
 
@@ -2296,7 +2279,7 @@ Extras-gated notebook namespace with no public objects yet. (11 modules, 2236 li
 
 ### `torchlens.stats`
 
-Streaming statistics for aggregating outputs over a dataloader: stat kernels, per-unit quantiles and top-k, and save/load of fitted accum... (18 modules, 7246 lines)
+Streaming statistics for aggregating outputs over a dataloader: stat kernels, per-unit quantiles and top-k, and save/load of fitted accum... (18 modules, 7241 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -2316,7 +2299,7 @@ Streaming statistics for aggregating outputs over a dataloader: stat kernels, pe
 | `_stats_render` | Stats-line renderers: the core grammar over TensorStats. | 248 |
 | `_streaming` | Streaming statistic kernels. | 834 |
 | `_tensor_stats` | The frozen TensorStats record. | 392 |
-| `_trace_tables` | Trace tabular export and decoded-output functions (record rebuild destination). | 678 |
+| `_trace_tables` | Trace tabular export and decoded-output functions (record rebuild destination). | 673 |
 | `_trajectory` | Logit-lens trajectory statistics in one call (''tl.mechinterp.measure_trajectory''). | 513 |
 
 ### `torchlens.trackers`
@@ -2385,7 +2368,7 @@ Built-in activation transforms: one contract, declared not sniffed. (13 modules,
 
 ### `torchlens.validation`
 
-Validation subpackage for saved activations, backward capture, and invariants. (87 modules, 34338 lines)
+Validation subpackage for saved activations, backward capture, and invariants. (87 modules, 34336 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -2431,7 +2414,7 @@ Validation subpackage for saved activations, backward capture, and invariants. (
 | `_invariants_connectivity` | Distance, connectivity, lookup, and contract helpers. | 841 |
 | `_invariants_distance_messages` | Min/max order failure message for the distance invariants. | 36 |
 | `_invariants_entry` | Invariant dispatch and backend-neutral identity checks. | 637 |
-| `_invariants_equivalence` | Equivalence, ordering, and loop-detection invariants. | 757 |
+| `_invariants_equivalence` | Equivalence, ordering, and loop-detection invariants. | 750 |
 | `_invariants_equivalence_index` | Index builders for the equivalence and loop-detection invariants. | 97 |
 | `_invariants_modules_params` | Module-call and parameter cross-reference invariants. | 601 |
 | `_invariants_parentless` | Parentless-op exemption evidence for the graph-connectivity invariant. | 72 |
@@ -2473,7 +2456,7 @@ Validation subpackage for saved activations, backward capture, and invariants. (
 | `_stock_layer_grads` | Stock per-module-output gradient capture for backward validation. | 413 |
 | `_structural_domains` | In-domain perturbations for parents bound by an op's structural contract. | 372 |
 | `_structural_slot_checks` | Pre-perturbation checks for argument slots whose value is pinned by structure. | 173 |
-| `_trace_checks` | Trace check functions reached from the records through ''_data_classes._doors.validation''. | 184 |
+| `_trace_checks` | Trace check functions reached from the records through ''_data_classes._doors.validation''. | 189 |
 | `_unread_value_proofs` | Posthoc value proofs for writes that cannot change the output and unread arguments. | 378 |
 | `_value_predicates` | Saved-value predicates used by the posthoc value-proof decisions. | 197 |
 

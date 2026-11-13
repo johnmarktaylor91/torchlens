@@ -452,10 +452,19 @@ class PreviewBackendAdapter:
         to_numpy = getattr(value, "numpy", None)
         return np.asarray(to_numpy() if callable(to_numpy) else value)
 
-    def save(self, trace: Any, path: Path) -> None:
-        """Persist one captured trace as a portable artifact."""
+    #: Save level whose bundle keeps the replay recipes validation re-executes
+    #: from after load (torch declares the same level for its saved arguments).
+    #: Only ``c2_validation_after_load`` saves at it; every other c2 cell keeps
+    #: the default level.
+    replay_save_level = "executable_with_callables"
 
-        trace.save(path)
+    def save(self, trace: Any, path: Path, level: str | None = None) -> None:
+        """Persist one captured trace (default level unless ``level`` is given)."""
+
+        if level is None:
+            trace.save(path)
+        else:
+            trace.save(path, level=level)
 
     def load(self, path: Path) -> Any:
         """Reload one persisted artifact."""

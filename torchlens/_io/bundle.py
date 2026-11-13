@@ -90,6 +90,7 @@ from ._save_gates import (
 from ._save_subject import resolve_save_subject
 from ._skipped_blobs import _apply_skipped_blobs_to_scrubbed_state
 from ._tlspec_identity import _preflight_schema_v2_runtime
+from ._trace_sidecars import write_trace_sidecars
 from .format3 import (
     contract as format3_contract,
     reader as format3_reader,
@@ -104,7 +105,6 @@ from .format3.payloads import (
     submit_tensor_payload,
     tensor_reference,
 )
-from .format3.recipe import write_trace_recipe
 from .format3.restore import (
     _stamp_loaded_context,
     loaded_persistent_buffer_universe,
@@ -728,10 +728,10 @@ def save(
                 )
             )
 
-        # io.1: a staged intervention spec persists as intervention.json (its
-        # tensors join this artifact's payload store before it closes).
-        intervention_entry, recipe_disclosures = write_trace_recipe(
-            tmp_path, trace, store=payload_store, save_level=save_level
+        # io.1: a staged intervention spec persists as intervention.json (its tensors join
+        # this payload store before it closes); replay recipes as replay_recipes.json.
+        intervention_entry, recipe_disclosures = write_trace_sidecars(
+            tmp_path, trace, store=payload_store, save_level=save_level, backend=backend_name
         )
         runnable_entry = None
         if sparse_run_descriptor is not None:
