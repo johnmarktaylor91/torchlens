@@ -718,13 +718,14 @@ class JAXBackend:
         flat_args, _args_treedef = flatten_dynamic_args(args, static_argnums)
         session_capture = (args, closure_consts, grad_options, save_code_context)
         session = open_equation_session(self, trace, intervene, session_capture)
-        with forward_scopes(session, backward_ready=cast(bool, backward_ready)):
+        with forward_scopes(session, backward_ready=cast(bool, backward_ready)) as hooks:
             result = interpret_closed_jaxpr_with_inlining(
                 return_probe.jaxpr_to_interpret(tree, closed_jaxpr),
                 flat_args,
                 jax_control_flow=cast(str, jax_control_flow),
                 jax_max_control_flow_unroll=cast(int, jax_max_control_flow_unroll),
                 equation_hook=session.hook,
+                hooks=hooks,
             )
         result, output = session.finish(return_probe.split_outputs(result, tree), output)
         output_leaf_paths = self._output_leaf_paths(output)

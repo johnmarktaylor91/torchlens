@@ -1,7 +1,7 @@
 """Capture-time hook calls into the optional random-state and backward modules.
 
-The JAX capture wraps its forward in the hooks the backend parity contracts
-name: ``rng_scope(session)`` from ``backends/_rng_capture/jax.py`` and, for a
+The JAX capture wraps its forward in the interpreter hooks (retention keyed on
+the capture's session) and the hooks the backend parity contracts name: ``rng_scope(session)`` from ``backends/_rng_capture/jax.py`` and, for a
 backward-ready capture, ``backward_ready_scope(session)`` plus
 ``retain_backward_state(trace, session)`` from ``backends/_backward_native/jax.py``.
 Each module is called only when it is installed; an absent module leaves the
@@ -17,6 +17,8 @@ from collections.abc import Iterator
 from contextlib import ExitStack, contextmanager
 from types import ModuleType
 from typing import Any
+
+from ._interp_hooks import InterpreterHooks
 
 _RNG_MODULE = "torchlens.backends._rng_capture.jax"
 _BACKWARD_MODULE = "torchlens.backends._backward_native.jax"
@@ -45,7 +47,7 @@ def _optional_module(name: str) -> ModuleType | None:
 
 
 @contextmanager
-def forward_scopes(session: Any, *, backward_ready: bool) -> Iterator[None]:
+def forward_scopes(session: Any, *, backward_ready: bool) -> Iterator[InterpreterHooks]:
     """Enter the installed capture-time scopes around one JAX forward.
 
     Parameters
@@ -57,8 +59,9 @@ def forward_scopes(session: Any, *, backward_ready: bool) -> Iterator[None]:
 
     Yields
     ------
-    None
-        Control while the forward is interpreted.
+    InterpreterHooks
+        The interpreter hooks for this forward. Retention is keyed on ``session``
+        (``_retention.retention_of``); a session with no policy keeps every value.
     """
 
     with ExitStack() as stack:
@@ -68,7 +71,7 @@ def forward_scopes(session: Any, *, backward_ready: bool) -> Iterator[None]:
         backward = _optional_module(_BACKWARD_MODULE) if backward_ready else None
         if backward is not None:
             stack.enter_context(backward.backward_ready_scope(session))
-        yield
+        yield InterpreterHooks(session=session)
 
 
 def retain_backward_state(trace: Any, session: Any, events: Any, *, backward_ready: bool) -> None:

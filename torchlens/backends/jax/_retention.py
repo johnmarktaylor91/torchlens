@@ -61,7 +61,10 @@ def set_retention(session: Any, retention: Retention) -> None:
 def retention_of(session: Any) -> Retention:
     """Return the retention attached to ``session`` (keep all when none was set)."""
 
-    return _POLICIES.get(session, KEEP_ALL)
+    try:
+        return _POLICIES.get(session, KEEP_ALL)
+    except TypeError:  # not weak-referenceable, so no policy can have been attached
+        return KEEP_ALL
 
 
 def retention_policy(session: Any) -> KeepTest:
