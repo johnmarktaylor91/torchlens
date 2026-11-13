@@ -120,6 +120,17 @@ def _is_float(dtype: Any) -> bool:
     return bool(dtypes.is_float(dtype))
 
 
+_CONSTANT_UOPS = frozenset({"CONST", "STACK"})
+
+
+def _differentiable(uop: Any) -> bool:
+    """A float value that is not a literal constant (a constant takes no gradient,
+    as a Python scalar takes none in PyTorch; the replay validator keeps the
+    same sources fixed)."""
+
+    return _uop_name(uop) not in _CONSTANT_UOPS and _is_float(uop.dtype)
+
+
 def _gradient_api() -> tuple[Callable[..., Any], Any]:
     """tinygrad's ``compute_gradient`` and ``pm_gradient``, found by feature detection."""
 
@@ -257,7 +268,7 @@ class BackwardScope:
         loss = self._loss(raw_output)
         labelled = {id(uop) for uop in (*sources, *recorded)}
         ordered = list({id(uop): uop for uop in (*sources, *recorded)}.values())
-        wanted = {uop for uop in ordered if _is_float(uop.dtype)}
+        wanted = {uop for uop in ordered if _differentiable(uop)}
         seed = Tensor(1.0, dtype=loss.dtype, device=loss.device)
         grads = compute_gradient(loss.uop, seed.uop, wanted)
         walked = _walked(loss.uop, wanted)
@@ -267,11 +278,13 @@ class BackwardScope:
                 continue
             self.op_grads.append((uop, self._target(grad)))
             if id(uop) in walked:
-                self._prepare_node(uop, grad, rules, labelled)
+                self._prepare_node(uop, grad, rules, labelled, wanted)
         output_ids = {id(tensor.uop) for tensor in _flat_tensors(raw_output)}
         self.root_uops = [node.uop for node in self.nodes if id(node.uop) in output_ids]
 
-    def _prepare_node(self, uop: Any, grad: Any, rules: Any, labelled: set[int]) -> None:
+    def _prepare_node(
+        self, uop: Any, grad: Any, rules: Any, labelled: set[int], targets: set[Any]
+    ) -> None:
         """The rule's gradient to each labelled parent occurrence of ``uop``."""
 
         positions = [pos for pos, src in enumerate(uop.src) if id(src) in labelled]
@@ -286,7 +299,7 @@ class BackwardScope:
         for pos in positions:
             value = local[pos]
             usable = value is not None and _uop_name(value) != "NOOP"
-            usable = usable and _is_float(uop.src[pos].dtype)
+            usable = usable and uop.src[pos] in targets
             outgoing.append((pos, self._target(value) if usable else None))
         self.nodes.append(_PreparedNode(uop=uop, outgoing=tuple(outgoing)))
 
@@ -359,9 +372,16 @@ def _payloads(scope: BackwardScope) -> dict[int, Any]:
 
 
 def _final_labels(trace: Any, uop_labels: Mapping[int, str]) -> dict[int, str]:
-    """``id()`` of a pre-realize UOp to the final label of the op recording it."""
+    """``id()`` of a pre-realize UOp to the final lookup label of its op.
 
-    finals = {getattr(op, "_label_raw", None): op.layer_label for op in trace._layer_list}
+    The lookup label is the layer label for a single-pass op and the pass label
+    otherwise, as ``GradFn.op_label`` is on PyTorch.
+    """
+
+    finals = {
+        getattr(op, "_label_raw", None): op.layer_label if op.num_passes == 1 else op.label
+        for op in trace._layer_list
+    }
     return {key: finals[raw] for key, raw in uop_labels.items() if raw in finals}
 
 

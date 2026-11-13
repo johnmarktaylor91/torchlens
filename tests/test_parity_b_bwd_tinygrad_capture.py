@@ -202,22 +202,28 @@ def _eager_grads(model: Any, value: Any) -> tuple[Any, dict[str, Any], Any]:
 
 
 def _check(trace: Any) -> Any:
-    """The replay graph and the recorded pass, both keyed by the graph's labels.
+    """The replay graph and the recorded pass, both keyed by pass label (``op.label``).
 
-    The records key ops by layer label (``GradFn.op_label``); the tinygrad
-    replay graph names each node by its pass label (``op.label``).
+    Calls come from bwd-core's reader, keyed by ``GradFn.op_label`` (the final
+    lookup label); each op's gradient is read per pass op, since a multi-pass
+    op shares one layer label across its passes.
     """
 
     ops = [op for op in trace._layer_list if not _is_input(op)]
     graph = graph_from_recipes(trace, adapter, ops, lambda label: trace[label].out)
     pass_number = trace.autograd.backward_passes[-1].pass_number
-    recorded = recorded_backward_from_trace(trace, pass_number)
-    to_graph = {op.layer_label: op.label for op in trace._layer_list}
+    calls = recorded_backward_from_trace(trace, pass_number).calls
+    lookup = trace._layer_dict_all_keys
+    grads = {
+        op.label: record.grad
+        for op in trace._layer_list
+        for record in op._slot("_grad_records") or ()
+        if record.backward_pass_number == pass_number and record.grad is not None
+    }
     keyed = RecordedBackward(
-        calls={to_graph[key]: call for key, call in recorded.calls.items()},
-        grads={to_graph[key]: grad for key, grad in recorded.grads.items()},
+        calls={lookup[key].label: call for key, call in calls.items()}, grads=grads
     )
-    return graph, keyed, to_graph
+    return graph, keyed
 
 
 def _diag(name: str, payload: dict[str, Any]) -> None:
@@ -234,9 +240,9 @@ def test_recorded_pass_passes_the_backward_validator(joint: _JointCapture, row: 
     state = trace.__dict__[native.STATE_KEY]
     assert state.unavailable is None, state.unavailable
     trace.backward(scalar_loss)
-    graph, recorded, to_graph = _check(trace)
+    graph, recorded = _check(trace)
     input_grad, _params, _output = _eager_grads(model, value)
-    label = to_graph[_input_label(trace)]
+    label = trace[_input_label(trace)].label
     result = check_backward_records(trace, adapter, graph, recorded, {label: input_grad})
     _diag(
         f"validator-{row.family}",
