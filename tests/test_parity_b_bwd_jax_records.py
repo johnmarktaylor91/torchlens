@@ -151,7 +151,8 @@ def test_shared_dense_layer_has_one_node_per_call() -> None:
     assert len(dots) == 2
     expected = jax.grad(lambda p: loss(shared(p, x)))(params)
     for address in ("w", "b"):
-        assert get_adapter("jax").close(expected[address], trace._param_logs[address].grad)
+        recorded = trace._param_logs[address].grads.for_pass(1).grad
+        assert get_adapter("jax").close(expected[address], recorded)
 
 
 def test_multi_output_split_and_top_k() -> None:
