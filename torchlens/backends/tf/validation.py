@@ -18,6 +18,7 @@ from .._validation_shared import (
     replay_payload,
 )
 from ._raw_op_replay import _import_tensorflow, _replay_raw_op
+from ._replay_exemptions import early_decision, tally_early
 from .op_callback_capture import TFOpCapture
 
 TFOpClass = Literal[
@@ -254,9 +255,6 @@ def validate_tf_trace_detailed(trace: Any) -> TFValidationResult:
     if failures:
         return _structural_failure_result(failures, classes, ops_by_label)
 
-    replayed_count = 0
-    pure_unverified_count = 0
-    effect_region_count = 0
     decisions_list: list[Mapping[str, Any]] = []
     unverified_reasons: Counter[str] = Counter()
     exempted_reasons: Counter[str] = Counter()
@@ -270,9 +268,13 @@ def validate_tf_trace_detailed(trace: Any) -> TFValidationResult:
             if op_type == "constant":
                 _record_constant_leaf(op_label, decisions_list, exempted_reasons)
             continue
+        args = (op_class, _PURE_REPLAY_ALLOWLIST, captures_by_label, ops_by_label)
+        if early := early_decision(trace, op, *args):
+            decisions_list.append(early)
+            tally_early(label, early, failures, exempted_reasons)
+            continue
         if op_class != "value":
             if op_class in {"pure-resource-read", "effect-denied", "control-region"}:
-                effect_region_count += 1
                 effect_region_histogram[op_type] += 1
                 unverified_reasons[_REASON_EFFECT] += 1
                 decisions_list.append(
@@ -281,7 +283,6 @@ def validate_tf_trace_detailed(trace: Any) -> TFValidationResult:
             continue
         capture = captures_by_label.get(label)
         if op_type not in _PURE_REPLAY_ALLOWLIST or capture is None:
-            pure_unverified_count += 1
             pure_unverified_histogram[op_type] += 1
             unverified_reasons[_REASON_NO_FUNCTION] += 1
             decisions_list.append(
@@ -290,7 +291,6 @@ def validate_tf_trace_detailed(trace: Any) -> TFValidationResult:
             continue
         outcome = _replay_and_perturb_op(op=op, capture=capture, ops_by_label=ops_by_label)
         if outcome == _REASON_REPLAYED:
-            replayed_count += 1
             replayed_histogram[op_type] += 1
             decisions_list.append(_decision(op_label, op_type, "replay", "validated", outcome))
             continue
@@ -300,9 +300,9 @@ def validate_tf_trace_detailed(trace: Any) -> TFValidationResult:
 
     return _detailed_result(
         counts=TFValidationCounts(
-            replayed_node_count=replayed_count,
-            pure_unverified_node_count=pure_unverified_count,
-            effect_region_node_count=effect_region_count,
+            replayed_node_count=sum(replayed_histogram.values()),
+            pure_unverified_node_count=sum(pure_unverified_histogram.values()),
+            effect_region_node_count=sum(effect_region_histogram.values()),
             failed_node_count=len(failures),
         ),
         failures=failures,

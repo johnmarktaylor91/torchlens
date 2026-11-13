@@ -78,8 +78,20 @@ print(status.state)
   `tl.trace` call frame. `CaptureOptions(save_source_context=True)` loads the
   surrounding code lines.
 
+### Selective save and memory
+
+- `save=` decides each op's payload at capture: only selected ops (and model inputs)
+  keep a NumPy snapshot. Without a backward pass to prepare for, op records drop
+  their live tensors once their edges are recorded, and the producer index holds
+  tensors weakly, so an intermediate is freed as soon as the model drops it.
+- On a 20-block chain of 4 MiB activations, `save=` with one late op peaks at about
+  66 MiB (a bare forward peaks at about 48 MiB), and a full capture at about 260 MiB,
+  which is the 244 MiB of saved payloads plus the forward.
+
 ### Known gaps
 
+- A `save=` trace fails replay validation at ops whose own output or an input was
+  not saved, where torch exempts those ops as `not_saved_by_user`.
 - Replay validation reports `unverified`, rather than `passed`, on Keras models
   because parameter reads (`ReadVariableOp`) count as unverified regions.
 - `tl.zero_ablate()` records its replacement as a `ZerosLike` op, which replay validation

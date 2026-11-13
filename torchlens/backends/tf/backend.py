@@ -6,6 +6,7 @@ import random
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from functools import partial
 from typing import Any, Literal, cast
 
 from ... import _state
@@ -48,6 +49,7 @@ from .._options import (
     resolve_optional_capture_field,
 )
 from ..registry import BackendUnsupportedError, get_backend_spec
+from ._capture_hooks import after_forward, forward_hooks
 from ._halt import refuse_static_halt
 from .funcgraph import capture_static_funcgraph
 from .interventions import finish_halt, run_wired_session, wire_eager_session
@@ -221,13 +223,6 @@ class TFBackend:
         halt = pop_stop_directive(extra_kwargs)
         facet_recipes = pop_facet_recipes(extra_kwargs)
         _reject_extra_kwargs(extra_kwargs)
-        if (intervene is not None or halt is not None) and grad_options is not None:
-            raise BackendUnsupportedError(
-                "tf backend does not combine intervene= or stop_after= with grad_options=; "
-                "the derived-gradient replay reruns the full un-intervened forward and would "
-                "always refuse on output divergence. Capture the two surfaces in "
-                "separate traces."
-            )
         if random_seed is not None:
             raise BackendUnsupportedError(
                 "the tf backend does not support random_seed; use tf.random.set_seed(...) "
@@ -251,6 +246,34 @@ class TFBackend:
         )
         plan = self.normalize_call(model=model, input_args=input_args, input_kwargs=input_kwargs)
         tf = self._import_tensorflow()
+        new_trace = partial(
+            self._new_trace,
+            model=model,
+            output_device=output_device,
+            activation_transform=activation_transform,
+            save_raw_activations=save_raw_activations,
+            detach_saved_activations=detach_saved_activations,
+            save_grads=save_grads,
+            seed=random_seed,
+            num_context_lines=num_context_lines,
+            save_args=save_arg_values,
+            save_source_context=save_code_context,
+            save_rng=save_rng_states,
+            recurrence_detection=recurrence_detection,
+            compute_input_output_distances=compute_input_output_distances,
+            verbose=verbose,
+            backward_ready=backward_ready,
+            name=name,
+            transform=transform,
+            raw_input=raw_input,
+            save_raw_input=save_raw_input,
+            batch_render=batch_render,
+            output_transform=output_transform,
+            save_transformed_output=save_transformed_output,
+            layer_visualizers=layer_visualizers,
+            save_visualizations=save_visualizations,
+            tf=tf,
+        )
         if plan.mode == "graph_only":
             if grad_options is not None:
                 raise BackendUnsupportedError(
@@ -266,33 +289,7 @@ class TFBackend:
                     "callable instead."
                 )
             refuse_static_halt(halt, plan.reason)
-            trace = self._new_trace(
-                model=model,
-                output_device=output_device,
-                activation_transform=activation_transform,
-                save_raw_activations=save_raw_activations,
-                detach_saved_activations=detach_saved_activations,
-                save_grads=save_grads,
-                seed=random_seed,
-                num_context_lines=num_context_lines,
-                save_args=save_arg_values,
-                save_source_context=save_code_context,
-                save_rng=save_rng_states,
-                recurrence_detection=recurrence_detection,
-                compute_input_output_distances=compute_input_output_distances,
-                verbose=verbose,
-                backward_ready=backward_ready,
-                name=name,
-                transform=transform,
-                raw_input=raw_input,
-                save_raw_input=save_raw_input,
-                batch_render=batch_render,
-                output_transform=output_transform,
-                save_transformed_output=save_transformed_output,
-                layer_visualizers=layer_visualizers,
-                save_visualizations=save_visualizations,
-                tf=tf,
-            )
+            trace = new_trace()
             trace.capture_events = CaptureEvents()
             trace._provenance_start_time = time.time()
             static_result = capture_static_funcgraph(
@@ -336,33 +333,7 @@ class TFBackend:
         module_tree = discover_tf_module_tree(model, tf)
         if not use_object_module:
             module_tree = None
-        trace = self._new_trace(
-            model=model,
-            output_device=output_device,
-            activation_transform=activation_transform,
-            save_raw_activations=save_raw_activations,
-            detach_saved_activations=detach_saved_activations,
-            save_grads=save_grads,
-            seed=random_seed,
-            num_context_lines=num_context_lines,
-            save_args=save_arg_values,
-            save_source_context=save_code_context,
-            save_rng=save_rng_states,
-            recurrence_detection=recurrence_detection,
-            compute_input_output_distances=compute_input_output_distances,
-            verbose=verbose,
-            backward_ready=backward_ready,
-            name=name,
-            transform=transform,
-            raw_input=raw_input,
-            save_raw_input=save_raw_input,
-            batch_render=batch_render,
-            output_transform=output_transform,
-            save_transformed_output=save_transformed_output,
-            layer_visualizers=layer_visualizers,
-            save_visualizations=save_visualizations,
-            tf=tf,
-        )
+        trace = new_trace()
         session = TFEagerCaptureSession(
             tf=tf,
             callable_obj=plan.callable_obj,
@@ -372,6 +343,7 @@ class TFBackend:
             save_payloads=True,
             save_predicate=save_predicate,
         )
+        session.retain_live_tensors = bool(backward_ready)  # S1: release once edges are recorded
         wiring = wire_eager_session(trace, session, intervene, halt)
         trace.capture_events = CaptureEvents()
         trace._provenance_start_time = time.time()
@@ -380,7 +352,8 @@ class TFBackend:
         # path reads the global raw) and could republish a finished trace on
         # restore, wedging later admissions. Concurrent capture now refuses
         # typed, matching the torch-vs-torch contract.
-        with _state.publish_active_trace(trace):
+        hooks = {"save_rng": save_rng_states, "backward_ready": backward_ready}
+        with _state.publish_active_trace(trace), forward_hooks(session, **hooks) as hook_state:
             result = run_wired_session(tf, session, wiring)
         if save_predicate is not None and session.save_predicate_match_count == 0:
             # TF gates retention per-op (the shared post-finalization resolver
@@ -403,6 +376,7 @@ class TFBackend:
         _mark_outputs(trace, result.output, session.producer_by_ref)
         _reject_collapsed_graph_capture(result.op_type_counts)
         materialize_from_events(trace, trace.capture_events)
+        after_forward(trace, session, hook_state, backward_ready=backward_ready)
         delattr(trace, "capture_events")
         self._attach_param_logs(trace, module_tree)
         self._finish_trace(
@@ -425,6 +399,8 @@ class TFBackend:
                 captured_output=result.output,
                 grad_options=grad_options,
                 module_tree=module_tree,
+                intervene=intervene,
+                halt=halt,
             )
         attach_facet_recipes(trace, facet_recipes, backend_name="tf")
         freeze_trace_relation_views(trace)
