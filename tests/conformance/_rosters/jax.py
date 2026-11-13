@@ -2,8 +2,9 @@
 
 Inventories are derived from the model definition in execution order, using
 ``Op.func_name``. A missing op is a capture defect, never a list edit.
-Framework imports occur only inside builders. Ecosystem rows are parked
-pending a dependency decision for Flax checkpoints.
+Framework imports occur only inside builders. The ecosystem rows load pinned
+pretrained Flax checkpoints into the NNX implementations in
+``tests/conformance/_jax_checkpoints.py``.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ from typing import Any
 
 import numpy as np
 
+from .. import _jax_checkpoints as checkpoints
 from .._adapters import RosterModel
 from . import ecosystem_enabled
 
@@ -212,14 +214,6 @@ def _build_conv_pool() -> tuple[Any, Any]:
         return h.reshape(h.shape[0], -1).sum(-1)
 
     return conv_pool, jnp.asarray(_IMG)
-
-
-def _build_parked() -> tuple[Any, Any]:
-    """Refuse ecosystem construction until a Flax checkpoint path is chosen."""
-    raise RuntimeError(
-        "jax ecosystem rows need Flax checkpoints; transformers 5 removed the Flax models "
-        "(see docs/backends/jax.md, Can and cannot)"
-    )
 
 
 def _loop_intermediates() -> dict[str, np.ndarray | list[np.ndarray]]:
@@ -452,24 +446,27 @@ ROW_SPECS: tuple[dict[str, Any], ...] = (
         has_constants=True,
     ),
     {
-        "family": "bert_tiny_flax",
+        "family": "bert_uncased_l2_h256_flax",
         "realism": "pretrained",
-        "builder": _build_parked,
-        "checkpoint_evidence": "",
+        "builder": checkpoints.build_bert,
+        "checkpoint_evidence": checkpoints.BERT_L2_H256.evidence,
         "expected_op_kinds": None,
         "expected_intermediates": {},
-        "has_constants": False,
+        # Position ids (iota), the all-zero token types and the attention
+        # scale are values no recorded op derives from an input or parameter.
+        "has_constants": True,
         "random_init": False,
         "group": "ecosystem",
     },
     {
-        "family": "vit_tiny_flax",
+        "family": "vit_base_patch16_in21k_flax",
         "realism": "pretrained",
-        "builder": _build_parked,
-        "checkpoint_evidence": "",
+        "builder": checkpoints.build_vit,
+        "checkpoint_evidence": checkpoints.VIT_B16_IN21K.evidence,
         "expected_op_kinds": None,
         "expected_intermediates": {},
-        "has_constants": False,
+        # The attention scale is a Python scalar no recorded op produces.
+        "has_constants": True,
         "random_init": False,
         "group": "ecosystem",
     },
@@ -481,7 +478,8 @@ CONFIG_BUILT_FAMILIES: tuple[str, ...] = tuple(
 ECOSYSTEM_FAMILIES: tuple[str, ...] = tuple(
     spec["family"] for spec in ROW_SPECS if spec["group"] == "ecosystem"
 )
-PARKED_ECOSYSTEM_FAMILIES: tuple[str, ...] = ("bert_tiny_flax", "vit_tiny_flax")
+#: Declared ecosystem families that cannot run yet (none: both checkpoints are pinned).
+PARKED_ECOSYSTEM_FAMILIES: tuple[str, ...] = ()
 
 
 def config_built_roster() -> tuple[RosterModel, ...]:

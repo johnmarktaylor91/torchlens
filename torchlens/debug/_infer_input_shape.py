@@ -7,13 +7,12 @@ import math
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal
 
 import torch
 from torch import nn
 
 from torchlens._errors import ShapeInferenceError
-from torchlens.debug._infer_failure_classify import classify_nongeometric_failure
 from torchlens.debug._infer_training_states import (
     _restore_training_states,
     _training_states,
@@ -32,22 +31,21 @@ from ._infer_op_facts import (
     _shape_tuple,
 )
 from ._infer_report import GuessInputShapeReport
+from ._shape_search import (
+    PRECHECK_MESSAGES,
+    SearchLedger,
+    candidate_sides as _candidate_sides,
+    dispatch_non_torch,
+    entry_precheck,
+    failure_result as _failure_result,
+    is_rank_inflated,
+    maybe_raise as _maybe_raise,
+    terminal_failure,
+    validate_search_arguments as _validate_search_arguments,
+)
 
 if TYPE_CHECKING:
     from torchlens._data_classes.trace import Trace
-
-FailureReason = Literal[
-    "non_shape_blocker",
-    "exact_size_unreachable",
-    "multi_input_required",
-    "multi_input_unsupported",
-    "budget_exhausted",
-    "unknown_entry",
-    "lazy_uninitialized",
-    "verification_failed",
-    "device_mismatch",
-    "rank_undetermined",
-]
 
 
 @dataclass(frozen=True)
@@ -1073,39 +1071,6 @@ def _sequence_cap(model: nn.Module) -> int | None:
     return None
 
 
-def _candidate_sides(
-    start: int,
-    min_size: int,
-    max_size: int,
-    preferred_sizes: Sequence[int],
-) -> list[int]:
-    """Return ordered spatial side candidates.
-
-    Parameters
-    ----------
-    start:
-        Initial side from static prior.
-    min_size:
-        Minimum side.
-    max_size:
-        Maximum side.
-    preferred_sizes:
-        Preferred side lengths.
-
-    Returns
-    -------
-    list[int]
-        Unique side candidates in probe order.
-    """
-
-    values = [start, *preferred_sizes, 32, 28, 16, 8, min_size, max_size]
-    return [
-        side
-        for index, side in enumerate(values)
-        if min_size <= side <= max_size and side not in values[:index]
-    ]
-
-
 def _trace_model(model: nn.Module, example_input: Any) -> Trace:
     """Run a final TorchLens inference-only trace without mutating model state.
 
@@ -1133,6 +1098,12 @@ def _trace_model(model: nn.Module, example_input: Any) -> Trace:
         return trace(model, example_input, capture=CaptureOptions(inference_only=True))
     finally:
         _restore_training_states(states)
+
+
+def _trace_any(model: Any, example_input: Any) -> Trace:
+    """Verification trace for the neutral search (any backend, mode set by its prior)."""
+
+    return trace(model, example_input)
 
 
 def _executed_constraint(trace: Trace) -> _ExecutedConstraint | None:
@@ -1222,37 +1193,11 @@ def _executed_constraint(trace: Trace) -> _ExecutedConstraint | None:
 
 
 def _is_rank_inflated(constraint: _ExecutedConstraint | None, example: torch.Tensor) -> bool:
-    """Return whether a success only ran by broadcasting the input to a higher rank.
+    """Torch adapter over :func:`torchlens.debug._shape_search.is_rank_inflated`."""
 
-    A probe that "works" because the model broadcast a low-rank input into a
-    fabricated higher-rank view (for example a 2D tensor repeated into a 1xN
-    "image") verifies a different computation than intended. The tell is that
-    the first executed input-consuming constraint saw a HIGHER-rank tensor with
-    MORE non-singleton dimensions than the probe input itself; rank-preserving
-    reshapes such as ``unsqueeze`` only add singleton dimensions and stay legal.
-
-    Parameters
-    ----------
-    constraint:
-        First executed constraint from the verification trace.
-    example:
-        Probe input that ran successfully.
-
-    Returns
-    -------
-    bool
-        Whether the success is a broadcast/rank artifact.
-    """
-
-    if constraint is None or constraint.input_shape is None:
+    if constraint is None:
         return False
-    if constraint.kind not in {"conv", "linear", "matmul"}:
-        return False
-    if len(constraint.input_shape) <= int(example.ndim):
-        return False
-    example_wide = sum(1 for dim in example.shape if int(dim) > 1)
-    constraint_wide = sum(1 for dim in constraint.input_shape if int(dim) > 1)
-    return constraint_wide > example_wide
+    return is_rank_inflated(constraint.kind, constraint.input_shape, tuple(example.shape))
 
 
 def _resolved_flexible_dims(
@@ -1388,112 +1333,6 @@ def _verified_result(
         trace=trace_obj if return_trace else None,
         message=f"Found valid input shape {shape} (strategy: {strategy}).{message_note}",
     )
-
-
-def _failure_result(
-    reason: FailureReason,
-    attempts: list[tuple[tuple[int, ...] | None, str]],
-    message: str,
-) -> GuessInputShapeReport:
-    """Build a standardized failed inference result.
-
-    Parameters
-    ----------
-    reason:
-        Failure reason.
-    attempts:
-        Probe attempts.
-    message:
-        User-facing message.
-
-    Returns
-    -------
-    GuessInputShapeReport
-        Failed result.
-    """
-
-    return GuessInputShapeReport(
-        found=False,
-        shape=None,
-        shapes=None,
-        dtype=None,
-        value_range=None,
-        flexible_dims=(),
-        constraining_module=None,
-        constraining_op=None,
-        source_line=None,
-        example_input=None,
-        strategy="none",
-        reason=reason,
-        attempts=tuple(attempts),
-        trace=None,
-        message=message,
-    )
-
-
-def _maybe_raise(result: GuessInputShapeReport, on_failure: Literal["return", "raise"]) -> None:
-    """Raise for a failed result when requested.
-
-    Parameters
-    ----------
-    result:
-        Inference result.
-    on_failure:
-        Failure behavior.
-    """
-
-    if not result.found and on_failure == "raise":
-        raise ShapeInferenceError(result.message)
-
-
-def _validate_search_arguments(
-    *,
-    batch_size: int,
-    channels: int | None,
-    spatial_rank: int | Literal["auto"],
-    seq_len: int | None,
-    min_size: int,
-    max_size: int,
-    max_probes: int,
-) -> None:
-    """Validate caller-supplied search arguments with typed errors.
-
-    Invalid arguments are caller bugs, so they raise :class:`ShapeInferenceError`
-    regardless of ``on_failure`` instead of producing degenerate probes such as
-    a ``(0, N)`` "success" or a raw negative-dimension ``RuntimeError``.
-
-    Parameters
-    ----------
-    batch_size:
-        Requested batch size.
-    channels:
-        Optional channel override.
-    spatial_rank:
-        Spatial rank override or ``"auto"``.
-    seq_len:
-        Optional sequence length override.
-    min_size:
-        Minimum spatial side.
-    max_size:
-        Maximum spatial side.
-    max_probes:
-        Probe budget.
-    """
-
-    if batch_size < 1:
-        raise ShapeInferenceError(f"batch_size must be >= 1, got {batch_size}.")
-    if channels is not None and channels < 1:
-        raise ShapeInferenceError(f"channels must be >= 1 when provided, got {channels}.")
-    if spatial_rank != "auto" and int(spatial_rank) < 1:
-        raise ShapeInferenceError(f"spatial_rank must be 'auto' or >= 1, got {spatial_rank!r}.")
-    if seq_len is not None and seq_len < 1:
-        raise ShapeInferenceError(f"seq_len must be >= 1 when provided, got {seq_len}.")
-    if min_size < 1:
-        raise ShapeInferenceError(f"min_size must be >= 1, got {min_size}.")
-    if max_size < min_size:
-        raise ShapeInferenceError(f"max_size ({max_size}) must be >= min_size ({min_size}).")
-    if max_probes < 1:
-        raise ShapeInferenceError(f"max_probes must be >= 1, got {max_probes}.")
 
 
 def _run_search(
@@ -1842,43 +1681,10 @@ def _run_search(
         if lower_outcome and not _is_skippable_shape_error(probe.outcome):
             record_blocker(probe.outcome)
 
-    if probes >= max_probes:
-        return _failure_result(
-            "budget_exhausted", attempts, f"No valid shape was found within {max_probes} probes."
-        )
-    if device_blockers:
-        return _failure_result(
-            "device_mismatch",
-            attempts,
-            "Shape inference was blocked by a device mismatch, not an input-shape problem: "
-            f"{device_blockers[-1]} Move the model to a single device or pass a matching "
-            "device= argument.",
-        )
-    if rank_rejections:
-        return _failure_result(
-            "rank_undetermined",
-            attempts,
-            "Probes ran only after in-model broadcasting of a lower-rank input (rejected: "
-            f"{', '.join(rank_rejections)}); the true input rank is under-determined. Pass "
-            "seq_len= or explicit channels/spatial_rank hints.",
-        )
-    if delayed_blockers:
-        return _failure_result(
-            "non_shape_blocker",
-            attempts,
-            f"Shape inference was blocked by an unsupported forward error: {delayed_blockers[-1]}",
-        )
-    # Evidence-led classification (the CLIP-class fix):
-    # see torchlens/debug/_infer_failure_classify.py.
-    classified = classify_nongeometric_failure(attempts, _is_skippable_shape_error)
-    if classified is not None:
-        return _failure_result(cast("FailureReason", classified[0]), attempts, classified[1])
-    return _failure_result(
-        "exact_size_unreachable",
-        attempts,
-        "No square valid input was found; the model may need a rectangular (non-square) input, "
-        "whose exact aspect ratio is not searched, or sides outside min_size/max_size.",
+    ledger = SearchLedger(
+        attempts, max_probes, probes, device_blockers, delayed_blockers, rank_rejections
     )
+    return terminal_failure(ledger, _is_skippable_shape_error)
 
 
 def _infer_input_shape_impl(
@@ -1992,20 +1798,9 @@ def _infer_input_shape_impl(
         max_size=max_size,
         max_probes=max_probes,
     )
-    if input_specs is not None:
-        result = _failure_result(
-            "multi_input_unsupported",
-            [],
-            "input_specs multi-input inference is not implemented yet; pass a single-input module.",
-        )
-        _maybe_raise(result, on_failure)
-        return result
-    if not square:
-        result = _failure_result(
-            "exact_size_unreachable",
-            [],
-            "Non-square spatial inference requires an explicit aspect-ratio hint, which is not supported.",
-        )
+    precheck = entry_precheck(input_specs=input_specs, square=square)
+    if precheck is not None:
+        result = _failure_result(precheck, [], PRECHECK_MESSAGES[precheck])
         _maybe_raise(result, on_failure)
         return result
 
@@ -2060,6 +1855,8 @@ def guess_input_shape(model: nn.Module, **kwargs: Any) -> GuessInputShapeReport:
     exit so this diagnostic is RNG-neutral. Model state is likewise left untouched:
     training flags are saved and restored around the whole call, probes and traces
     run in ``eval()`` mode, and lazy modules are never materialized. All
+    Paddle and tinygrad models, and any backend with a prior module in
+    ``debug/_shape_priors``, go to the neutral search in ``debug/_shape_search``. All
     keyword-only arguments and the full signature/docstring of
     :func:`_infer_input_shape_impl` are preserved via :func:`functools.wraps`.
 
@@ -2073,6 +1870,10 @@ def guess_input_shape(model: nn.Module, **kwargs: Any) -> GuessInputShapeReport:
     4
     """
 
+    if not isinstance(model, nn.Module):
+        neutral = dispatch_non_torch(model, kwargs, _trace_any)
+        if neutral is not None:
+            return neutral
     cpu_rng_state = torch.default_generator.get_state()
     # Initialized-CUDA-only, latch-guarded: the bare is_available
     # gate allocated a CUDA context per visible device on CPU-only runs.

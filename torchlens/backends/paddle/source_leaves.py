@@ -78,7 +78,11 @@ class PaddleSourceLeaves:
         named_buffers = getattr(model, "named_buffers", None)
         if layer_type is not None and isinstance(model, layer_type) and callable(named_buffers):
             for address, buffer in named_buffers():
-                if isinstance(buffer, paddle.Tensor) and id(buffer) not in param_address_by_id:
+                if (
+                    isinstance(buffer, paddle.Tensor)
+                    and id(buffer) not in param_address_by_id
+                    and _holds_storage(buffer)
+                ):
                     buffers.setdefault(id(buffer), (address, buffer))
         closure = find_closure_tensors(
             model, paddle.Tensor, layer_type, exclude_ids={*param_address_by_id, *buffers}
@@ -94,6 +98,18 @@ class PaddleSourceLeaves:
             f"{PARAMETER_WRITE_MARKER}: buffer {address}"
             for address in self.buffer_guard.written_addresses(trace)
         ]
+
+
+def _holds_storage(tensor: Any) -> bool:
+    """Whether ``tensor`` has allocated memory that can be copied before the forward.
+
+    Paddle RNN layers register an uninitialized dropout-state buffer (no memory
+    until the RNN op writes it); it cannot be cloned or fingerprinted, so it
+    stays an ordinary unlabeled leaf as before buffers became source ops.
+    """
+
+    is_initialized = getattr(tensor, "_is_initialized", None)
+    return not callable(is_initialized) or bool(is_initialized())
 
 
 def record_source_leaves(

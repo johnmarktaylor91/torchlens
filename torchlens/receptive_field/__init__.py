@@ -8,7 +8,10 @@ from typing import TYPE_CHECKING, cast
 import torch
 
 from .._utils.tensor_utils import layer_grad_tolerances_for_dtype
-from . import _influence  # noqa: F401  (registers the resolver behind .of())
+from . import (
+    _gradient_provider,  # noqa: F401  (installs the cone-replay gradient probes)
+    _influence,  # noqa: F401  (registers the resolver behind .of())
+)
 
 # Importing the package executes built-in rule decorators once, before any public
 # descriptor, projective, or validation path can reach the geometry engines.

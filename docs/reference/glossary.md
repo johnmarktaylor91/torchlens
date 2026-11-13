@@ -432,6 +432,14 @@ have multiple captured versions.
   buffer too, addressed `<module>.<attr>[<name>]` (e.g. `vae.prior[scale]`). Only the
   object's own attributes are read, not containers inside it.
 
+**Trace.backward**: Runs one backward pass from `loss` and records it on the trace (`GradFn`,
+`GradFnCall`, `BackwardPass`, op gradients). `loss` is the scalar to differentiate, or a callable
+that maps the model's return value (`Trace.output`) to that scalar, with the meaning `loss_fn=`
+has elsewhere: `trace.backward(lambda out: out.sum())`. Every backend that supports backward
+accepts both forms; PyTorch calls the callable once on the live output, and a backend whose
+framework differentiates functions receives the callable itself. `save_grads=` narrows or widens the retained gradients
+for this pass; every other keyword goes to the framework's backward call. Returns the trace.
+
 **GradFn**: A live backward-autograd node captured while logging the backward pass. Portable artifacts
 do not contain PyTorch's live autograd graph.
 

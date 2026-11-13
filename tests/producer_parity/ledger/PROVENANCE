@@ -6043,3 +6043,43 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: c9c0d53813804811b661c1af51b2f1f1c2a00366
 recorded: 2026-11-10T00:43:14+00:00
+---
+generator: scripts/regen_ledgers.py (producer static half)
+flag: none (deterministic ledger step)
+reason: pp-b-bwd-core: neutral backward builder, reverse engine, native backward surface
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 716559fd46decd49b11ebffeec217ecfe4dcd3e9
+recorded: 2026-11-13T00:34:46Z
+---
+generator: scripts/regen_ledgers.py (producer static half)
+flag: none (deterministic ledger step)
+reason: pp-b-adapter-jax: private JAX replay adapter
+env: py3.11-torch2.15.0
+torch: 2.15.0+cpu
+source: df741df16eeae993174a69c1b0b9fe7e8e4980c0
+recorded: 2026-11-13T01:45:14Z
+---
+generator: scripts/regen_ledgers.py (producer static half)
+flag: none (deterministic ledger step)
+reason: ledger-owner regen at 16ed8e910: static-scan moved
+env: py3.11-torch2.15.0
+torch: 2.15.0+cpu
+source: 16ed8e91016d9ed6bc6405f3c4933170976ec171
+recorded: 2026-11-13T02:31:41Z
+---
+generator: scripts/regen_ledgers.py (producer static half)
+flag: none (deterministic ledger step)
+reason: ledger-owner regen at 34a585539: static-scan moved
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 34a585539d01a185c926fcaaa60ca56f8ead359f
+recorded: 2026-11-13T00:58:40Z
+---
+generator: scripts/regen_ledgers.py (producer static half)
+flag: none (deterministic ledger step)
+reason: pp-merge-b: wave B batch 1 merges
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 6884f09e31818ff70f363df23436ef7d89ce389c
+recorded: 2026-11-13T06:44:51Z

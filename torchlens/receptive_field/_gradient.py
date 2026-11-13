@@ -12,8 +12,6 @@ from typing import TYPE_CHECKING, cast
 
 import torch
 
-from torchlens.backends.registry import BackendUnsupportedError
-
 from .. import _state
 from .._utils._record_group_table import record_member
 from .._utils._torch_compat import tensor_any_over_dims
@@ -25,6 +23,7 @@ from ._errors import (
     ReceptiveFieldUnavailableError,
 )
 from ._gradient_live import _RECAPTURE_RECIPE, _saved_tensor
+from ._gradient_replay_hook import replay_probe
 from ._gradient_support import _spatial_support, _support_ranges
 from ._path import require_path, resolve_graph_point
 from ._types import GradReceptiveField, ReceptiveFieldDirection
@@ -676,7 +675,7 @@ def gradient_for_unit(
     Raises
     ------
     BackendUnsupportedError
-        If the trace backend does not support true backward capture.
+        If the backend supports neither backward capture nor cone replay.
     ReceptiveFieldUnavailableError
         If capture state is not graph-connected or a reachable input yields ``None``.
     ReceptiveFieldError
@@ -695,11 +694,8 @@ def gradient_for_unit(
             # route it through the input path so the result is byte-identical.
             input_op = _source_op
             source = None
-    spec = get_backend_spec(str(trace._provenance_backend))
-    if not spec.capabilities.backward_capture:
-        raise BackendUnsupportedError(
-            f"Backend {spec.name!r} does not support gradient receptive-field probes."
-        )
+    if not get_backend_spec(str(trace._provenance_backend)).capabilities.backward_capture:
+        return replay_probe("receptive")(target, unit, input_op, source, atol, rtol)
     if not trace._options_backward_ready:
         raise ReceptiveFieldUnavailableError(
             "Gradient receptive fields require backward_ready=True and saved payloads. "

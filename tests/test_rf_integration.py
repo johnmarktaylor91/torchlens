@@ -254,8 +254,8 @@ def test_multi_input_view_keeps_each_io_role_and_rejects_bare_access() -> None:
 
 @pytest.mark.rare
 @pytest.mark.backend_tinygrad
-def test_non_torch_geometry_works_but_gradient_probe_is_gated() -> None:
-    """Keep geometry backend-neutral while rejecting non-torch gradient probes."""
+def test_non_torch_geometry_and_gradient_probe_both_work() -> None:
+    """Keep geometry backend-neutral and probe gradients by cone replay off PyTorch."""
 
     tinygrad = pytest.importorskip("tinygrad")
 
@@ -276,5 +276,5 @@ def test_non_torch_geometry_works_but_gradient_probe_is_gated() -> None:
 
     assert descriptor.status is tl.receptive_field.ReceptiveFieldStatus.EXACT
     assert descriptor.axis_roles.axis_kinds == ("pointwise",)
-    with pytest.raises(tl.errors.BackendUnsupportedError, match="tinygrad"):
-        target.receptive_field.probe_grad((0,))
+    (probe,) = target.receptive_field.probe_grad((0,)).values()
+    assert probe.signed_grad.tolist() == [1.0, 0.0, 0.0]

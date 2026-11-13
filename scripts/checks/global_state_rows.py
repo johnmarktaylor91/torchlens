@@ -196,6 +196,9 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         # 3.0 runnable binder: the bind-time helpers (digest, device, state universe) are
         # installed once by torchlens._io.bundle at import (install_runnable_binders).
         ("torchlens/_io/_format3_runnable_bind.py", "_BINDERS"),
+        # Cone-replay gradient probes: installed once when the receptive_field package
+        # imports torchlens.receptive_field._gradient_provider; never rebound afterwards.
+        ("torchlens/receptive_field/_gradient_replay_hook.py", "_REPLAY_PROBES"),
         ("torchlens/_io/prerelease.py", "_ACTIVE"),
         ("torchlens/_io/prerelease.py", "_ANNOTATIONS_KEY_REGISTRY"),
         ("torchlens/_io/prerelease.py", "_REGISTRY"),
@@ -614,6 +617,9 @@ _WEAK_SUBJECT_TABLES = frozenset(
         # Call-site grouping side table per live Trace (WeakKeyDictionary keyed
         # by the Trace), so re-validation of a fresh capture can re-check it.
         ("torchlens/_postprocess/_call_site_contract.py", "_CALL_SITE_CLASSES"),
+        # Replay recipe section read with a loaded Trace (WeakKeyDictionary keyed
+        # by the Trace), bound on its first validation-status read; dies with it.
+        ("torchlens/_io/_replay_recipe_codec.py", "_LOADED_SECTIONS"),
         ("torchlens/_state.py", "_log_registry"),
         # L9 runtime journals are keyed by the owning Trace and contain only
         # timing/token/finalization bookkeeping. They must disappear with
@@ -997,6 +1003,7 @@ _WEAKLY_HELD = frozenset(
     {
         ("torchlens/_utils/_optimizer_hooks.py", "_BINDINGS"),
         ("torchlens/_postprocess/_call_site_contract.py", "_CALL_SITE_CLASSES"),
+        ("torchlens/_io/_replay_recipe_codec.py", "_LOADED_SECTIONS"),
         ("torchlens/_utils/_call_site.py", "_CODE_TOKENS"),
         ("torchlens/_utils/_call_site.py", "_INSTRUCTION_MAPS"),
         ("torchlens/_capture_state_helpers.py", "_VALIDATION_DEEPCOPY_WARNING_TYPES"),

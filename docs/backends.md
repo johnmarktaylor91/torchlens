@@ -24,8 +24,15 @@ reruns the Yes and Partial cells so the table cannot quietly go stale.
 | tinygrad | Partial (1) | Partial (2) | Yes | Partial (4) | Partial (6) | Yes | Partial (7) | Yes | Yes |
 
 1. You can select operations by function, by module, or both. Selecting by influence (which
-   later units a given unit can reach) works only on PyTorch; on the other frameworks it refuses
-   with `influence_geometry_unavailable` or returns only a whole-input upper bound.
+   later units a given unit can reach) with `method="gradient"` works on every framework in both
+   directions: TorchLens replays the captured operations between the two units and differentiates
+   the replay with the framework's own autodiff, after checking the replay reproduces the
+   capture. A trace without runtime replay records (a loaded trace) refuses with
+   `gradient_replay_unavailable`. On PaddlePaddle, tinygrad, and MLX graphs with convolutions (no
+   forward-mode rule in MLX 0.26), a projective probe runs one reverse probe per target element
+   and refuses above 4096 target elements. Geometric influence selection works only on PyTorch;
+   on the other frameworks it refuses with `influence_geometry_unavailable` or returns only a
+   whole-input upper bound.
 2. You can save only the operations you choose. Stopping the forward pass early and fast
    repeated recording (`tl.record`) work only on PyTorch.
 3. You can save only the operations you choose and stop the forward pass early. Fast repeated
@@ -40,9 +47,10 @@ reruns the Yes and Partial cells so the table cannot quietly go stale.
    function or by module; a condition on their values raises an error. You cannot edit a
    finished trace or patch in activations from another run; asking for either raises an error
    that names the framework.
-7. The NaN finder and the dead-unit counter work. Guessing a model's input shape works only on
-   PyTorch, and on a convolution output the dead-unit counter needs the channel axis passed as
-   `dim`.
+7. The NaN finder and the dead-unit counter work. Guessing a model's input shape works on
+   PyTorch, Paddle, tinygrad, TensorFlow, MLX and JAX; for a plain function it reports a working
+   or ambiguous shape, never a determined one. On a convolution output the dead-unit counter
+   needs the channel axis passed as `dim`.
 
 Compare means comparing two runs on the same framework, for example two inputs through one
 model. Comparing a run from one framework with a run from another (a PyTorch trace against an
