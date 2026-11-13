@@ -1,21 +1,25 @@
 """Resolution of ``trace(intervene=tl.when(...))`` to a tinygrad edit.
 
 This is the ``can_intervene`` capability implementation of the tinygrad
-backend: it checks that the intervention is a static selector with a supported
-action and returns the selector with a lazy ``tensor -> tensor`` edit
-(the ``_helper_edits`` table: ``zero_ablate``, ``scale``, ``add``, ``clamp``,
-``mean_ablate``, ``replace_with``; or a user transform). ``_edits`` applies the edit during capture.
+backend: it checks the intervention's condition and action and returns the
+condition with a lazy ``tensor -> tensor`` edit (the ``_helper_edits`` table:
+``zero_ablate``, ``scale``, ``add``, ``clamp``, ``mean_ablate``,
+``replace_with``; or a user transform). ``_edits`` applies the edit during
+capture.
 
-Only static selectors are supported. A value-dependent predicate needs a
-concrete value at predicate time, which a lazy tinygrad forward does not have
-before its one realization; it refuses typed, as do ``stop_after=``,
-module-output sites, gradient sites and helpers without a tinygrad application.
+A condition is a static selector (``tl.func``, ``tl.label``,
+``tl.label_contains``, ``tl.in_module`` and their combinations), or a
+condition that reads values (a plain callable or a ``tl.where`` leaf), which
+``_value_edits`` evaluates on each call's live value. ``stop_after=``,
+module-output sites, gradient sites and helpers without a tinygrad application
+refuse typed.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
+from ..._capture.projections import _build_record_context
 from ..._ir.selector_eval import first_selector_kind_outside
 from ..._postprocess._selective_save import _STATIC_INTERVENTION_SELECTOR_KINDS
 from ..._selection.selectors import BaseSelector
@@ -28,6 +32,7 @@ from ._helper_edits import helper_application
 __tl_layer__ = "L4"
 
 _EDIT_SELECTOR_KINDS = _STATIC_INTERVENTION_SELECTOR_KINDS - frozenset({"module"})
+_CONDITION_KINDS = _EDIT_SELECTOR_KINDS | frozenset({"predicate"})
 
 
 def resolve_tinygrad_edit_plan(intervene: Any, halt: Any) -> TinygradEditPlan:
@@ -48,7 +53,7 @@ def resolve_tinygrad_edit_plan(intervene: Any, halt: Any) -> TinygradEditPlan:
     Raises
     ------
     BackendUnsupportedError
-        For ``stop_after=`` and any edit outside the static-selector contract.
+        For ``stop_after=`` and any condition or edit outside the contract above.
     """
 
     if halt is not None:
@@ -59,27 +64,37 @@ def resolve_tinygrad_edit_plan(intervene: Any, halt: Any) -> TinygradEditPlan:
         )
     selector = getattr(intervene, "selector", None)
     decision = getattr(intervene, "decision", None)
-    if not isinstance(selector, BaseSelector) or not isinstance(decision, InterventionDecision):
+    if not callable(selector) or not isinstance(decision, InterventionDecision):
         raise refuse_edit(
-            "trace(intervene=...) supports only tl.when(static_selector, edit). A "
-            "value-dependent predicate needs a concrete value at predicate time, which a "
-            "lazy tinygrad forward does not have before it is realized.",
+            "trace(intervene=...) supports only tl.when(condition, edit) with one selector or "
+            "callable condition.",
             code=EDIT_REFUSAL,
         )
+    reads_values = not isinstance(selector, BaseSelector) or _selector_reads_values(selector)
+    return TinygradEditPlan(
+        selector=selector,
+        edit=_resolve_decision(decision),
+        build_context=_build_record_context if reads_values else None,
+    )
+
+
+def _selector_reads_values(selector: BaseSelector) -> bool:
+    """Check a selector condition; whether it has a leaf that reads values (``tl.where``)."""
+
     if any(universe != "activation" for universe, _branch in split_site_branches(selector)):
         raise refuse_edit(
             f"the site {selector!r} addresses a gradient; tinygrad captures no backward pass.",
             code=refusal_code_for_capability("backward_capture"),
         )
-    unsupported = first_selector_kind_outside(selector, allowed=_EDIT_SELECTOR_KINDS)
+    unsupported = first_selector_kind_outside(selector, allowed=_CONDITION_KINDS)
     if unsupported is not None:
         raise refuse_edit(
             "trace(intervene=...) supports the static selectors tl.func, tl.label, "
-            "tl.label_contains, tl.in_module and their &, |, ~ combinations; "
-            f"unsupported selector kind {unsupported!r}.",
+            "tl.label_contains, tl.in_module, value conditions (tl.where or a callable) and "
+            f"their &, |, ~ combinations; unsupported selector kind {unsupported!r}.",
             code=EDIT_REFUSAL,
         )
-    return TinygradEditPlan(selector=selector, edit=_resolve_decision(decision))
+    return first_selector_kind_outside(selector, allowed=_EDIT_SELECTOR_KINDS) is not None
 
 
 def _resolve_decision(decision: InterventionDecision) -> TinygradEdit:

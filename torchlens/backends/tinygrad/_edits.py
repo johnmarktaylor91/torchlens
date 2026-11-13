@@ -29,6 +29,7 @@ from .._options import is_missing
 from ..registry import BackendUnsupportedError, get_backend_spec, require_capability_implementation
 from ._edited_grads import attach_edited_derived_grads
 from ._rules import RNG_STATE_IN_GRAPH_CODE
+from ._value_edits import condition_matched_labels
 
 if TYPE_CHECKING:
     from ..._selection.selectors import BaseSelector
@@ -55,10 +56,16 @@ class TinygradEdit:
 
 @dataclass(frozen=True)
 class TinygradEditPlan:
-    """The selector and edit of one ``trace(intervene=tl.when(selector, edit))``."""
+    """The condition and edit of one ``trace(intervene=tl.when(condition, edit))``.
 
-    selector: BaseSelector
+    ``build_context`` is torch's ``RecordContext`` builder when the condition
+    reads predicate contexts (a plain callable or a ``tl.where`` leaf), else
+    ``None``.
+    """
+
+    selector: BaseSelector | Callable[[Any], bool]
     edit: TinygradEdit
+    build_context: Callable[..., Any] | None = None
 
 
 def refuse_edit(message: str, *, code: str) -> BackendUnsupportedError:
@@ -78,14 +85,14 @@ class TinygradEditSession:
     edit
         The edit to apply, or ``None`` for the planning run.
     selector
-        The ``tl.when`` selector, recorded on each fire.
+        The ``tl.when`` condition, recorded on each fire.
     """
 
     def __init__(
         self,
         sites: Mapping[int, str],
         edit: TinygradEdit | None,
-        selector: BaseSelector | None = None,
+        selector: object = None,
     ) -> None:
         """Initialize a session before its forward runs."""
 
@@ -223,23 +230,26 @@ def fire_amendment(event: Any, edit: TinygradEdit, selector: object) -> OpAmendm
     )
 
 
-def _matched_labels(trace: Any, selector: BaseSelector) -> frozenset[str]:
-    """Raw labels of the finished ops ``selector`` matches (the ``save=`` matcher)."""
+def _matched_labels(trace: Any, plan: TinygradEditPlan) -> frozenset[str]:
+    """Raw labels of the finished ops the plan's condition matches (the ``save=`` matcher)."""
 
+    if plan.build_context is not None:
+        return condition_matched_labels(trace, plan.selector, plan.build_context)
+    selector = plan.selector
     return frozenset(str(op._label_raw) for op in trace._layer_list if bool(selector(op)))
 
 
 def _planned_sites(
-    trace: Any, selector: BaseSelector, calls: list[tuple[Any, str]]
+    trace: Any, plan: TinygradEditPlan, calls: list[tuple[Any, str]]
 ) -> dict[int, str]:
-    """``call number -> name`` of the calls returning the ops ``selector`` matches."""
+    """``call number -> name`` of the calls returning the ops the plan's condition matches."""
 
     uop_by_label = {capture.label_raw: capture.uop for capture in trace.tinygrad_uop_captures}
     numbers: dict[int, list[int]] = {}
     for number, (uop, _name) in enumerate(calls):
         numbers.setdefault(id(uop), []).append(number)
     sites: dict[int, str] = {}
-    for label in sorted(_matched_labels(trace, selector)):
+    for label in sorted(_matched_labels(trace, plan)):
         uop = uop_by_label.get(label)
         found = numbers.get(id(uop), []) if uop is not None else []
         if not found:
@@ -288,7 +298,7 @@ def capture_with_edits(backend: Any, call: dict[str, Any], intervene: Any, halt:
     original, call = call, {**call, "grad_options": None}
     planning = TinygradEditSession({}, None)
     planned = _run_session(backend, call, planning)
-    sites = _planned_sites(planned, plan.selector, planning.calls)
+    sites = _planned_sites(planned, plan, planning.calls)
     if not sites:
         backend._warn_zero_fire(
             f"Capture-time intervention selector {plan.selector!r} matched zero sites on "
@@ -297,12 +307,12 @@ def capture_with_edits(backend: Any, call: dict[str, Any], intervene: Any, halt:
         )
         return planned if grad_options is None else backend.capture_trace(**original)
     _refuse_lazy_random_draws(planned)
-    expected = _matched_labels(planned, plan.selector)
+    expected = _matched_labels(planned, plan)
     del planned
     session = TinygradEditSession(sites, plan.edit, plan.selector)
     edited = _run_session(backend, call, session)
     edited_labels = {c.label_raw for c in edited.tinygrad_uop_captures if c.edit is not None}
-    if not expected == edited_labels == _matched_labels(edited, plan.selector):
+    if not expected == edited_labels == _matched_labels(edited, plan):
         raise refuse_edit(
             "the edited capture's matched ops differ from the planning capture's; the edit "
             "was not applied where the selector points.",
