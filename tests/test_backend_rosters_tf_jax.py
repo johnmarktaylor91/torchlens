@@ -123,7 +123,9 @@ def test_tf_ecosystem_has_checkpoint_evidence() -> None:
             assert spec["checkpoint_evidence"]
 
 
-def test_jax_ecosystem_is_explicitly_parked() -> None:
-    """Keep the Flax checkpoint dependency gap in the full roster denominator."""
-    ecosystem = tuple(spec["family"] for spec in jax.ROW_SPECS if spec["group"] == "ecosystem")
-    assert ecosystem == jax.PARKED_ECOSYSTEM_FAMILIES
+def test_jax_ecosystem_has_checkpoint_evidence() -> None:
+    """Keep the pinned Flax checkpoint evidence nonempty without downloading it."""
+    ecosystem = [spec for spec in jax.ROW_SPECS if spec["group"] == "ecosystem"]
+    assert len(ecosystem) == 2
+    assert all(spec["checkpoint_evidence"] for spec in ecosystem)
+    assert jax.PARKED_ECOSYSTEM_FAMILIES == ()
