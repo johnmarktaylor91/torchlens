@@ -5,15 +5,10 @@ from __future__ import annotations
 import dataclasses
 import json
 
+import numpy as np
 import pytest
 
-pytest.importorskip("jax")
-
-import jax  # noqa: E402
-import jax.numpy as jnp  # noqa: E402
-import numpy as np  # noqa: E402
-
-from tests.test_parity_b_adapter_jax_support import (  # noqa: E402
+from tests.test_parity_b_adapter_jax_support import (
     capture,
     engine_grads,
     equation_ops,
@@ -22,14 +17,14 @@ from tests.test_parity_b_adapter_jax_support import (  # noqa: E402
     round_trip_validates,
     saved_parent_values,
 )
-from torchlens.backends._replay_adapters import (  # noqa: E402
-    ReplayRefusal,
-    get_adapter,
-)
+from torchlens.backends._replay_adapters import ReplayRefusal, get_adapter
+
+jax = pytest.importorskip("jax")
+jnp = pytest.importorskip("jax.numpy")
 
 
 @pytest.fixture(scope="module")
-def adapter():  # type: ignore[no-untyped-def]
+def adapter():
     return get_adapter("jax")
 
 
@@ -37,27 +32,27 @@ def _x(*shape: int) -> jax.Array:
     return jnp.asarray(np.random.default_rng(1).standard_normal(shape), dtype=jnp.float32)
 
 
-def _assert_forward_all(adapter, trace) -> None:  # type: ignore[no-untyped-def]
-    for op in trace._layer_list:
+def _assert_forward_all(adapter, trace) -> None:
+    for op in equation_ops(trace):
         assert adapter.can_replay(trace, op) is None, op.label
         (out,) = adapter.forward(trace, op, saved_parent_values(adapter, trace, op))
         assert adapter.close(op.out, out), op.label
 
 
-def _assert_grads_match(adapter, trace) -> None:  # type: ignore[no-untyped-def]
+def _assert_grads_match(adapter, trace) -> None:
     leaves, engine = engine_grads(adapter, trace)
     replayed = oracle_grads(adapter, trace, leaves)
     for label in leaves:
         assert adapter.close(replayed[label], engine[label]), label
 
 
-def test_get_adapter_returns_complete_module(adapter) -> None:  # type: ignore[no-untyped-def]
+def test_get_adapter_returns_complete_module(adapter) -> None:
     assert isinstance(adapter.ALLOWLIST, frozenset)
     assert "jax.primitive.add" in adapter.ALLOWLIST
     assert "jax.scan_read" in adapter.ALLOWLIST
 
 
-def test_repeated_parent_gets_one_cotangent_per_occurrence(adapter) -> None:  # type: ignore[no-untyped-def]
+def test_repeated_parent_gets_one_cotangent_per_occurrence(adapter) -> None:
     trace = capture(lambda v: v * v, _x(3))
     (mul,) = [op for op in equation_ops(trace) if func(op) == "mul"]
     occurrences = adapter.step(trace, mul).inputs
@@ -70,8 +65,8 @@ def test_repeated_parent_gets_one_cotangent_per_occurrence(adapter) -> None:  # 
     _assert_grads_match(adapter, trace)
 
 
-def test_multi_output_parent_selects_its_element(adapter) -> None:  # type: ignore[no-untyped-def]
-    def split(v):  # type: ignore[no-untyped-def]
+def test_multi_output_parent_selects_its_element(adapter) -> None:
+    def split(v):
         a, b = jnp.split(v, 2)
         return a * 2.0 + jnp.sin(b)
 
@@ -81,8 +76,8 @@ def test_multi_output_parent_selects_its_element(adapter) -> None:  # type: igno
     round_trip_validates(adapter, trace)
 
 
-def test_integer_parent_has_no_cotangent(adapter) -> None:  # type: ignore[no-untyped-def]
-    def gather(v):  # type: ignore[no-untyped-def]
+def test_integer_parent_has_no_cotangent(adapter) -> None:
+    def gather(v):
         idx = jnp.argmax(v)
         return v[idx] * 3.0
 
@@ -93,16 +88,30 @@ def test_integer_parent_has_no_cotangent(adapter) -> None:  # type: ignore[no-un
     _assert_grads_match(adapter, trace)
 
 
-def test_key_based_random_replays_exactly(adapter) -> None:  # type: ignore[no-untyped-def]
-    def noisy(v):  # type: ignore[no-untyped-def]
+def test_key_based_random_replays_exactly(adapter) -> None:
+    def noisy(v):
         key = jax.random.key_data(jax.random.PRNGKey(0))
         return v + jax.random.normal(jax.random.wrap_key_data(key), v.shape)
 
     trace = capture(noisy, _x(3))
     _assert_forward_all(adapter, trace)
+    round_trip_validates(adapter, trace)
 
 
-def test_stateful_rng_uniform_is_refused(adapter) -> None:  # type: ignore[no-untyped-def]
+def test_sources_are_graph_only_and_carry_no_recipe(adapter) -> None:
+    trace = capture(lambda v: jnp.sin(v) * 2.0, _x(3))
+    sources = [op for op in trace._layer_list if func(op) == "input"]
+    assert sources
+    for op in sources:
+        assert adapter.can_replay(trace, op).startswith("graph-only entry")
+        assert adapter.recipe(trace, op) is None
+        with pytest.raises(ValueError):
+            adapter.forward(trace, op, [])
+    for op in equation_ops(trace):
+        assert adapter.recipe(trace, op) is not None, op.label
+
+
+def test_stateful_rng_uniform_is_refused(adapter) -> None:
     trace = capture(lambda v: jnp.tanh(v) + 1.0, _x(3))
     captures = list(trace.jax_equation_captures)
     captures[0] = dataclasses.replace(captures[0], primitive="rng_uniform")
@@ -113,7 +122,7 @@ def test_stateful_rng_uniform_is_refused(adapter) -> None:  # type: ignore[no-un
     assert adapter.recipe(trace, ops[0]) is None
 
 
-def test_bind_refuses_missing_foreign_and_corrupt_recipes(adapter) -> None:  # type: ignore[no-untyped-def]
+def test_bind_refuses_missing_foreign_and_corrupt_recipes(adapter) -> None:
     from torchlens.backends._replay_adapters import decode_recipe, encode_recipe
 
     trace = capture(lambda v: jnp.exp(v) * 2.0, _x(3))
@@ -131,7 +140,7 @@ def test_bind_refuses_missing_foreign_and_corrupt_recipes(adapter) -> None:  # t
         decode_recipe(tree, backend="jax", allowlist=adapter.ALLOWLIST)
 
 
-def test_unbound_trace_reports_a_reason(adapter) -> None:  # type: ignore[no-untyped-def]
+def test_unbound_trace_reports_a_reason(adapter) -> None:
     trace = capture(lambda v: jnp.cos(v), _x(2))
     op = equation_ops(trace)[0]
     trace.jax_equation_captures = ()
@@ -149,13 +158,13 @@ def test_unbound_trace_reports_a_reason(adapter) -> None:  # type: ignore[no-unt
     ],
     ids=["fori", "scan", "cond", "while"],
 )
-def test_control_flow_replays_and_round_trips(adapter, fn) -> None:  # type: ignore[no-untyped-def]
+def test_control_flow_replays_and_round_trips(adapter, fn) -> None:
     trace = capture(fn, _x(3))
     _assert_forward_all(adapter, trace)
     round_trip_validates(adapter, trace)
 
 
-def test_tuple_aware_helpers(adapter) -> None:  # type: ignore[no-untyped-def]
+def test_tuple_aware_helpers(adapter) -> None:
     pair = (jnp.ones(2), jnp.arange(2.0))
     zero = adapter.zeros_like(pair)
     assert adapter.close((jnp.zeros(2), jnp.zeros(2)), zero)
@@ -166,8 +175,8 @@ def test_tuple_aware_helpers(adapter) -> None:  # type: ignore[no-untyped-def]
     assert not adapter.close(pair, (jnp.ones(2),))
 
 
-def test_opaque_region_is_refused_and_unbindable(adapter) -> None:  # type: ignore[no-untyped-def]
-    def with_callback(v):  # type: ignore[no-untyped-def]
+def test_opaque_region_is_refused_and_unbindable(adapter) -> None:
+    def with_callback(v):
         shape = jax.ShapeDtypeStruct(v.shape, v.dtype)
         return jax.pure_callback(lambda a: np.asarray(a) * 2, shape, v) + 1.0
 

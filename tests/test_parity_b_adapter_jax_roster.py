@@ -11,10 +11,8 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("jax")
-
-from tests.conformance._rosters.jax import config_built_roster  # noqa: E402
-from tests.test_parity_b_adapter_jax_support import (  # noqa: E402
+from tests.conformance._rosters.jax import config_built_roster
+from tests.test_parity_b_adapter_jax_support import (
     capture,
     engine_grads,
     equation_ops,
@@ -24,12 +22,14 @@ from tests.test_parity_b_adapter_jax_support import (  # noqa: E402
     round_trip_validates,
     saved_parent_values,
 )
-from torchlens.backends._replay_adapters import get_adapter  # noqa: E402
+from torchlens.backends._replay_adapters import get_adapter
+
+pytest.importorskip("jax")
 
 ROWS = {row.family: row for row in config_built_roster()}
 
 
-def _row_trace(family: str):  # type: ignore[no-untyped-def]
+def _row_trace(family: str):
     row = ROWS[family]
     try:
         net, example = row.builder()
@@ -43,8 +43,7 @@ def test_forward_reproduces_every_saved_payload(family: str) -> None:
     adapter = get_adapter("jax")
     _net, _example, trace = _row_trace(family)
     refused = {}
-    ops = list(trace._layer_list)
-    for op in ops:
+    for op in trace._layer_list:
         reason = adapter.can_replay(trace, op)
         if reason is not None:
             refused[op.label] = reason
@@ -52,8 +51,11 @@ def test_forward_reproduces_every_saved_payload(family: str) -> None:
         outputs = adapter.forward(trace, op, saved_parent_values(adapter, trace, op))
         assert len(outputs) == 1, op.label
         assert adapter.close(op.out, outputs[0]), f"{family}: {op.label} replay differs"
-    assert refused == {}, f"{family}: can_replay refused {refused}"
-    assert equation_ops(trace), f"{family}: no equation ops captured"
+    equations = {op.label for op in equation_ops(trace)}
+    assert equations, f"{family}: no equation ops captured"
+    assert not equations & set(refused), f"{family}: equations refused {refused}"
+    for label, reason in refused.items():
+        assert reason.startswith("graph-only entry: a source value"), (label, reason)
 
 
 @pytest.mark.parametrize("family", sorted(ROWS))
@@ -86,7 +88,7 @@ def test_replayed_graph_is_differentiable_by_jax() -> None:
     _net, _example, trace = _row_trace("chain_branch_function")
     (leaf,) = [op for op in trace._layer_list if func(op) == "input"]
 
-    def loss(value):  # type: ignore[no-untyped-def]
+    def loss(value):
         outputs = graph_forward(adapter, trace, {leaf.label: value})
         return sum(jnp.sum(v) for v in outputs.values())
 
