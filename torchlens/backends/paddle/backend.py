@@ -38,7 +38,6 @@ from ..._ir.semantics import BackendSemantics, CapturePolicy
 from ..._output_slot import returned, stopped
 from ..._postprocess._materialize import materialize_from_events
 from ..._postprocess._selective_save import (
-    apply_static_label_save_policy,
     pop_static_label_save_predicate,
 )
 from ..._quantities import Duration
@@ -80,6 +79,7 @@ from .._protocols.paddle import (
 )
 from .._root_frames import strip_root_frames
 from .._validation_shared import replay_payload
+from . import _retention
 from ._capture_helpers import (
     _alias_to_primary,
     _append_intervention_events,
@@ -494,6 +494,7 @@ class PaddleBackend:
         trace._paddle_alias_annotations = []
         trace._paddle_capture_gap_markers = []
         trace._paddle_intervention_runtime = intervention_runtime
+        _retention.start_retention(trace, save_predicate, enabled=grad_options is None)
         if facet_recipes is not None:
             trace.facet_functions = _paddle_facet_snapshot(facet_recipes)
         trace._provenance_backend_version = str(getattr(self.paddle, "__version__", ""))
@@ -564,7 +565,7 @@ class PaddleBackend:
             _attach_paddle_param_logs(trace, module_tree if use_object_module else None)
             self._finish_trace(trace, module_tree if use_object_module else None)
             hooks.retain(trace)
-            apply_static_label_save_policy(trace, save_predicate, backend_name="paddle")
+            _retention.apply_save_with_retention(trace, save_predicate, backend_name="paddle")
             if grad_options is not None:
                 self._attach_derived_grads(
                     trace=trace,
@@ -582,6 +583,7 @@ class PaddleBackend:
             freeze_trace_relation_views(trace)
         finally:
             hooks.close()
+            _retention.discard_retention(trace)
             self._param_address_by_id = {}
             self._param_write_guard = ParameterWriteGuard()
             self._source_leaves = PaddleSourceLeaves()
@@ -1465,9 +1467,7 @@ class PaddleBackend:
     ) -> OpEvent:
         """Build one topology-complete Paddle operation event."""
 
-        tensor_ref = self.tensor_ref(
-            session, output, output if policy.save_payload else None, policy
-        )
+        tensor_ref = _retention.saved_ref(self, session, reserved, func_event_input, output, policy)
         input_ancestors = frozenset(
             edge.parent_label_raw for edge in parents if edge.parent_label_raw.startswith("input.")
         )

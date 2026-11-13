@@ -1,0 +1,279 @@
+"""Payload retention decided during a Paddle capture (``save=`` lowers peak memory).
+
+A full Paddle capture holds every op output until the trace is finished, then
+``save=`` hides the unselected payloads (``_postprocess/_selective_save.py``).
+Replay validation reads every hidden payload, so the peak is the full capture.
+
+Here the capture decides, as each wrapped call returns and after its edges are
+recorded, whether the output payload stays in RAM. A payload the ``save=``
+selector does not select is written to a private spool directory and the live
+tensor is released; the trace's replay-visible payload table reads it back on
+demand. Validation therefore sees exactly the witnesses a full capture keeps
+(no check changes and no regenerated outputs), while peak memory holds only the
+selected payloads.
+
+The decision only affects where a payload lives, never what the trace returns:
+the selector is evaluated on the capture-time context (function name, layer
+type, module stack and the predicted label spellings), and after the trace is
+finished every op the selector selects on its final labels gets its payload
+back in RAM, so a wrong prediction costs a reload, not a value.
+"""
+
+from __future__ import annotations
+
+import shutil
+import tempfile
+import weakref
+from collections.abc import Callable, Iterator, Mapping
+from dataclasses import dataclass, field, replace
+from pathlib import Path
+from typing import Any
+
+from ... import _state
+from ..._ir.selector_eval import first_selector_kind_outside
+from ..._postprocess._selective_save import (
+    _STATIC_INTERVENTION_SELECTOR_KINDS,
+    _set_op_field,
+    apply_static_label_save_policy,
+)
+from ..._selection.selectors import BaseSelector
+
+STATE_KEY = "_paddle_retention_state"
+"""Trace ``__dict__`` key holding the capture's :class:`PaddleRetention`."""
+
+
+@dataclass(frozen=True)
+class SpilledPayload:
+    """One op payload moved out of RAM during capture.
+
+    Attributes
+    ----------
+    path
+        ``.npy`` file in the capture's spool directory.
+    place
+        The Paddle place the payload lived on.
+    """
+
+    path: Path
+    place: Any
+
+    def load(self) -> Any:
+        """Read the payload back as a Paddle tensor on its original place."""
+
+        import numpy as np
+        import paddle
+
+        with _state.pause_logging():
+            return paddle.to_tensor(np.load(self.path, allow_pickle=False), place=self.place)
+
+
+class SpilledPayloads(Mapping[str, Any]):
+    """Replay-visible payloads by label; spilled entries load on access.
+
+    Parameters
+    ----------
+    payloads
+        Hidden payloads by raw and final label; spilled ones are
+        :class:`SpilledPayload` handles.
+    spool
+        The spool directory, removed when this table is collected.
+    """
+
+    def __init__(self, payloads: Mapping[str, Any], spool: Path) -> None:
+        self._payloads = dict(payloads)
+        self._spool = spool
+        self._cleanup = weakref.finalize(self, shutil.rmtree, str(spool), True)
+
+    def __getitem__(self, label: str) -> Any:
+        value = self._payloads[label]
+        return value.load() if isinstance(value, SpilledPayload) else value
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._payloads)
+
+    def __len__(self) -> int:
+        return len(self._payloads)
+
+    def __reduce__(self) -> tuple[Any, ...]:
+        """Copies and pickles carry the loaded payloads, never spool paths."""
+
+        return (dict, (dict(self.items()),))
+
+
+@dataclass
+class PaddleRetention:
+    """Retention state of one capture.
+
+    Attributes
+    ----------
+    predicate
+        The static ``save=`` selector.
+    spool
+        Spool directory, created on the first spill.
+    spilled
+        Number of payloads moved out of RAM.
+    handles
+        Spilled payloads by raw label.
+    """
+
+    predicate: BaseSelector
+    spool: Path | None = None
+    spilled: int = 0
+    handles: dict[str, SpilledPayload] = field(default_factory=dict)
+
+    def keeps(self, ctx: Any) -> bool:
+        """Whether the selector may select the op ``ctx`` describes (True keeps it in RAM)."""
+
+        variants = (
+            ctx,
+            replace(ctx, label=f"{ctx.layer_type}_{ctx.type_index}_{ctx.raw_index}"),
+            replace(ctx, label=f"{ctx.layer_type}_{ctx.type_index}"),
+        )
+        try:
+            return any(bool(self.predicate(variant)) for variant in variants)
+        except Exception:  # noqa: BLE001 - an undecidable op stays in RAM; final labels decide
+            return True
+
+    def spill(self, label_raw: str, tensor: Any) -> None:
+        """Write ``tensor`` to the spool under ``label_raw``."""
+
+        import numpy as np
+
+        if self.spool is None:
+            self.spool = Path(tempfile.mkdtemp(prefix="torchlens-paddle-retention-"))
+        self.spilled += 1
+        path = self.spool / f"{self.spilled}.npy"
+        with _state.pause_logging():
+            np.save(path, tensor.numpy(), allow_pickle=False)
+        self.handles[label_raw] = SpilledPayload(path=path, place=tensor.place)
+
+
+def start_retention(trace: Any, predicate: object, *, enabled: bool) -> None:
+    """Arm capture-time retention on ``trace`` when ``predicate`` can be decided per op.
+
+    Parameters
+    ----------
+    trace
+        The trace under construction.
+    predicate
+        The capture's static ``save=`` predicate, or ``None``.
+    enabled
+        False when another option needs every payload in RAM (derived gradients).
+    """
+
+    if not enabled or not isinstance(predicate, BaseSelector):
+        return
+    if first_selector_kind_outside(predicate, allowed=_STATIC_INTERVENTION_SELECTOR_KINDS):
+        return
+    trace.__dict__[STATE_KEY] = PaddleRetention(predicate)
+
+
+def retention_policy(session: Any) -> Callable[[Any], bool]:
+    """Return the capture's per-op keep decision (wave B hook contract).
+
+    Parameters
+    ----------
+    session
+        The trace under construction.
+
+    Returns
+    -------
+    Callable[[Any], bool]
+        Maps a capture-time ``RecordContext`` to True when its payload stays in RAM.
+    """
+
+    state = session.__dict__.get(STATE_KEY)
+    return (lambda _ctx: True) if state is None else state.keeps
+
+
+def retained_payload(
+    backend: Any, session: Any, site: Any, call: Any, output: Any, policy: Any
+) -> Any:
+    """Return the payload one emitted output carries: the tensor, or ``None`` when unsaved.
+
+    Parameters
+    ----------
+    backend
+        The Paddle backend (builds the capture-time context).
+    session
+        The trace under construction.
+    site
+        The output's reserved label.
+    call
+        The wrapped call's ``FunctionEventInput``.
+    output
+        The output tensor.
+    policy
+        The capture's ``CapturePolicy``; no payload when it saves none.
+
+    Returns
+    -------
+    Any
+        ``output`` when it stays in RAM, else ``None`` (unsaved, or the spool holds it).
+    """
+
+    if not policy.save_payload:
+        return None
+    state = session.__dict__.get(STATE_KEY)
+    if state is None or site.layer_type == "input" or not _spillable(backend, output):
+        return output
+    if state.keeps(backend.build_record_context(session, site, call, output)):
+        return output
+    state.spill(site.label_raw, output)
+    return None
+
+
+def saved_ref(backend: Any, session: Any, site: Any, call: Any, output: Any, policy: Any) -> Any:
+    """Build the output's tensor reference with the payload :func:`retained_payload` keeps."""
+
+    payload = retained_payload(backend, session, site, call, output, policy)
+    return backend.tensor_ref(session, output, payload, policy)
+
+
+def _spillable(backend: Any, output: Any) -> bool:
+    """Tensors NumPy round-trips exactly: not bfloat16 (NumPy carries it as uint16)."""
+
+    return bool(backend.is_tensor(output)) and "bfloat16" not in str(backend._dtype(output))
+
+
+def apply_save_with_retention(trace: Any, predicate: Any, *, backend_name: str) -> None:
+    """Apply ``save=`` to the finished trace, using the payloads retention spilled.
+
+    Ops the selector selects on their final labels get their payload back in
+    RAM before filtering; every other spilled payload stays replay-visible
+    through the trace's hidden payload table.
+
+    Parameters
+    ----------
+    trace
+        The finished trace.
+    predicate
+        The static ``save=`` predicate, or ``None``.
+    backend_name
+        Backend name for diagnostics.
+    """
+
+    state = trace.__dict__.pop(STATE_KEY, None)
+    handles = {} if state is None else state.handles
+    for op in trace._layer_list if handles else ():
+        handle = handles.get(str(op._label_raw))
+        if handle is not None and bool(predicate(op)):
+            _set_op_field(op, "out", handle.load())
+    apply_static_label_save_policy(trace, predicate, backend_name=backend_name)
+    if not handles or state is None or state.spool is None:
+        return
+    hidden = dict(getattr(trace, "_selective_save_hidden_payloads", None) or {})
+    for op in trace._layer_list:
+        handle = handles.get(str(op._label_raw))
+        if handle is not None and getattr(op, "out", None) is None:
+            hidden.setdefault(str(op._label_raw), handle)
+            hidden.setdefault(str(op.label), handle)
+    trace._selective_save_hidden_payloads = SpilledPayloads(hidden, state.spool)
+
+
+def discard_retention(trace: Any) -> None:
+    """Remove retention state and its spool after a failed capture."""
+
+    state = trace.__dict__.pop(STATE_KEY, None)
+    if state is not None and state.spool is not None:
+        shutil.rmtree(state.spool, ignore_errors=True)
