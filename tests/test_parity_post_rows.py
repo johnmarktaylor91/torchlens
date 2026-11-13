@@ -211,12 +211,23 @@ def _kept(trace: Any, field: str = "out") -> set[tuple[tuple[int, ...], tuple[fl
     return {_fingerprint(value) for value in _model_payloads(trace, field)}
 
 
-def _assert_validates(trace: Any) -> None:
-    """Replay-validate a filtered or shaped twin trace (hidden raw copies included)."""
+def _assert_validates(trace: Any, capture_fn: Callable[..., Any]) -> None:
+    """Replay-validate a filtered or shaped twin trace (hidden raw copies included).
+
+    JAX, Paddle and tinygrad return a bool, which must be True. MLX and TensorFlow
+    return a ``ValidationStatus``; TensorFlow honestly reports ``unverified`` for
+    variable reads outside pure replay even on a full save. The filtered trace must
+    then match its own full-save twin: same state, same replayed count, no failures.
+    """
 
     status = trace.validate_forward_pass([])
-    # MLX returns a ValidationStatus record; the other backends return a bool.
-    assert getattr(status, "passed", status) is True
+    if isinstance(status, bool):
+        assert status is True
+        return
+    baseline = capture_fn().validate_forward_pass([])
+    assert baseline.state in {"passed", "unverified"}, baseline
+    assert status.num_failed_ops == 0, status
+    assert (status.state, status.num_replayed_ops) == (baseline.state, baseline.num_replayed_ops)
 
 
 def _op_kind(op: Any) -> str:
@@ -315,7 +326,7 @@ def test_s2_value_dependent_save_keeps_what_torch_keeps(
         assert expected <= own, "the lowered graph lost a payload torch keeps"
         expected = own
     assert _kept(trace) == expected
-    _assert_validates(trace)
+    _assert_validates(trace, capture)
 
 
 @pytest.mark.rare
@@ -349,7 +360,7 @@ def test_s3_lookback_selectors_keep_what_torch_keeps(
     expected = _kept(reference)
     assert expected, "torch twin kept nothing; the selector does not exercise S3"
     assert _kept(trace) == expected
-    _assert_validates(trace)
+    _assert_validates(trace, capture)
 
 
 def _rank3(ctx: Any) -> bool:
@@ -402,7 +413,7 @@ def test_s3_lookback_selectors_on_the_lowered_tinygrad_graph(
     relu = _fingerprint(np.maximum(_X @ _W1.T, 0.0))
     assert relu in expected, "the lowered graph must still keep torch's rectified payload"
     assert _kept(trace) == expected
-    _assert_validates(trace)
+    _assert_validates(trace, _tinygrad_trace)
 
 
 def _double(tensor: Any) -> Any:
@@ -438,7 +449,7 @@ def test_s4_save_shaping_matches_torch(
     for field, prints in expected.items():
         assert _kept(trace, field) == prints, field
     assert trace._options_save_raw_activations == reference._options_save_raw_activations
-    _assert_validates(trace)
+    _assert_validates(trace, capture)
 
 
 def _lowered_shaping(full: Any, options: dict[str, Any], torch_sets: dict[str, Any]) -> Any:
