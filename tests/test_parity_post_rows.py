@@ -41,7 +41,8 @@ _MODEL_SHAPES = frozenset({_HIDDEN, _OUTPUT})
 def _torch_trace(**kwargs: Any) -> Any:
     """Capture the reference MLP on torch."""
 
-    torch = pytest.importorskip("torch")
+    import torch
+
     model = torch.nn.Sequential(
         torch.nn.Linear(4, 5, bias=False), torch.nn.ReLU(), torch.nn.Linear(5, 3, bias=False)
     ).eval()
@@ -211,7 +212,9 @@ def _kept(trace: Any, field: str = "out") -> set[tuple[tuple[int, ...], tuple[fl
 def _assert_validates(trace: Any) -> None:
     """Replay-validate a filtered or shaped twin trace (hidden raw copies included)."""
 
-    assert trace.validate_forward_pass([]) is True
+    status = trace.validate_forward_pass([])
+    # MLX returns a ValidationStatus record; the other backends return a bool.
+    assert getattr(status, "passed", status) is True
 
 
 def _op_kind(op: Any) -> str:

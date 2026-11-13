@@ -289,7 +289,8 @@ def _weights() -> np.ndarray:
 def _torch_trace() -> Any:
     """Capture the reference NCHW convolution followed by ReLU."""
 
-    torch = pytest.importorskip("torch")
+    import torch
+
     model = torch.nn.Sequential(torch.nn.Conv2d(1, 3, 1, bias=False), torch.nn.ReLU()).eval()
     with torch.no_grad():
         model[0].weight.copy_(torch.from_numpy(_weights()))
