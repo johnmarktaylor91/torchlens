@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-87 packages, 1815 modules, 720532 lines, 0 modules without a docstring.
+87 packages, 1815 modules, 720557 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -78,7 +78,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.experimental` | Experimental TorchLens APIs with unstable naming and behavior. | 2 | 372 |
 | `torchlens.export` | Static export helpers for TorchLens logs. | 15 | 5549 |
 | `torchlens.export._model_explorer` | Google Model Explorer export: a writer for Model Explorer's file-ingest schema with module-hierarchy namespaces, op-type labels, ported e... | 16 | 3039 |
-| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 87 | 38719 |
+| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 87 | 38744 |
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1923 |
 | `torchlens.intervention._topology` | Topology comparison and supergraph construction for intervention bundles. | 2 | 798 |
 | `torchlens.io` | Public I/O and administrative helpers for TorchLens. | 1 | 432 |
@@ -1957,7 +1957,7 @@ Google Model Explorer export: a writer for Model Explorer's file-ingest schema w
 
 ### `torchlens.intervention`
 
-Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (87 modules, 38719 lines)
+Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (87 modules, 38744 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1981,7 +1981,7 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `_facet_save` | The capture-time save selector for ''trace(save=<facet selector>)''. | 102 |
 | `_facet_union` | Facet unions at the write doors: ''head_a \| head_b'' splits into its facet branches. | 170 |
 | `_facet_writes` | Facet writes: which records serve facet views, and the facet slice an edit is writing. | 253 |
-| `_grad_site_neutral` | ''tl.grad'' edit sites on any backend with a replay adapter. | 534 |
+| `_grad_site_neutral` | ''tl.grad'' edit sites on any backend with a replay adapter. | 559 |
 | `_grad_site_plan` | Gradient-site plans for ''Trace.do'': split, preflight, arm and settle. | 702 |
 | `_gradient_contract` | The gradient contract for edits: ''keep_grad(edit)'' and its connectivity check. | 243 |
 | `_helper_fingerprint` | Content fingerprints of the tensors a staged helper closes over. | 248 |
