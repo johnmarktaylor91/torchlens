@@ -350,6 +350,7 @@ class TFBackend:
             save_payloads=True,
             save_predicate=save_predicate,
         )
+        session.retain_live_tensors = bool(backward_ready)  # S1: release once edges are recorded
         wiring = wire_eager_session(trace, session, intervene, halt)
         trace.capture_events = CaptureEvents()
         trace._provenance_start_time = time.time()

@@ -24,6 +24,7 @@ from ..._ir.semantics import BackendSemantics, CapturePolicy
 from ...recording._halt import StopSignal
 from ...recording._types import CaptureSpec
 from ._callback_attrs import _attrs_to_public_dict, _attrs_to_raw_dict, _normalize_op_type
+from ._retention import WeakProducerIndex, release_live_tensors, retention_policy
 from ._tensor_probe import (
     _bool_value,
     _classify_source_tensor,
@@ -118,7 +119,7 @@ class TFInputCapture:
     source_label_raw
         Raw source label when a source event was materialized.
     tensor
-        Live TensorFlow tensor observed in the callback input slot.
+        Live TensorFlow tensor observed in the callback input slot (``None`` once released).
     ref_key
         Stable eager tensor reference key.
     """
@@ -148,7 +149,7 @@ class TFOpCapture:
     inputs
         Recorded callback input slots.
     output_tensor
-        Live TensorFlow output tensor for this output slot.
+        Live TensorFlow output tensor for this output slot, or ``None`` once released.
     """
 
     label_raw: str
@@ -203,6 +204,8 @@ class TFEagerCaptureSession:
     """
 
     output_hook: Callable[[list[tuple[str, RecordContext, Any]]], None] | None = None
+    #: Off when no backward pass will run: op records then drop live tensors (``_retention``).
+    retain_live_tensors: bool = True
     code_context_fn: Callable[[], tuple[Any, ...]] = tuple
 
     def __init__(
@@ -256,7 +259,7 @@ class TFEagerCaptureSession:
         self.module_exit_hook = module_exit_hook
         self.events = CaptureEvents()
         self.module_stack: list[ModuleFrame] = []
-        self.producer_by_ref: dict[object, str] = {}
+        self.producer_by_ref: WeakProducerIndex = WeakProducerIndex()
         self.source_by_ref: dict[object, TFSourceRecord] = {}
         self.source_records: list[TFSourceRecord] = []
         self.unresolved_producers: list[TFUnresolvedProducer] = []
@@ -414,15 +417,8 @@ class TFEagerCaptureSession:
             self.output_hook(recorded)
 
     def _record_op_capture(self, op_capture: TFOpCapture) -> None:
-        """Keep one output's replay record and index its tensor's producer label.
+        """Keep one output's replay record (live tensors per ``_retention``) and index its producer."""
 
-        Parameters
-        ----------
-        op_capture
-            Replay record for one callback output.
-        """
-
-        self.op_captures.append(op_capture)
         if self.output_tap is not None:
             self.output_tap(
                 op_capture,
@@ -431,6 +427,8 @@ class TFEagerCaptureSession:
         ref_key = _tensor_ref_key(op_capture.output_tensor)
         if ref_key is not None:
             self.producer_by_ref[ref_key] = op_capture.label_raw
+        keep_live = retention_policy(self)(op_capture)
+        self.op_captures.append(op_capture if keep_live else release_live_tensors(op_capture))
         if op_capture.op_type in _INIT_OP_TYPES:
             self.init_op_labels.append(op_capture.label_raw)
 
