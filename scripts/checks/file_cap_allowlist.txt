@@ -178,7 +178,7 @@ torchlens/_io/_safe_unpickle.py::_BundleAllowlistPolicy._resolve_global	313
 torchlens/_io/_save_gates.py::_capture_activation_blob_specs	107
 torchlens/_io/_scrub_identities.py::_scrub_nondeterministic_identities	202
 torchlens/_io/_source_privacy.py::_scrub_signature_string	66
-torchlens/_io/bundle.py	3663
+torchlens/_io/bundle.py	3637
 torchlens/_io/bundle.py::_attach_fast_copy_specs	64
 torchlens/_io/bundle.py::_bind_archived_activation_payload	103
 torchlens/_io/bundle.py::_bind_embedded_nonpersistent_buffer_payload	73
@@ -190,7 +190,7 @@ torchlens/_io/bundle.py::_load_trace_payload	173
 torchlens/_io/bundle.py::_load_unified_tlspec	94
 torchlens/_io/bundle.py::_preflight_unified_trace_manifest	90
 torchlens/_io/bundle.py::_scrub_trace_for_bundle	62
-torchlens/_io/bundle.py::cleanup_tmp	109
+torchlens/_io/bundle.py::cleanup_tmp	106
 torchlens/_io/bundle.py::load	131
 torchlens/_io/bundle.py::save	581
 torchlens/_io/bundle_container.py::_load_unified_bundle	81
@@ -294,7 +294,7 @@ torchlens/_merged/_artifact.py	1029
 torchlens/_merged/_artifact.py::_cached_join_refs	84
 torchlens/_merged/_artifact.py::_check_degraded_cache_coherence	137
 torchlens/_merged/_artifact.py::load_merged	295
-torchlens/_merged/_artifact.py::save_merged	206
+torchlens/_merged/_artifact.py::save_merged	205
 torchlens/_merged/_engine.py::derive_merge	76
 torchlens/_merged/_presenter.py	887
 torchlens/_observability/_artifact.py::HistoryWriter._columns_for	65
@@ -1122,7 +1122,7 @@ torchlens/intervention/_runtime.py::validate_hook_output	70
 torchlens/intervention/_runtime_probes.py::_apply_inplace_replacement_to_mutated_storage	72
 torchlens/intervention/_save.py	817
 torchlens/intervention/_save.py::_build_target_manifest	73
-torchlens/intervention/_save.py::save_intervention	130
+torchlens/intervention/_save.py::save_intervention	129
 torchlens/intervention/_spec_codec.py::_deserialize_intervention_spec	72
 torchlens/intervention/_spec_values.py::_deserialize_value	103
 torchlens/intervention/_subspace_edits.py::subspace_ablate	89

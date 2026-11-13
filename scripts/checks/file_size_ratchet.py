@@ -192,7 +192,8 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # are unchanged. Harness bundles phase 2 moved the bundle-container
     # loaders to _io/bundle_container.py and re-keyed the row back down to
     # the 4450 baseline (4700 -> 4450).
-    "torchlens/_io/bundle.py": 3750,
+    # 3750 -> 3650: the staging helpers moved to _io/_staging.py measure 3637 (slack rule).
+    "torchlens/_io/bundle.py": 3650,
     "torchlens/_io/runnable_load.py": 3750,
     # 4450 -> 4500 (2026-10-01 ci-fix ratchet settle): "preserve checkpoint
     # hook identity across token swap" (8397d1469) plus the round-1 feature
