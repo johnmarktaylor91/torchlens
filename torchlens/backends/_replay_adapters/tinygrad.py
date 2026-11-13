@@ -243,7 +243,8 @@ def vjp(
 
     ``None`` for an occurrence that is not differentiable: a non-float parent,
     a bool or integer output, a parent the validator keeps as a constant
-    source, or a source tinygrad's rule gives no gradient (a ``WHERE`` condition).
+    source, the source of a ``DETACH``, or a source tinygrad's rule gives no
+    gradient (a ``WHERE`` condition).
     """
 
     from tinygrad import Tensor
@@ -272,6 +273,9 @@ def _local_gradients(root: Any, root_grad: Any) -> tuple[Any | None, ...]:
 
     from tinygrad import gradient as tg_gradient
 
+    if _uop_name(root) == "DETACH":
+        # tinygrad's own backward does not flow through DETACH (gradient._deepwalk).
+        return (None,) * len(root.src)
     rules = getattr(tg_gradient, "pm_gradient", None)
     if rules is None:
         raise ValueError("this tinygrad has no per-UOp derivative rules (pm_gradient)")

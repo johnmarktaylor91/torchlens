@@ -203,3 +203,13 @@ def test_session_chain_replays_every_roster_op_from_replayed_parents(row: Any) -
     values = ReplaySession(adapter, trace, steps, initial=initial).run()
     for op in trace._layer_list:
         assert adapter.close(op.out, values[op.label]), op.label
+
+
+def test_vjp_gives_no_gradient_through_detach() -> None:
+    """As in tinygrad's own backward, no cotangent flows through a ``DETACH``."""
+
+    trace = _capture(lambda v: v.detach() * v, Tensor([1.0, -2.0, 3.0]))
+    detached = [op for op in trace._layer_list if adapter.recipe(trace, op) is not None]
+    detach = next(op for op in detached if "DETACH" in adapter.recipe(trace, op).op_identity)
+    values = _parent_values(trace, detach)
+    assert adapter.vjp(trace, detach, values, (Tensor([1.0, 1.0, 1.0]),)) == (None,)
