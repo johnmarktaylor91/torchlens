@@ -235,7 +235,6 @@ JAX_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
     runtime_option_names=frozenset(
         {
             "halt",
-            "intervene",
             "save",
             "stop_after",
             "storage",
@@ -243,14 +242,13 @@ JAX_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
         }
     ),
     runtime_message=(
-        "JAX backend preview does not support runtime-mutation or stop-early "
+        "JAX backend preview does not support stop-early or storage "
         "options: {names}. Static-label save= selectors are supported as "
-        "post-finalization payload filters, but trace(intervene=...) and "
-        "trace(stop_after=...) need predicate-time concrete values and mutation/partial "
-        "replay semantics that jaxpr tracing does not expose through TorchLens' "
-        "current public labels. Use an unfiltered tl.trace(..., backend='jax') "
-        "call, static-label save= selectors, or the PyTorch backend for "
-        "intervention, stop_after, storage, and value-dependent predicates."
+        "post-finalization payload filters and trace(intervene=...) edits equation "
+        "outputs at capture time, but trace(stop_after=...) needs partial-capture "
+        "semantics the JAX capture path does not implement. Use an unfiltered "
+        "tl.trace(..., backend='jax') call, static-label save= selectors, or the "
+        "PyTorch backend for stop_after, storage, and streaming."
     ),
     fallback_message=(
         "JAX backend preview does not support: {names}. "
@@ -377,10 +375,6 @@ in the tf eager capture path and are popped before this policy runs, as is
 
 JAX_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
     backend_name="JAX",
-    input_kwargs_message=(
-        "JAX backend preview supports positional args only. Pass keyword values as "
-        "explicit params/input leaves or declared static positional args."
-    ),
     full_save_message="JAX backend preview is full-save only; save shaping is unsupported.",
     rejected_truthy_messages={
         "activation_transform": (
@@ -397,10 +391,6 @@ JAX_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
         ),
         "save_args": (
             "JAX backend preview does not support save_args; full-save forward capture "
-            "only. Use full-save JAX trace capture or the PyTorch backend."
-        ),
-        "save_source_context": (
-            "JAX backend preview does not support save_source_context; full-save forward capture "
             "only. Use full-save JAX trace capture or the PyTorch backend."
         ),
         "backward_ready": (

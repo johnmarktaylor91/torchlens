@@ -29,7 +29,6 @@ from ..._ir.container import ContainerSpec, DictKey, OutputPathComponent, TupleI
 from ..._ir.events import (
     ArgTemplateRef,
     FunctionCallRef,
-    ModuleFrame,
     OpEvent,
     OutputRef,
     ParentEdge,
@@ -97,6 +96,11 @@ from .._root_frames import refuse_rootless_stack, strip_op_root_frames
 from .._validation_shared import float_replay_tolerances
 from . import _module_return_probe as return_probe
 from ._closure_consts import _readable_closure_consts
+from ._converted_grads import DerivedGradCapture, attach_jax_derived_grads
+from ._edits import append_session_event, open_equation_session, replay_with_edits
+from ._host_state import _reject_closed_over_host_state
+from ._input_kwargs import bind_input_kwargs
+from ._module_frames import jax_event_module_frames
 from ._perturbation_probes import _perturb_candidates
 from ._pytree_param_barcodes import stamp_pytree_param_barcodes
 from ._raw_relabel import (
@@ -398,7 +402,7 @@ def _validate_one_jax_equation(
         return False
     try:
         inputs = _inputs_from_trace_graph(capture, op, ops_by_label, hidden_outputs_by_label)
-        replayed = replay_equation(capture, inputs)
+        replayed, raw = replay_with_edits(capture, op, replay_equation(capture, inputs))
         saved_outputs = _saved_op_outputs(
             op,
             len(replayed),
@@ -418,9 +422,10 @@ def _validate_one_jax_equation(
             log, op_label, func_name, _JaxVerdict("replay", "failed", "replay_mismatch")
         )
         return False
-    if not _parent_perturbations_change_output(capture, op, inputs, saved_outputs):
+    reference = saved_outputs if raw is None else raw  # edits: sensitivity of the raw replay
+    if not _parent_perturbations_change_output(capture, op, inputs, reference):
         return _record_insensitive_outcome(
-            log, (op_label, func_name), capture, op, (inputs, saved_outputs)
+            log, (op_label, func_name), capture, op, (inputs, reference)
         )
     _record_jax_decision(
         log, op_label, func_name, _JaxVerdict("replay", "validated", "replay_match")
@@ -483,7 +488,7 @@ class JAXBackend:
         input_args
             Positional arguments for the callable.
         input_kwargs
-            Keyword arguments. Unsupported in this preview.
+            Keyword arguments: array values trace as pytree leaves, others bind statically.
         save
             ``"all"``, omitted, or a static ``tl.trace(save=)`` selector of ops to keep.
         keep_orphans
@@ -570,6 +575,7 @@ class JAXBackend:
 
         save_predicate = pop_static_label_save_predicate({"save": save}, backend_name="JAX")
         facet_recipes = pop_facet_recipes(kwargs)
+        intervene = kwargs.pop("intervene", None)
         self._reject_extra_kwargs(kwargs)
         _reject_transformed_callable(model)
         # N5 fix: ``trace()`` no longer passes these as flat kwargs at all --
@@ -669,11 +675,7 @@ class JAXBackend:
             module_identity_mode,
             module_tree,
         )
-        if use_pytree_module and grad_options is not None:
-            raise BackendUnsupportedError(
-                "JAX pytree_module capture does not yet support grad_options. "
-                "Use a raw fn(params, *inputs) function_root capture for derived gradients."
-            )
+        call_fn, args = bind_input_kwargs(model, args, input_kwargs)
         if not _is_missing(random_seed) and random_seed is not None:
             raise BackendUnsupportedError(
                 "JAX backend preview requires explicit PRNG keys as params/input leaves; "
@@ -717,15 +719,18 @@ class JAXBackend:
         if use_pytree_module and module_tree is None:
             raise AssertionError("pytree_module mode requires JAX module metadata.")
         tree = module_tree if use_pytree_module else None
-        closed_jaxpr, closure_consts, output = _derive_and_run(model, args, static_argnums, tree)
+        closed_jaxpr, closure_consts, output = _derive_and_run(call_fn, args, static_argnums, tree)
         flat_args, _args_treedef = flatten_dynamic_args(args, static_argnums)
+        session_capture = (args, closure_consts, grad_options, save_code_context)
+        session = open_equation_session(self, trace, intervene, session_capture)
         result = interpret_closed_jaxpr_with_inlining(
             return_probe.jaxpr_to_interpret(tree, closed_jaxpr),
             flat_args,
             jax_control_flow=cast(str, jax_control_flow),
             jax_max_control_flow_unroll=cast(int, jax_max_control_flow_unroll),
+            equation_hook=session.hook,
         )
-        result = return_probe.split_outputs(result, tree)
+        result, output = session.finish(return_probe.split_outputs(result, tree), output)
         output_leaf_paths = self._output_leaf_paths(output)
         output_container_spec = self._builtin_output_container_spec(output)
         trace._cost_forward_duration = Duration(time.time() - trace._provenance_start_time)
@@ -749,16 +754,13 @@ class JAXBackend:
         _stamp_jaxpr_results(trace, closed_jaxpr, result, static_argnums)
         apply_static_label_save_policy(trace, save_predicate, backend_name="JAX")
         if grad_options is not None:
-            self._attach_derived_grads(
+            captured = (model, call_fn, args, static_argnums, closed_jaxpr, tree, output)
+            flow = (cast(str, jax_control_flow), cast(int, jax_max_control_flow_unroll))
+            attach_jax_derived_grads(
+                self,
                 trace=trace,
-                model=model,
-                args=args,
-                static_argnums=static_argnums,
-                closed_jaxpr=closed_jaxpr,
-                captured_output=output,
-                grad_options=cast(GradOptions, grad_options),
-                jax_control_flow=cast(str, jax_control_flow),
-                jax_max_control_flow_unroll=cast(int, jax_max_control_flow_unroll),
+                capture=DerivedGradCapture(*captured, grad_options, flow),
+                derive=derive_closed_jaxpr,
             )
         attach_facet_recipes(trace, facet_recipes, backend_name="JAX")
         freeze_trace_relation_views(trace)
@@ -1420,11 +1422,7 @@ class JAXBackend:
             save_grad=False,
         )
         tensor_ref = self._tensor_ref(output, reserved.label_raw)
-        module_addresses = _jax_event_module_stack(module_stack)
-        module_calls = _jax_event_module_call_stack(module_addresses, module_call_stack)
-        module_frames = tuple(
-            _jax_module_frame(address, call_index) for address, call_index in module_calls
-        )
+        module_calls, module_frames = jax_event_module_frames(module_stack, module_call_stack)
         input_ancestors = frozenset(
             edge.parent_label_raw for edge in parents if edge.parent_label_raw.startswith("input.")
         )
@@ -1531,8 +1529,7 @@ class JAXBackend:
             record_context=self._record_context(reserved, output, func_name),
             capture_spec=CaptureSpec(save_out=True, save_metadata=True),
         )
-        trace.capture_events.append(event)
-        return event
+        return cast(OpEvent, append_session_event(self, trace, event))
 
     def _tensor_ref(self, value: object, label_raw: str) -> TensorRef:
         """Build a tensor reference for a JAX payload.
@@ -3165,79 +3162,6 @@ def _derive_and_run(
     return closed_jaxpr, (), output
 
 
-def _jax_event_module_stack(module_stack: Sequence[str]) -> tuple[str, ...]:
-    """Normalize decoded JAX module scopes for TorchLens Op containment.
-
-    Root-only equations are attributed to ``self`` so non-function-root
-    invariants have an owning module. Nested equations omit ``self`` because
-    Torch module stacks historically contain only submodule calls.
-
-    Parameters
-    ----------
-    module_stack
-        Decoded module scopes in outer-to-inner order.
-
-    Returns
-    -------
-    tuple[str, ...]
-        Module stack to store on JAX operation events.
-    """
-
-    stack = tuple(module_stack)
-    if len(stack) > 1 and stack[0] == "self":
-        return stack[1:]
-    return stack
-
-
-def _jax_event_module_call_stack(
-    module_addresses: Sequence[str],
-    module_call_stack: Sequence[tuple[str, int]],
-) -> tuple[tuple[str, int], ...]:
-    """Normalize decoded JAX module-call scopes for event emission.
-
-    Parameters
-    ----------
-    module_addresses
-        Address-only module stack after root elision.
-    module_call_stack
-        Decoded module-call stack in outer-to-inner order.
-
-    Returns
-    -------
-    tuple[tuple[str, int], ...]
-        Module calls aligned with ``module_addresses``.
-    """
-
-    call_by_address = dict(module_call_stack)
-    return tuple((address, call_by_address.get(address, 1)) for address in module_addresses)
-
-
-def _jax_module_frame(address: str, call_index: int) -> ModuleFrame:
-    """Return an event-layer module frame for one JAX module address.
-
-    Parameters
-    ----------
-    address
-        TorchLens module address.
-    call_index
-        One-based module call index.
-
-    Returns
-    -------
-    ModuleFrame
-        Module frame.
-    """
-
-    return ModuleFrame(
-        address=address,
-        address_normalized=address,
-        module_type="pytree_module",
-        call_index=call_index,
-        fx_qualpath=None,
-        entry_argnames=(),
-    )
-
-
 def _reject_transformed_callable(model: Callable[..., Any]) -> None:
     """Reject root JAX transformed callables before jaxpr capture.
 
@@ -3353,39 +3277,6 @@ def _assert_same_treedef(left: Any, right: Any, *, label: str) -> None:
 
     if jax.tree.structure(left) != jax.tree.structure(right):
         raise ValueError(f"{label} must have the same pytree structure as positional arg 0.")
-
-
-def _reject_closed_over_host_state(fn: Callable[..., Any]) -> None:
-    """Reject obvious closed-over host scalar or array state for derived grads.
-
-    Parameters
-    ----------
-    fn
-        Callable being differentiated.
-
-    Returns
-    -------
-    None
-        Returns when no referenced host scalar/array globals are found.
-    """
-
-    import jax
-    import numpy as np
-
-    closure = inspect.getclosurevars(fn)
-    candidates = {**closure.nonlocals, **closure.globals}
-    for name, value in candidates.items():
-        module = inspect.getmodule(value)
-        module_name = "" if module is None else module.__name__
-        if module_name.startswith(("jax", "jaxlib", "numpy")):
-            continue
-        if inspect.ismodule(value) or inspect.isfunction(value) or inspect.isclass(value):
-            continue
-        if isinstance(value, (int, float, complex, bool, str, np.ndarray, jax.Array)):
-            raise ValueError(
-                "JAX derived gradients reject closed-over host-state values. "
-                f"Pass {name!r} as an explicit params/input/static argument."
-            )
 
 
 def _differentiated_leaf_paths(

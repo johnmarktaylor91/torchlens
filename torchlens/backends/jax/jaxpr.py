@@ -282,6 +282,12 @@ def reject_undeclared_consts(closed_jaxpr: Any) -> None:
         )
 
 
+def _unedited_outputs(captures: Any, eqn: Any, outputs: tuple[Any, ...], stacks: Any) -> Any:
+    """Default equation hook: keep the primitive outputs."""
+
+    return outputs
+
+
 def interpret_closed_jaxpr_with_inlining(
     closed_jaxpr: Any,
     flat_args: Sequence[Any],
@@ -290,6 +296,7 @@ def interpret_closed_jaxpr_with_inlining(
     jax_max_control_flow_unroll: int = 64,
     tap_values_by_capture_output: Mapping[tuple[int, int], Any] | None = None,
     replacement_values_by_capture_output: Mapping[tuple[int, int], Any] | None = None,
+    equation_hook: Callable[..., tuple[Any, ...]] | None = None,
 ) -> JaxCaptureResult:
     """Interpret a closed jaxpr while inlining safe pure call primitives.
 
@@ -313,6 +320,10 @@ def interpret_closed_jaxpr_with_inlining(
     replacement_values_by_capture_output
         Optional mapping from ``(capture_index, output_index)`` to boundary
         replacement values used only by oracle replays.
+    equation_hook
+        Optional ``hook(captures, eqn, outputs, (module_stack, module_call_stack))``
+        called per primitive equation before its outputs are written; returns
+        the outputs to write and capture (capture-time interventions).
 
     Returns
     -------
@@ -323,6 +334,7 @@ def interpret_closed_jaxpr_with_inlining(
     from jax.extend import core
 
     _assert_no_rejected_effects(closed_jaxpr)
+    equation_hook = equation_hook or _unedited_outputs
     captures: list[JaxRuntimeCapture] = []
     inlined_calls: list[str] = []
     tap_values = {} if tap_values_by_capture_output is None else tap_values_by_capture_output
@@ -331,20 +343,7 @@ def interpret_closed_jaxpr_with_inlining(
     )
 
     def rewrite_outputs(capture_index: int, outputs: tuple[Any, ...]) -> tuple[Any, ...]:
-        """Apply optional replay-only replacements and zero taps to outputs.
-
-        Parameters
-        ----------
-        capture_index
-            Flattened capture index for the equation outputs.
-        outputs
-            Primitive or synthetic capture outputs.
-
-        Returns
-        -------
-        tuple[Any, ...]
-            Outputs to write into the interpreter environment.
-        """
+        """Apply optional replay-only replacements and zero taps to outputs."""
 
         rewritten = list(outputs)
         for output_index, output in enumerate(rewritten):
@@ -579,14 +578,14 @@ def interpret_closed_jaxpr_with_inlining(
                 _refusals.refuse_nested_jaxpr(primitive_name)
             result = eqn.primitive.bind(*inputs, **eqn.params)
             outputs = tuple(result if eqn.primitive.multiple_results else (result,))
-            capture_index = len(captures)
-            outputs = rewrite_outputs(capture_index, outputs)
-            for var, value in zip(eqn.outvars, outputs, strict=True):
-                _write_env(env, var, value, core)
             equation_module_stack = module_stack_from_eqn(eqn) or inherited_module_stack
             equation_module_call_stack = (
                 module_call_stack_from_eqn(eqn) or inherited_module_call_stack
             )
+            stacks = (equation_module_stack, equation_module_call_stack)
+            outputs = equation_hook(captures, eqn, rewrite_outputs(len(captures), outputs), stacks)
+            for var, value in zip(eqn.outvars, outputs, strict=True):
+                _write_env(env, var, value, core)
             captures.append(
                 JaxEquationCapture(
                     index=len(captures),

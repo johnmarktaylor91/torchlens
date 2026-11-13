@@ -19,6 +19,14 @@ Jaxpr-first JAX backend preview. It fills the backend protocol (`maturity="previ
   `_raise_nnx_trace_context_error`; `_readable_closure_consts` (in
   `_closure_consts.py`) refuses a function-root closure constant with no
   readable buffer (`constant_unrealizable`).
+- Keyword inputs (`_input_kwargs.py`): array-valued keywords become one trailing
+  positional dict of jaxpr leaves; other keyword values bind statically. The
+  wrapper is a plain function so `_reject_closed_over_host_state` (now in
+  `_host_state.py`) can still inspect the user callable behind it.
+- Derived gradients over module roots and closure constants
+  (`_converted_grads.py`) evaluate the captured closed jaxpr with its constants as
+  explicit arguments; `derive_closed_jaxpr` is passed in so the module stays out of
+  the import cycle.
 - Recurrence grouping calls `group_recurrent_nodes` directly (the same neutral
   grouper torch uses), gated by `recurrence_detection` (default True).
 
@@ -56,13 +64,38 @@ Jaxpr-first JAX backend preview. It fills the backend protocol (`maturity="previ
   attachment runs after it), so distinct same-shape modules stay separate layers.
 
 ## capabilities.py
-- Registry-backed re-exports only. Per the registry: `can_intervene=False`,
+- Registry-backed re-exports only. Per the registry: `can_intervene=False` (the
+  backend implements edits; the registry flip belongs to the registry owner),
   `intermediate_derived_grads=True`, backward capture / fastlog / rng replay /
   streaming all False, `payload_policy="array_payloads"`.
 
+## _edits.py, _edit_helpers.py, _source_lines.py
+- `_edits.py` holds the per-capture equation session: the interpreter's
+  `equation_hook` simulates labels with the same counters `CaptureEvents` uses
+  (inputs, then closure constants, then one per capture; region captures count as
+  `jax_region` / `jax_region_out`), so the label a predicate sees is the label the
+  event gets. Any change to emission order must change the simulation with it.
+- An edited capture is a `JaxEditedEquationCapture` carrying its appliers; the
+  validator replays the primitive, re-applies them and compares with the saved
+  output, and checks parent sensitivity on the raw replay. Never skip the replay
+  for an edited op, and never compare against the raw output.
+- Replacements are copied (`checked_replacement`) because parent edges resolve
+  by value identity; shape and dtype changes refuse (`intervention_result_invalid`).
+- `_edits.py` is the one module that joins the import cycle; `_edit_helpers.py` and
+  `_source_lines.py` must not import cycle members.
+- `_source_lines.py` maps `eqn.source_info.traceback` to `FuncCallLocation`
+  frames: drop jax, jaxlib and TorchLens frames; the traced region ends at the first
+  TorchLens frame. Equation tracebacks stop at the traced function, so the call site
+  is read from the live stack when the session opens.
+- Every refusal raise passes `code=` and has a row in
+  `tests/composition_expectations/data/refusal_site_classification.tsv`. Refusal
+  factories need package-unique names: the census keys factories by bare name.
+- Derived-gradient closures must not close over host scalars or arrays (the
+  host-state check rejects them); select behaviour with a function, not a flag.
+
 ## Local Invariants
-- `intervene=` / `stop_after=` are NOT supported on jax (unlike the tf/mlx/paddle
-  previews); do not claim intervention parity.
+- `intervene=` edits equation outputs at capture time (`_edits.py`); `stop_after=`
+  is NOT supported on jax.
 - The capture is static (jaxpr interpretation), not eager wrapper capture;
   taken-branch honesty depends on the control-flow mode, and rejected nested
   primitives must stay typed refusals rather than silent boundary nodes.
