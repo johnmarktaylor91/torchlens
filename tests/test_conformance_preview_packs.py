@@ -286,10 +286,11 @@ def _assert_named_reds(
     assert "conformant" not in card.to_json().lower()
 
 
-#: tinygrad's red cells on its fifteen rows: the JAX after-load cause on every
-#: row. The three random-init rows capture too: realize-once capture draws a
-#: ``tinygrad.nn`` layer's lazy random weights in the same single realization
-#: as the forward, so they pass every C0 and C1 cell and the pack earns C1.
+#: tinygrad's rows on its fifteen-row roster. No red cell remains: loaded traces
+#: replay from saved recipes, so every after-load cell passes. The three
+#: random-init rows capture too: realize-once capture draws a ``tinygrad.nn``
+#: layer's lazy random weights in the same single realization as the forward,
+#: so they pass every cell and the pack reaches C2.
 _TINYGRAD_PROBE_ROWS: tuple[str, ...] = ("matmul_relu_function", "mlp_module")
 _TINYGRAD_RANDOM_INIT_ROWS: tuple[str, ...] = (
     "nn_linear_random_init",
@@ -428,7 +429,7 @@ def test_mlx_pack_earns_c1_with_its_named_red_cells(tmp_path: Path) -> None:
 @pytest.mark.heavy
 @pytest.mark.backend_tinygrad
 def test_tinygrad_pack_earns_c1_with_its_named_red_cells(tmp_path: Path) -> None:
-    """The tinygrad pack on its fifteen-row roster earns C1; every red cell is named.
+    """The tinygrad pack on its fifteen-row roster reaches C2; every red cell is named.
 
     A new red or a fixed one both fail here; the fix removes its entry (and
     rewrites the shipped scorecard) in the same change.
@@ -438,7 +439,7 @@ def test_tinygrad_pack_earns_c1_with_its_named_red_cells(tmp_path: Path) -> None
 
     pytest.importorskip("tinygrad")
     pack = ("tinygrad", metadata.version("tinygrad"))
-    _assert_named_reds(pack, tmp_path, _tinygrad_known_red_cells(), 15, "C1")
+    _assert_named_reds(pack, tmp_path, _tinygrad_known_red_cells(), 15, "C2")
 
 
 @pytest.mark.rare
