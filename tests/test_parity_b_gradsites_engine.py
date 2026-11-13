@@ -324,3 +324,25 @@ def test_the_neutral_module_imports_nothing_from_the_selector_or_hook_cycle() ->
         if isinstance(node, ast.ImportFrom) and node.level > 0
     }
     assert imported <= {"backends._reverse_engine", "backends._replay_adapters", "errors"}
+
+
+def test_a_blocked_op_named_by_its_raw_label_still_refuses() -> None:
+    """A recipe-less op whose consumers list its raw label is refused, not taken for a leaf."""
+
+    blocked_op = SimpleNamespace(label="dropout_1", _label_raw="dropout_1_raw")
+    graph = ReplayGraph(
+        nodes=(
+            EngineNode(
+                op=blocked_op, parents=(), outputs=("dropout_1",), blocked="training dropout"
+            ),
+            EngineNode(op=SimpleNamespace(label="u"), parents=("dropout_1_raw",), outputs=("u",)),
+        ),
+        value=lambda label: None,
+    )
+    renamed = neutral._name_blocked_as_consumed(graph)
+    assert [node.outputs for node in renamed.nodes] == [("dropout_1_raw",), ("u",)]
+    assert renamed.nodes[0].blocked == "training dropout"
+    untouched = neutral._name_blocked_as_consumed(
+        ReplayGraph(nodes=graph.nodes[:1], value=graph.value)
+    )
+    assert untouched.nodes[0].outputs == ("dropout_1",)
