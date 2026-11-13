@@ -201,7 +201,7 @@ class PaddleStream:
     def writer(self, trace: Any) -> Any:
         """Return the capture's writer, opening it on first use (``None``: no bundle path)."""
 
-        writer = getattr(trace, "_out_writer", None)
+        writer = trace._out_writer
         path = _storage_path(self.storage)
         if writer is not None or path is None:
             return writer
@@ -276,7 +276,7 @@ def end_capture_mode(trace: Any) -> None:
     if stream is None or failure is stream.entry_exception:
         return
     trace.__dict__.pop(_retention.STREAM_KEY, None)
-    writer = getattr(trace, "_out_writer", None)
+    writer = trace._out_writer
     if writer is not None:
         writer.abort(f"Paddle capture failed: {type(failure).__name__}: {failure}")
         trace._out_writer = None

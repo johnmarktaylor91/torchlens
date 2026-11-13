@@ -293,7 +293,7 @@ def apply_save(trace: Any, predicate: Any, apply_policy: Callable[..., None]) ->
     apply_policy(trace, predicate, backend_name="paddle")
     if not handles or state is None or state.spool is None:
         return
-    hidden = dict(getattr(trace, "_selective_save_hidden_payloads", None) or {})
+    hidden = dict(trace._selective_save_hidden_payloads or {})  # set by apply_policy above
     for op in trace._layer_list:
         handle = handles.get(str(op._label_raw))
         if handle is not None and getattr(op, "out", None) is None:
