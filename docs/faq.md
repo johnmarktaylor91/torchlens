@@ -127,7 +127,7 @@ process or from inside another capture. See
 
 ## Does it work with JAX, TensorFlow or other frameworks?
 
-PyTorch eager is the stable backend. JAX, TensorFlow, MLX, Paddle and tinygrad have preview
+TorchLens is built for PyTorch eager. JAX, TensorFlow, MLX, Paddle and tinygrad have their own
 backends: pass `backend="jax"` (or `"tf"`, `"paddle"`, `"tinygrad"`) to `tl.trace`, and MLX
 modules are routed to their backend automatically. Each needs its framework installed (for
 example `pip install "torchlens[jax]"`), covers a smaller set of features, and refuses with a

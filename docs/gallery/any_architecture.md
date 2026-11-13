@@ -1,7 +1,7 @@
 # The same three lines on any architecture
 
 The same three lines, `tl.trace`, `trace.draw()` and one `do`, on six architecture families
-from the [Model Menagerie](https://modelmenagerie.ai), plus one preview backend. The Menagerie
+from the [Model Menagerie](https://modelmenagerie.ai), plus one non-PyTorch backend. The Menagerie
 runs TorchLens on thousands of models across all major architecture families; the models here
 are small, randomly initialised versions so the page runs on a CPU with nothing downloaded.
 
@@ -153,9 +153,9 @@ trace.draw()
 edited = trace.fork().do(site, tl.zero_ablate(), model=model, inputs=x)
 ```
 
-## Preview backend: JAX (preview)
+## Another framework: JAX
 
-The JAX backend is a preview. It records and draws a JAX function through its jaxpr; edits
+The JAX backend records and draws a JAX function through its jaxpr; edits
 are not supported there yet, so this fence has two of the three lines. Its capability table is
 on [the JAX backend page](../backends/jax.md).
 

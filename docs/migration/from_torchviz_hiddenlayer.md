@@ -119,7 +119,7 @@ RESULT = ("ConvBnRelu" in dot_source, os.path.exists(outpath + ".svg"))
 - torchviz's `show_attrs=True` prints each backward node's attributes. The TorchLens sketch
   does not read them.
 - hiddenlayer's graph building from a PyTorch or TensorFlow model and its framework-neutral
-  transform set are not mirrored; TorchLens traces PyTorch eager models (a JAX preview backend
+  transform set are not mirrored; TorchLens traces PyTorch eager models (a JAX backend
   exists, see `docs/backends.md`).
 
 See [where to go instead](where_to_go_instead.md) for tools outside TorchLens's scope.

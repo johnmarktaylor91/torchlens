@@ -49,8 +49,8 @@ short summaries; check each tool's own documentation before relying on them.
 - `torch_geometric.explain`: graph-neural-network explainers belong to PyTorch Geometric.
   TorchLens has no graph-learning explainers.
 - TensorFlow and Keras explanation libraries (for example iNNvestigate), Flax NNX's `nnx.tabulate`,
-  and Julia's LRP packages: TorchLens is PyTorch-first. Its TensorFlow and JAX backends are
-  previews ([backends](backends.md)) and carry no attribution methods.
+  and Julia's LRP packages: TorchLens is PyTorch-first. Its TensorFlow and JAX backends
+  ([backends](backends.md)) carry no attribution methods.
 - Training dynamics: TorchLens records per-site distributions across training
   ([monitor training](monitor_training.md)); it is not an experiment tracker and leaves logging to
   TensorBoard or Weights & Biases.

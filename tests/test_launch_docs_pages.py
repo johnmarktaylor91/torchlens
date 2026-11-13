@@ -168,7 +168,7 @@ def test_strip_has_six_families_and_one_preview() -> None:
     page = _text("gallery/any_architecture.md")
     assert "https://modelmenagerie.ai" in page
     assert "thousands of models across all major architecture families" in page
-    assert "(preview)" in page
+    assert "## Another framework: JAX" in page
 
 
 def _canonical_fences() -> list[str]:

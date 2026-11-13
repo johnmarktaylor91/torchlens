@@ -3,7 +3,7 @@
 TorchLens defaults favor complete metadata and debuggability. For high-throughput capture, use the
 smallest capture surface that answers your question.
 
-Backend note: these defaults describe torch capture. `tl.record()` (sparse recording) is torch-only. JAX, tinygrad, Paddle, and TensorFlow preview `.tlspec` payloads materialize
+Backend note: these defaults describe torch capture. `tl.record()` (sparse recording) is torch-only. JAX, tinygrad, Paddle, and TensorFlow `.tlspec` payloads materialize
 arrays, but loaded traces report replay validation as unavailable because runtime replay captures
 are stripped.
 

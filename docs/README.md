@@ -18,7 +18,7 @@
 - [The basis grid](gallery/basis_grid.md): the six Reproduction Gallery entries against the six
   verbs they use.
 - [The any-architecture strip](gallery/any_architecture.md): the same three lines on six
-  architecture families and one preview backend.
+  architecture families and one non-PyTorch backend.
 - [Capture speed, by kind of use](benchmarks/capture.md): what each way of using TorchLens costs
   against a plain forward, measured, including where it is slow.
 

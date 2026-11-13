@@ -108,8 +108,8 @@ counted once.
 
 ## What flax tabulate does that TorchLens does not
 
-- It summarizes Flax and JAX models. TorchLens summarizes PyTorch models; its JAX backend is
-  a preview that captures functions and Equinox and Flax NNX modules, without
+- It summarizes Flax and JAX models. TorchLens summarizes PyTorch models; its JAX backend
+  captures functions and Equinox and Flax NNX modules, without
   `nnx.tabulate`'s table ([JAX backend](../backends/jax.md)), and replacing `nnx.tabulate` is
   not a goal ([non-goals](../non_goals.md)).
 - It shows every variable collection, including random-number state, as its own column.

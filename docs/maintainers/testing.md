@@ -66,7 +66,7 @@ session that ran an offender. Run `-n N` with `N` equal to the cores you declare
 torch thread per worker; every worker collects the whole suite first, so the gain shrinks
 below four workers.
 
-Preview-backend tests (TensorFlow, JAX, MLX, Paddle and tinygrad) carry `rare` alongside
+Non-PyTorch backend tests (TensorFlow, JAX, MLX, Paddle and tinygrad) carry `rare` alongside
 their backend marker (`tf_backend`, `backend_jax`, `backend_mlx`, `backend_paddle`,
 `backend_tinygrad`). Without the framework they only skip, so the pull-request tiers leave
 them out. The nightly `preview-backends` legs install each framework and select its tests

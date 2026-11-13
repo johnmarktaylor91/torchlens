@@ -67,7 +67,7 @@ RESULT = (
 | Save a modified computation | `trace.save_intervention(path, level="portable")` writes a `.tlspec/` recipe | TorchLens saves recipes, not rewritten model trees. |
 | Compare several variants | `tl.Bundle({...})` | Equivalent comparison container. |
 | Intervene on fused kernel internals | Attention facets and `torchlens.mechinterp.patch_head` for heads on fused attention; manual unfused code otherwise | Raw fused-kernel intermediates are not captured ops. |
-| Pure JAX workflows | `tl.trace(fn, (params, x), backend="jax")`: a preview backend that captures a functional call `fn(params, *inputs)` from its jaxpr; Equinox and Flax NNX modules are supported roots | Preview: `jax.jit`, `lax.cond`, `lax.scan`, `lax.while_loop` and custom-VJP regions refuse in strict mode; gradients are derived, not captured backward passes (see `docs/backends.md`). |
+| Pure JAX workflows | `tl.trace(fn, (params, x), backend="jax")`: a backend that captures a functional call `fn(params, *inputs)` from its jaxpr; Equinox and Flax NNX modules are supported roots | Limits: `jax.jit`, `lax.cond`, `lax.scan`, `lax.while_loop` and custom-VJP regions refuse in strict mode; gradients are derived, not captured backward passes (see `docs/backends.md`). |
 | Pretty-print model trees and arrays (treescope) | The `torchlens.bridge.treescope` bridge (`docs/guides/treescope_cards.md`), or the bounded `repr`/`str` cards on every trace object | |
 
 ## What TorchLens adds
@@ -80,7 +80,7 @@ RESULT = (
   level="portable")`).
 - Attention facets and head-level patching on fused attention (`docs/facets.md`,
   `torchlens.mechinterp.patch_head`).
-- A JAX preview backend (`tl.trace(fn, (params, x), backend="jax")`), described in
+- A JAX backend (`tl.trace(fn, (params, x), backend="jax")`), described in
   `docs/backends.md`.
 
 ## What penzai does that TorchLens does not
@@ -88,7 +88,7 @@ RESULT = (
 Penzai was the better fit for functional JAX model surgery, named axes, and workflows that
 want the model tree itself to be the edited artifact, and nothing in TorchLens replaces that:
 TorchLens records and edits runs, it does not rewrite model trees. For PyTorch models,
-TorchLens's capture surface is PyTorch eager; for JAX, the preview backend captures declared
+TorchLens's capture surface is PyTorch eager; for JAX, the JAX backend captures declared
 functional calls as jaxpr-derived traces, which is enough to read and compare activations but
 is not a JAX tree-rewriting system. Penzai's named axes and layer classes have no TorchLens
 counterpart. See [where to go instead](where_to_go_instead.md) and
@@ -99,7 +99,7 @@ counterpart. See [where to go instead](where_to_go_instead.md) and
 ### penzai feeds TorchLens
 
 There is no bridge from a penzai model tree to TorchLens. For a pure-JAX workflow, trace the
-functional call with `tl.trace(fn, (params, x), backend="jax")` (a preview backend; Equinox and
+functional call with `tl.trace(fn, (params, x), backend="jax")` (the JAX backend; Equinox and
 Flax NNX modules are supported roots), or port the model to PyTorch.
 
 ### TorchLens feeds penzai
@@ -116,6 +116,6 @@ upgrade, `torchlens.bridge.treescope` (`docs/guides/treescope_cards.md`); TorchL
   from the edited value; passing `model=` and `inputs=` runs the model again, which matters
   when the edit may change control flow or randomness.
 - **No named axes.** Tensors stay positional; helpers take `dim=` where they need an axis.
-- **Preview JAX backend.** `jax.jit`, `lax.cond`, `lax.scan`, `lax.while_loop` and custom-VJP
+- **JAX backend limits.** `jax.jit`, `lax.cond`, `lax.scan`, `lax.while_loop` and custom-VJP
   regions refuse in strict mode, and gradients are derived, not captured backward passes
   (see `docs/backends.md`).
