@@ -340,15 +340,19 @@ def _gradient_pairs(
     links: list[int | None],
     seeds: Mapping[int, int],
 ) -> list[tuple[int, int]]:
-    """``(forward tensor, gradient sent to it)`` from linked frames and the seeds."""
+    """``(forward tensor, gradient sent to it)`` from the frames and the seeds.
+
+    A linked frame's inputs are its call's; an unlinked frame (an op outside
+    the trace, such as a loss computed after the forward) names only the
+    inputs the tape kept for it.
+    """
 
     pairs = list(seeds.items())
     for frame in frames:
         linked = links[frame.index]
-        if linked is None:
-            continue
+        input_ids = frame.input_ids if linked is None else calls[linked].input_ids
         result_ids = frame.result_ids
-        for slot, input_id in enumerate(calls[linked].input_ids):
+        for slot, input_id in enumerate(input_ids):
             if input_id is not None and slot < len(result_ids) and result_ids[slot] is not None:
                 pairs.append((input_id, result_ids[slot]))
     return pairs
@@ -391,9 +395,9 @@ def link_frames(
 ) -> list[int | None]:
     """Name the forward call each frame differentiates (``None`` when no call matches).
 
-    Step 3 (data flow): a gradient sent to a forward tensor (a linked frame's
-    result for its op's input slot ``i``, or a pass seed, keyed by the tensor
-    it seeds in ``seeds``) reaches, directly or through the tape's sums,
+    Step 3 (data flow): a gradient sent to a forward tensor (a frame's result
+    for its op's input slot ``i``, or a pass seed, keyed by the tensor it
+    seeds in ``seeds``) reaches, directly or through the tape's sums,
     incoming gradient ``k`` of the frame of the op that produced that tensor
     as its output ``k``. A link is made only when exactly one frame qualifies,
     and no call gets two frames.

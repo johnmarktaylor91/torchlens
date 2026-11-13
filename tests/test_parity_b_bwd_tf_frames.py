@@ -88,6 +88,16 @@ def test_link_by_outputs_inputs_and_dataflow() -> None:
     assert flowed_ids(rec.frames, rec.events, {20}) >= {20, 21, 22, 23, 24, 25, 26, 27}
 
 
+def test_a_loss_op_outside_the_trace_links_the_last_forward_op() -> None:
+    # forward: y=BiasAdd(x:1, b:2)->3 ; loss outside the trace: l=Mul(y, y)->4
+    calls = [_call(0, "BiasAdd", (1, 2), (3,))]
+    rec = BackwardRecorder()
+    _run(rec, "Mul", [3, 3], [], [20], [T(21), T(22)])
+    rec.callback("AddN", [T(21), T(22)], None, [T(23)])
+    _run(rec, "BiasAdd", [], [], [23], [T(24), T(25)])
+    assert link_frames(calls, rec.frames, rec.events, {4: 20}) == [None, 0]
+
+
 def test_ambiguous_frames_stay_unlinked() -> None:
     calls = [_call(0, "Relu", (1,), (2,)), _call(1, "Relu", (1,), (3,))]
     rec = BackwardRecorder()
