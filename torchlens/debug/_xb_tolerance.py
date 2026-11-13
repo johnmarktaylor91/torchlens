@@ -30,7 +30,7 @@ bfloat16 no ``c`` separates small bugs on all-zero outputs from rounding.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, cast
 
 import torch
 
@@ -110,7 +110,7 @@ def _narrower_float(dtype_a: torch.dtype, dtype_b: torch.dtype) -> str | None:
 def _atol_floor(narrower: str | None, scale: float) -> float:
     """``CROSS_BACKEND_ATOL_FLOOR[narrower] * eps(narrower dtype) * scale``."""
 
-    eps = torch.finfo(torch_attr(narrower or "float32")).eps
+    eps = torch.finfo(cast(torch.dtype, torch_attr(narrower or "float32"))).eps
     return CROSS_BACKEND_ATOL_FLOOR[narrower or "float32"] * eps * scale
 
 

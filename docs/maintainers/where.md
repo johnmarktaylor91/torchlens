@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1800 modules, 713907 lines, 0 modules without a docstring.
+85 packages, 1800 modules, 713910 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 56 | 26853 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1504 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 9 | 4782 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 124 | 43048 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 124 | 43047 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives, artifact v2 and model identity. | 4 | 1263 |
 | `torchlens._distributed` | Honest detection of distributed (DTensor / device-mesh / TP / PP) model state. | 5 | 3101 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 602 |
@@ -31,7 +31,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._observe` | Observe kit: memory truth and diagnostics substrates. | 6 | 1520 |
 | `torchlens._partial` | Partial capture helpers for failed TorchLens forward ops. | 1 | 518 |
 | `torchlens._plots` | Pixel plotting helpers (PIL, numpy) shared by the reads packages and ''viz''. | 3 | 2102 |
-| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 49 | 19912 |
+| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 49 | 19914 |
 | `torchlens._quickstart` | TorchLens quickstart: input resolution, input provenance and the drawing entry point. | 9 | 2016 |
 | `torchlens._registry` | Private registry kernel package (never public API). | 3 | 556 |
 | `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 20 | 15063 |
@@ -67,7 +67,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 28 | 9426 |
 | `torchlens.callbacks` | Callback integration namespace with lazy Lightning support. | 2 | 705 |
 | `torchlens.compat` | Compatibility adapters for TorchLens 2.37 and earlier. | 5 | 2035 |
-| `torchlens.debug` | Debugging tools for completed TorchLens traces, grouped by the symptom they answer. | 39 | 13096 |
+| `torchlens.debug` | Debugging tools for completed TorchLens traces, grouped by the symptom they answer. | 39 | 13098 |
 | `torchlens.debug._checks` | Training sanity checks -- the torcheck niche, honestly redefined. | 12 | 4286 |
 | `torchlens.distributed` | Distributed capture opt-in: arming, group lifetime identity, and evidence. | 6 | 423 |
 | `torchlens.errors` | Public TorchLens exception classes. | 6 | 1589 |
@@ -314,7 +314,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (9 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (124 modules, 43048 lines)
+Core data structures for representing a logged forward pass. (124 modules, 43047 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -422,7 +422,7 @@ Core data structures for representing a logged forward pass. (124 modules, 43048
 | `_value_ops` | Operation and pass-aware layer text cards, built from captured facts. | 258 |
 | `_value_params` | Parameter and buffer records: metadata first, explicit value basis. | 120 |
 | `_value_repr` | Record display facade: one-line identities and bounded labelled cards. | 33 |
-| `_value_state` | Resident-payload probes and bounded value facts for record displays. | 212 |
+| `_value_state` | Resident-payload probes and bounded value facts for record displays. | 211 |
 | `aten_op` | Primitive-operation records for the ATen profile (persisted, tlspec v8). | 220 |
 | `attribute_write` | The record of one plain module attribute a traced forward wrote. | 66 |
 | `backward_pass` | Per-invocation backward pass records and accessors. | 376 |
@@ -725,7 +725,7 @@ Pixel plotting helpers (PIL, numpy) shared by the reads packages and ''viz''. (3
 
 ### `torchlens._postprocess`
 
-Postprocessing pipeline for cleaning up the model log after the forward pass. (49 modules, 19912 lines)
+Postprocessing pipeline for cleaning up the model log after the forward pass. (49 modules, 19914 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -758,7 +758,7 @@ Postprocessing pipeline for cleaning up the model log after the forward pass. (4
 | `_pipeline` | Postprocess pipeline: the named ordered step table and ''run_pipeline''. | 610 |
 | `_post_plan` | Backend-neutral post-processing plan for non-torch ''tl.trace'' captures. | 151 |
 | `_post_predicate` | Value-dependent and lookback ''save='' predicates on a finished capture. | 223 |
-| `_post_shaping` | Save shaping for finished non-torch captures, through each backend's payload codec. | 140 |
+| `_post_shaping` | Save shaping for finished non-torch captures, through each backend's payload codec. | 142 |
 | `_pre_hook_provenance` | Pre-hook provenance of one module call, with raw producer labels finalized. | 70 |
 | `_primitive_profile` | Materialize and bind the private wave-0 primitive-operation profile. | 400 |
 | `_recurrence` | Shared preview-backend recurrence grouping feed. | 407 |
@@ -1763,7 +1763,7 @@ Compatibility adapters for TorchLens 2.37 and earlier. (5 modules, 2035 lines)
 
 ### `torchlens.debug`
 
-Debugging tools for completed TorchLens traces, grouped by the symptom they answer. (39 modules, 13096 lines)
+Debugging tools for completed TorchLens traces, grouped by the symptom they answer. (39 modules, 13098 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1804,7 +1804,7 @@ Debugging tools for completed TorchLens traces, grouped by the symptom they answ
 | `_xb_pairing` | Pair the module calls of two traces without looking at any value. | 241 |
 | `_xb_refusals` | Typed refusals of the module-level comparison in ''tl.debug''. | 56 |
 | `_xb_report` | The two public answers of the module-level comparison: a Report and a first row. | 233 |
-| `_xb_tolerance` | Tolerance policy for comparing two recorded values in ''tl.debug'' comparisons. | 200 |
+| `_xb_tolerance` | Tolerance policy for comparing two recorded values in ''tl.debug'' comparisons. | 202 |
 | `_xb_values` | Compare the recorded values of one paired module call. | 251 |
 
 ### `torchlens.debug._checks`
