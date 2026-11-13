@@ -20,7 +20,7 @@ from ._contract import (
     encode_recipe,
     validate_recipe,
 )
-from ._session import ReplaySession, ReplayStep, pullback_step
+from ._session import ReplayPlan, ReplaySession, ReplayStep, merge_grads, pullback_step
 
 __all__ = (
     "ADAPTER_BACKENDS",
@@ -28,6 +28,7 @@ __all__ = (
     "InputOccurrence",
     "OpRecipe",
     "ReplayAdapter",
+    "ReplayPlan",
     "ReplayRefusal",
     "ReplaySession",
     "ReplayStep",
@@ -35,6 +36,7 @@ __all__ = (
     "encode_recipe",
     "get_adapter",
     "has_adapter",
+    "merge_grads",
     "pullback_step",
     "validate_recipe",
 )
