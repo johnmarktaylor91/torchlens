@@ -294,17 +294,18 @@ def test_stop_after_refuses_typed() -> None:
     assert info.value.code == "interventions_unsupported"
 
 
-def test_grad_options_with_edit_refuses_typed() -> None:
-    """Derived gradients cannot be combined with an edit."""
+def test_grad_options_with_edit_differentiates_the_edited_program() -> None:
+    """Derived gradients of an edited capture are gradients of the edited program."""
 
-    with pytest.raises(BackendUnsupportedError, match="grad_options") as info:
-        TinygradBackend().capture_trace(
-            lambda x: (x * x).sum(),
-            Tensor([1.0, 2.0]),
-            grad_options=GradOptions(input_grad_argnums=(0,)),
-            intervene=tl.when(tl.func("mul"), tl.zero_ablate()),
-        )
-    assert info.value.code == "intervention_with_derived_grads_unsupported"
+    trace = TinygradBackend().capture_trace(
+        lambda x: (x * x).sum(),
+        Tensor([1.0, 2.0]),
+        grad_options=GradOptions(input_grad_argnums=(0,)),
+        intervene=tl.when(tl.func("mul"), tl.scale(0.5)),
+    )
+    np.testing.assert_allclose(
+        trace.autograd.derived_grads["inputs.0"].grad.numpy(), [1.0, 2.0], atol=1e-6
+    )
 
 
 def test_shape_changing_edit_refuses_typed() -> None:
