@@ -1239,13 +1239,13 @@ torchlens/receptive_field/_engine_geometry.py::_transpose_mapped	78
 torchlens/receptive_field/_forward_query.py::_map_axis_forward	61
 torchlens/receptive_field/_forward_query.py::_map_window_forward	64
 torchlens/receptive_field/_forward_query.py::box_for_source_unit	66
-torchlens/receptive_field/_gradient.py	815
+torchlens/receptive_field/_gradient.py	811
 torchlens/receptive_field/_gradient.py::_batch_semantics	77
 torchlens/receptive_field/_gradient.py::_build_result	74
 torchlens/receptive_field/_gradient.py::_select_inputs	71
-torchlens/receptive_field/_gradient.py::gradient_for_unit	171
+torchlens/receptive_field/_gradient.py::gradient_for_unit	168
 torchlens/receptive_field/_gradient_forward.py::_build_projective_result	72
-torchlens/receptive_field/_gradient_forward.py::projective_gradient_for_unit	89
+torchlens/receptive_field/_gradient_forward.py::projective_gradient_for_unit	87
 torchlens/receptive_field/_query.py	913
 torchlens/receptive_field/_query.py::_build_box	162
 torchlens/receptive_field/_query.py::_map_passthrough	64

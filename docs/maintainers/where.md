@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1769 modules, 708478 lines, 0 modules without a docstring.
+86 packages, 1777 modules, 709938 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 56 | 26857 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1504 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 9 | 4777 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 123 | 42901 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 123 | 42931 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives, artifact v2 and model identity. | 4 | 1263 |
 | `torchlens._distributed` | Honest detection of distributed (DTensor / device-mesh / TP / PP) model state. | 5 | 3101 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 602 |
@@ -84,8 +84,9 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.neuro` | The seam between a captured network and neuroscience tooling: hands per-site representations to rsatoolbox and Brain-Score with provenanc... | 7 | 4050 |
 | `torchlens.postprocessing` | Output decoding provenance: the public home of custom output detectors. | 1 | 61 |
 | `torchlens.preprocessing` | Preprocessing provenance + verification (NeuroAI audience). | 9 | 2811 |
-| `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 33 | 14297 |
+| `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 35 | 14812 |
 | `torchlens.receptive_field._builtin_rules` | Built-in receptive-field rules and idempotent pack registration. | 10 | 2006 |
+| `torchlens.receptive_field._unit_vjp` | Per-backend cone replay for gradient influence probes on non-torch traces. | 6 | 915 |
 | `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 28 | 7708 |
 | `torchlens.repgeom` | Representation-geometry helpers (RDMs, MDS, Procrustes, CKA inputs) that need only NumPy, Torch and PIL. | 9 | 4057 |
 | `torchlens.report` | Reports that describe a completed trace: summary, cost, profile, FLOPs and health. | 38 | 14490 |
@@ -314,7 +315,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (9 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (123 modules, 42901 lines)
+Core data structures for representing a logged forward pass. (123 modules, 42931 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -322,7 +323,7 @@ Core data structures for representing a logged forward pass. (123 modules, 42901
 | `_accessor_base` | Shared base class for TorchLens dict-like accessors. | 386 |
 | `_annotation_image` | Annotation pictures: ''trace.annotate(label, image=...)'' made drawable as PNG. | 180 |
 | `_aten_display` | ATen cards over recorded tensor metadata, never retained tensor values. | 126 |
-| `_backend_capability_guards` | Capability-derived guards for backward-only public accessors. | 122 |
+| `_backend_capability_guards` | Capability-derived guards for backward-only public accessors. | 152 |
 | `_call_tree` | ModuleCall tree display and call-scope resolution helpers. | 318 |
 | `_cleanup_label_filters` | Removed-label substitution filters for conditional metadata during cleanup. | 125 |
 | `_compaction` | Freeze-seam Op metadata compaction. | 139 |
@@ -2094,11 +2095,11 @@ Preprocessing provenance + verification (NeuroAI audience). (9 modules, 2811 lin
 
 ### `torchlens.receptive_field`
 
-Lazy public namespace for TorchLens receptive-field analysis. (33 modules, 14297 lines)
+Lazy public namespace for TorchLens receptive-field analysis. (35 modules, 14812 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
-| `__init__` | Lazy public namespace for TorchLens receptive-field analysis. | 453 |
+| `__init__` | Lazy public namespace for TorchLens receptive-field analysis. | 456 |
 | `_causal` | Structural causal-mask detection for attention receptive-field rules. | 175 |
 | `_display` | Bounded choices for receptive-field endpoint refusals. | 34 |
 | `_engine` | Whole-graph geometric receptive-field solver. | 1579 |
@@ -2109,9 +2110,11 @@ Lazy public namespace for TorchLens receptive-field analysis. (33 modules, 14297
 | `_engine_revision` | Structural fingerprint of a trace for the receptive-field solution caches. | 106 |
 | `_errors` | Exception types for receptive-field queries and validation. | 175 |
 | `_forward_query` | Exact per-unit projective queries via membership transposition. | 642 |
-| `_gradient` | Autograd-backed receptive-field probes with capture-side-effect suppression. | 815 |
-| `_gradient_forward` | Saved-graph double-VJP probes for projective receptive fields. | 529 |
+| `_gradient` | Autograd-backed receptive-field probes with capture-side-effect suppression. | 811 |
+| `_gradient_forward` | Saved-graph double-VJP probes for projective receptive fields. | 526 |
 | `_gradient_live` | Resolve the graph-connected tensor behind a same-object logging copy. | 127 |
+| `_gradient_provider` | Gradient influence probes for traces without a saved PyTorch autograd graph. | 473 |
+| `_gradient_replay_hook` | Install point for the gradient probes on traces without backward capture. | 46 |
 | `_gradient_support` | Support ranges and spatial support of a gradient receptive field. | 61 |
 | `_index_set` | Index sets of the per-unit receptive-field walks. | 232 |
 | `_influence` | Unit-level influence as a selection: the ENGINE behind the field views' ''.of''. | 602 |
@@ -2148,6 +2151,19 @@ Built-in receptive-field rules and idempotent pack registration. (10 modules, 20
 | `norms` | Mode-aware normalization receptive-field rules. | 186 |
 | `sequence` | Fail-closed rules for operations with nonlocal sequence semantics. | 22 |
 | `transforms` | Shape, ordering, slicing, concatenation, and padding RF rules. | 551 |
+
+### `torchlens.receptive_field._unit_vjp`
+
+Per-backend cone replay for gradient influence probes on non-torch traces. (6 modules, 915 lines)
+
+| Module | What it holds | Lines |
+| --- | --- | ---: |
+| `__init__` | Per-backend cone replay for gradient influence probes on non-torch traces. | 132 |
+| `jax` | JAX cone replay for gradient influence probes. | 164 |
+| `mlx` | MLX cone replay for gradient influence probes. | 159 |
+| `paddle` | Paddle cone replay for gradient influence probes. | 156 |
+| `tf` | TensorFlow cone replay for gradient influence probes. | 147 |
+| `tinygrad` | tinygrad cone replay for gradient influence probes. | 157 |
 
 ### `torchlens.recording`
 
