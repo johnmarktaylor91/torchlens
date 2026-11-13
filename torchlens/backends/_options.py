@@ -232,23 +232,12 @@ class PreviewTraceOptionPolicy:
 
 
 JAX_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
-    runtime_option_names=frozenset(
-        {
-            "halt",
-            "save",
-            "stop_after",
-            "storage",
-            "streaming",
-        }
-    ),
+    runtime_option_names=frozenset({"save", "storage", "streaming"}),
     runtime_message=(
-        "The JAX backend does not support stop-early or storage "
-        "options: {names}. Static-label save= selectors are supported as "
-        "post-finalization payload filters and trace(intervene=...) edits equation "
-        "outputs at capture time, but trace(stop_after=...) needs partial-capture "
-        "semantics the JAX capture path does not implement. Use an unfiltered "
-        "tl.trace(..., backend='jax') call, static-label save= selectors, or the "
-        "PyTorch backend for stop_after, storage, and streaming."
+        "The JAX backend does not support these options: {names}. Static-label "
+        "save= selectors are supported as post-finalization payload filters. Use an "
+        "unfiltered tl.trace(..., backend='jax') call, static-label save= selectors, "
+        "or the PyTorch backend for storage and streaming."
     ),
     fallback_message=(
         "The JAX backend does not support: {names}. "

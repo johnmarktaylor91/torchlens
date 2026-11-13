@@ -668,22 +668,19 @@ def _mlx_capture_trace(*args: Any, **kwargs: Any) -> Any:
 
 
 def _jax_capture_trace(*args: Any, **kwargs: Any) -> Any:
-    """Dispatch to the jaxpr-first JAX backend.
-
-    Parameters
-    ----------
-    *args, **kwargs:
-        Public ``trace`` arguments.
-
-    Returns
-    -------
-    Any
-        Captured trace.
-    """
+    """Dispatch the public ``trace`` arguments to the jaxpr-first JAX backend; returns the trace."""
 
     from .jax import JAXBackend
 
     return JAXBackend().capture_trace(*args, **kwargs)
+
+
+def _jax_interventions_implementation() -> object:
+    """Resolve the JAX capture-time edit runtime behind ``can_intervene`` (lazy import)."""
+
+    from .jax._edits import JaxEditRuntime
+
+    return JaxEditRuntime
 
 
 def _tinygrad_capture_trace(*args: Any, **kwargs: Any) -> Any:
@@ -1151,7 +1148,7 @@ def register_default_backend_specs() -> None:
                 backward_capture=False,
                 has_validation_replay=True,
                 fastlog=False,
-                can_intervene=False,
+                can_intervene=True,
                 rng_replay=False,
                 payload_materialization=True,
                 has_streaming=False,
@@ -1161,9 +1158,9 @@ def register_default_backend_specs() -> None:
                 module_identity_modes=("function_root", "pytree_module"),
                 trace_options=JAX_TRACE_OPTIONS,
             ),
+            capability_implementations={"can_intervene": _jax_interventions_implementation},
             serialization_policy=SerializationPolicy(
                 payload_policy="array_payloads",
-                body_format="safetensors",
                 manifest_schema_versions=(2,),
                 runtime_name="jax",
             ),
