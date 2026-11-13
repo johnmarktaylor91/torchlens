@@ -32,7 +32,6 @@ from typing import Any
 from .._data_classes.backward_pass import BackwardPass
 from .._data_classes.grad_fn import GradFn
 from .._data_classes.grad_fn_call import GradFnCall
-from .._errors import BackwardStreamUnavailableError
 from .._ir.events import (
     BackwardPassEnd,
     BackwardPassStart,
@@ -44,6 +43,7 @@ from .._ir.events import (
 from .._quantities import Bytes, Duration
 from .._trace_core.record_rows import BackwardEpoch, adopt_rows
 from .._utils._record_group_table import record_member
+from ..errors import RunCapabilityUnavailableError
 from .torch._grad_fn_graph import _sync_grad_fn_graph_relations
 from .torch._grad_fn_growth import _grad_fn_record_from_discovery
 from .torch._grad_fn_membership import (
@@ -58,7 +58,7 @@ from .torch._grad_fn_orders import (
 )
 from .torch._grad_fn_pairing import _pair_discovered_with_layers
 
-__all__ = [
+__all__ = (
     "NEUTRAL_PAYLOADS",
     "PayloadPolicy",
     "build_backward_records",
@@ -66,7 +66,7 @@ __all__ = [
     "materialize_neutral_backward",
     "next_backward_pass_index",
     "set_pass_roots",
-]
+)
 
 
 def _attr_shape(value: Any) -> tuple[int, ...] | None:
@@ -131,9 +131,11 @@ def _event_stream(trace: Any) -> Any:
         stream = getattr(trace, name, None)
         if stream is not None:
             return stream
-    raise BackwardStreamUnavailableError(
+    raise RunCapabilityUnavailableError(
         "This trace no longer owns a capture event stream, so backward capture cannot "
-        "record events. Capture a fresh trace before calling backward-capture APIs."
+        "record events. Capture a fresh trace before calling backward-capture APIs.",
+        code="run_capability_unavailable",
+        detection_stage="native_backward_capture",
     )
 
 

@@ -69,33 +69,91 @@ class _Diamond(nn.Module):
         return (y * y + torch.sin(y)).sum(dim=1, keepdim=True)
 
 
+_LINKED_RECORDS = frozenset({"Op", "Layer", "Param", "Module", "ModuleCall", "Trace"})
+
+
+def _is_record(value: Any) -> bool:
+    return hasattr(value, "_FIELD_POLICY") or type(value).__name__ in _LINKED_RECORDS
+
+
+def _is_plain_record(value: Any) -> bool:
+    """A record object that is not a linked record (GradientRecord): compare every field."""
+
+    spec = getattr(type(value), "_PORTABLE_STATE_SPEC", None)
+    return isinstance(spec, dict) and not _is_record(value)
+
+
+def _norm_record(value: Any) -> Any:
+    label = getattr(value, "label", None) or getattr(value, "layer_label", None)
+    return ("record", type(value).__name__, label)
+
+
+def _norm_dataclass(value: Any) -> Any:
+    names = [field.name for field in dataclasses.fields(value)]
+    return (type(value).__name__,) + tuple((name, _norm(getattr(value, name))) for name in names)
+
+
+#: (matches, comparable form), tried in order; the first match wins.
+_NORMALIZERS: tuple[tuple[Callable[[Any], bool], Callable[[Any], Any]], ...] = (
+    (
+        lambda v: isinstance(v, torch.Tensor),
+        lambda v: ("tensor", tuple(v.shape), str(v.dtype), v.detach().cpu().tolist()),
+    ),
+    (lambda v: isinstance(v, weakref.ref), lambda v: ("weakref",)),
+    (
+        _is_plain_record,
+        lambda v: (
+            (type(v).__name__,)
+            + tuple((name, _norm(getattr(v, name, "<missing>"))) for name in v._PORTABLE_STATE_SPEC)
+        ),
+    ),
+    (_is_record, _norm_record),
+    (
+        lambda v: isinstance(getattr(v, "_dict", None), dict),
+        lambda v: ("accessor", tuple((key, _norm(item)) for key, item in v._dict.items())),
+    ),
+    (lambda v: dataclasses.is_dataclass(v) and not isinstance(v, type), _norm_dataclass),
+    (
+        lambda v: isinstance(v, dict),
+        lambda v: ("dict", tuple((repr(key), _norm(item)) for key, item in v.items())),
+    ),
+    (
+        lambda v: isinstance(v, (list, tuple)),
+        lambda v: (type(v).__name__, tuple(_norm(item) for item in v)),
+    ),
+    (
+        lambda v: isinstance(v, (set, frozenset)),
+        lambda v: ("set", tuple(sorted(repr(_norm(item)) for item in v))),
+    ),
+)
+
+
 def _norm(value: Any) -> Any:
     """A comparable form of one stored field value."""
 
-    if isinstance(value, torch.Tensor):
-        return ("tensor", tuple(value.shape), str(value.dtype), value.detach().cpu().tolist())
-    if isinstance(value, weakref.ref):
-        return ("weakref",)
-    if hasattr(value, "_FIELD_POLICY") or type(value).__name__ in {"Op", "Param", "Module"}:
-        label = getattr(value, "label", None) or getattr(value, "layer_label", None)
-        return ("record", type(value).__name__, label)
-    if hasattr(value, "_dict") and isinstance(value._dict, dict):
-        return ("accessor", tuple((key, _norm(item)) for key, item in value._dict.items()))
-    if dataclasses.is_dataclass(value) and not isinstance(value, type):
-        return (type(value).__name__,) + tuple(
-            (field.name, _norm(getattr(value, field.name))) for field in dataclasses.fields(value)
-        )
-    if isinstance(value, dict):
-        return ("dict", tuple((repr(key), _norm(item)) for key, item in value.items()))
-    if isinstance(value, (list, tuple)):
-        return (type(value).__name__, tuple(_norm(item) for item in value))
-    if isinstance(value, (set, frozenset)):
-        return ("set", tuple(sorted(repr(_norm(item)) for item in value)))
+    for matches, form in _NORMALIZERS:
+        if matches(value):
+            return form(value)
     return value
 
 
 def _fields(record: Any, names: tuple[str, ...]) -> dict[str, Any]:
     return {name: _norm(getattr(record, name, "<missing>")) for name in names}
+
+
+_UNSET = object()
+
+
+def _op_field(op: Any, name: str) -> Any:
+    """The stored value of an op field; a read that refuses is compared by its error type."""
+
+    value = op._slot(name, _UNSET)
+    if value is not _UNSET:
+        return _norm(value)
+    try:
+        return _norm(getattr(op, name))
+    except Exception as exc:  # a refusal is part of the observable record state
+        return ("raises", type(exc).__name__)
 
 
 def _snapshot(trace: tl.Trace) -> dict[str, Any]:
@@ -115,7 +173,7 @@ def _snapshot(trace: tl.Trace) -> dict[str, Any]:
     }
     ops = {
         op.layer_label: {
-            **_fields(op, _OP_GRAD_FIELDS),
+            **{name: _op_field(op, name) for name in _OP_GRAD_FIELDS},
             "_grad_records": _norm(list(op._slot("_grad_records") or ())),
         }
         for op in trace._layer_list

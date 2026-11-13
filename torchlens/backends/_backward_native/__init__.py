@@ -22,20 +22,22 @@ from importlib import import_module
 from types import ModuleType
 from typing import Any
 
-from ..._runnable import RunnableErrorCode
 from ...errors import RunCapabilityUnavailableError
 from .._backward_neutral import NEUTRAL_PAYLOADS, PayloadPolicy, materialize_neutral_backward
 
-__all__ = [
+__all__ = (
     "NATIVE_BACKWARD_BACKENDS",
     "NativeBackwardSurface",
     "native_backward_module",
     "native_backward_surface",
     "payload_policy",
-]
+)
 
 NATIVE_BACKWARD_BACKENDS: frozenset[str] = frozenset({"jax", "mlx", "paddle", "tf", "tinygrad"})
 """Backend names that may own a native backward module in this package."""
+
+_CODE = "run_capability_unavailable"  # RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE
+_DETECTION_STAGE = "native_backward_capture"
 
 
 def native_backward_module(backend: str) -> ModuleType | None:
@@ -77,16 +79,6 @@ def payload_policy(module: ModuleType) -> PayloadPolicy:
     return policy if isinstance(policy, PayloadPolicy) else NEUTRAL_PAYLOADS
 
 
-def _refuse(problem: str) -> RunCapabilityUnavailableError:
-    """Typed refusal for a backward entry point this backend cannot serve."""
-
-    return RunCapabilityUnavailableError(
-        problem,
-        code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
-        detection_stage="native_backward_capture",
-    )
-
-
 @dataclass(frozen=True)
 class NativeBackwardSurface:
     """The ``backward_capture`` implementation of a backend with a native module.
@@ -104,9 +96,11 @@ class NativeBackwardSurface:
 
         stream = getattr(trace, "_capture_events", None)
         if stream is not None and int(getattr(stream, "pass_index_base", 0) or 0):
-            raise _refuse(
+            raise RunCapabilityUnavailableError(
                 f"backward() on a forked {self.backend} trace is unavailable: the fork keeps "
-                "the backward records it was made with. Call backward on the original trace."
+                "the backward records it was made with. Call backward on the original trace.",
+                code=_CODE,
+                detection_stage=_DETECTION_STAGE,
             )
         self.module.record_backward(trace, loss, **backward_kwargs)
         self.sync_projection(trace)
@@ -122,9 +116,11 @@ class NativeBackwardSurface:
 
         capture = getattr(self.module, "capture_backward", None)
         if capture is None:
-            raise _refuse(
+            raise RunCapabilityUnavailableError(
                 f"capture_backward() is unavailable on {self.backend}: backward calls the user "
-                "drives cannot be observed there. Call trace.backward(...) instead."
+                "drives cannot be observed there. Call trace.backward(...) instead.",
+                code=_CODE,
+                detection_stage=_DETECTION_STAGE,
             )
         return capture(trace)
 
