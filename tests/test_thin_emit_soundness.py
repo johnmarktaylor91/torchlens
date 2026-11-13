@@ -49,13 +49,60 @@ from field_diff_lib.surface import snapshot_trace  # noqa: E402
 Build = Callable[[], nn.Module]
 
 
-def _dump(trace: Any) -> dict[str, Any]:
-    """Return the trace's canonical field-differential dump, process-local names removed."""
+def _dump(trace: Any, model: nn.Module | None = None) -> dict[str, Any]:
+    """Return the trace's canonical field-differential dump, process-local names removed.
+
+    With ``model``, the module scope entries of the code-context cache keys
+    (``("module", id(module))``, ``_call_site.module_id_scope_entry``) name the
+    module by its address in ``model`` instead of its ``id``. Each side of a
+    comparison builds its own model, so the ids differ by construction; the
+    mask's ``address`` rule hides only integers of twelve digits or more, which
+    covers Linux heap addresses but not macOS ones (about ten digits). An id
+    that is not one of ``model``'s modules is left as it is and still compared.
+    """
 
     dump, _canon = snapshot_trace(trace, [(str(REPO_ROOT), "<repo>")], Mask(enabled=True))
     dump["trace"]["event_stream"]["fields"].pop("run_nonce", None)
     text = json.dumps(dump, default=repr, sort_keys=True).replace(trace.name, "<trace>")
-    return json.loads(text)
+    loaded = json.loads(text)
+    if model is None:
+        return loaded
+    names = {id(module): name or "<root>" for name, module in model.named_modules()}
+    return _with_named_cache_modules(loaded, names)
+
+
+def _with_named_cache_modules(value: Any, names: dict[int, str]) -> Any:
+    """Return ``value`` with the module entries under ``_code_context_cache`` named."""
+
+    if isinstance(value, dict):
+        return {
+            key: _named_module_entries(entry, names)
+            if key == "_code_context_cache"
+            else _with_named_cache_modules(entry, names)
+            for key, entry in value.items()
+        }
+    if isinstance(value, list):
+        return [_with_named_cache_modules(entry, names) for entry in value]
+    return value
+
+
+def _named_module_entries(value: Any, names: dict[int, str]) -> Any:
+    """Replace each canonical ``("module", id)`` pair whose id is a known module by its name."""
+
+    if isinstance(value, dict):
+        pair = value.get("__tuple__")
+        if (
+            isinstance(pair, list)
+            and len(pair) == 2
+            and pair[0] == "module"
+            and isinstance(pair[1], int)
+            and pair[1] in names
+        ):
+            return {"__tuple__": ["module", f"<module {names[pair[1]]}>"]}
+        return {key: _named_module_entries(entry, names) for key, entry in value.items()}
+    if isinstance(value, list):
+        return [_named_module_entries(entry, names) for entry in value]
+    return value
 
 
 @pytest.fixture
@@ -108,12 +155,12 @@ def _check(counts: dict[str, int], build: Build, x: torch.Tensor, **kwargs: Any)
     counts["thin"] = counts["fast"] = 0
     on, on_model = _capture(build, x, True, **dict(kwargs))
     hits, fast_on = counts["thin"], counts["fast"]
-    on_dump = _dump(on)
+    on_dump = _dump(on, on_model)
     counts["thin"] = counts["fast"] = 0
     off, off_model = _capture(build, x, False, **dict(kwargs))
     assert counts["thin"] == 0
     assert counts["fast"] == fast_on, "admission counts differ between the paths"
-    assert diff(_dump(off), on_dump) == []
+    assert diff(_dump(off, off_model), on_dump) == []
     on_state, off_state = on_model.state_dict(), off_model.state_dict()
     assert on_state.keys() == off_state.keys()
     for key, value in on_state.items():
@@ -342,7 +389,8 @@ def test_requires_grad_flip_before_the_record_build(
         torch.manual_seed(SEED)
         models.append(nn.Sequential(nn.Linear(3, 4), nn.ReLU(), nn.Linear(4, 2)))
         x = torch.randn(2, 3)
-        dumps.append(_dump(tl.trace(models[-1], x, capture=tl.options.CaptureOptions(seed=SEED))))
+        trace = tl.trace(models[-1], x, capture=tl.options.CaptureOptions(seed=SEED))
+        dumps.append(_dump(trace, models[-1]))
         assert outputs  # every fast commit passes here, served thin or not
     assert diff(dumps[1], dumps[0]) == []
 
