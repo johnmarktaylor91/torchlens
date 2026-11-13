@@ -24,7 +24,7 @@ SUPPORTED_HELPERS = ("zero_ablate", "scale", "add", "clamp", "mean_ablate", "rep
 HELPER_REFUSAL = "interventions_unsupported"
 
 
-def _refuse(message: str, *, code: str) -> BackendUnsupportedError:
+def _refuse_helper(message: str, *, code: str) -> BackendUnsupportedError:
     """A typed refusal of a helper form the tinygrad backend does not apply."""
 
     return BackendUnsupportedError(f"tinygrad backend: {message}", code=code)
@@ -43,7 +43,7 @@ def _mean_source(source: Any) -> Any | None:
         return None
     value = getattr(source, "out", source)
     if not _is_tinygrad_tensor(value):
-        raise _refuse(
+        raise _refuse_helper(
             "tl.mean_ablate(source) needs the site itself, a tinygrad Tensor or a tinygrad "
             f"op as its source; got {type(source).__name__} (populations are torch-side).",
             code=HELPER_REFUSAL,
@@ -114,7 +114,7 @@ def helper_application(spec: Any) -> Callable[[Any], Any]:
         return _mean_ablate(args, kwargs)
     if name == "replace_with":
         return _replace_with(args)
-    raise _refuse(
+    raise _refuse_helper(
         f"no tinygrad application for helper {name!r}; supported helpers are "
         f"{', '.join(SUPPORTED_HELPERS)}, plus callable transforms over tinygrad Tensors.",
         code=HELPER_REFUSAL,
