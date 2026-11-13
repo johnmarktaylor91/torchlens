@@ -7,14 +7,11 @@ mismatch. The proof is the capture's ``payload_declined`` flag. A payload absent
 for any other reason (no flag) keeps the replay check and fails, and a fully saved
 trace replays every op as before.
 
-On a tree whose capture does not yet record ``payload_declined``, the tests set the
-flag the way the capture does: on exactly the ops the selector left without a
-payload.
 """
 
 from __future__ import annotations
 
-from dataclasses import fields
+from dataclasses import replace
 from types import SimpleNamespace
 from typing import Any
 
@@ -48,32 +45,20 @@ def _input() -> Any:
     return tf.constant(np.random.default_rng(0).standard_normal(64).astype("float32"))
 
 
-def _captures_record_the_flag() -> bool:
-    from torchlens.backends.tf.op_callback_capture import TFOpCapture
-
-    return any(item.name == "payload_declined" for item in fields(TFOpCapture))
-
-
 def _set_flags(trace: Any, declined: Any) -> None:
     """Replace the trace's captures with copies whose ``payload_declined`` is ``declined(op)``."""
 
     ops = {str(op._label_raw): op for op in trace._layer_list}
     trace._tf_op_captures = tuple(
-        SimpleNamespace(
-            **{item.name: getattr(capture, item.name) for item in fields(capture)},
-            payload_declined=declined(ops.get(capture.label_raw)),
-        )
+        replace(capture, payload_declined=declined(ops.get(capture.label_raw)))
         for capture in trace._tf_op_captures
     )
 
 
 def _sparse(selector: Any) -> Any:
-    """Trace the chain with ``save=selector``, the declined flags as the capture sets them."""
+    """Trace the chain with ``save=selector``; the capture records which payloads it declined."""
 
-    trace = tl.trace(_chain, _input(), backend="tf", save=selector)
-    if not _captures_record_the_flag():
-        _set_flags(trace, lambda op: op is not None and replay_payload(op) is None)
-    return trace
+    return tl.trace(_chain, _input(), backend="tf", save=selector)
 
 
 def _status(trace: Any) -> Any:
