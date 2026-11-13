@@ -142,7 +142,7 @@ def test_jax_intervene_value_dependent_predicate() -> None:
 def test_jax_intervene_matches_torch_twin() -> None:
     """The edited JAX output equals the torch backend's edited output on the same model."""
 
-    torch = pytest.importorskip("torch")
+    import torch
 
     class TorchModel(torch.nn.Module):
         """Torch twin of :func:`_model`."""
