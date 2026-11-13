@@ -676,7 +676,8 @@ def test_tinygrad_static_label_save_filters_public_payloads(tmp_path: Path) -> N
     assert status.state == "unverified"
     assert status.num_failed_ops == 0
     assert set(status.unverified_reason_counts) == {"parent_payload_missing"}
-    assert status.exempted_reason_counts["not_saved_by_user"] == len(unsaved_ops)
+    dropped = [c for c in trace.tinygrad_uop_captures if c.retention == "dropped"]
+    assert status.exempted_reason_counts["not_saved_by_user"] == len(dropped)
 
     path = tmp_path / "tinygrad_selective_save.tlspec"
     trace.save(path, level="portable")
