@@ -24,6 +24,7 @@ from ..._data_classes.derived_grad import (
     DerivedGradRecord,
     IntermediateDerivedGradAccessor,
     IntermediateDerivedGradRecord,
+    set_intermediate_derived_grads,
 )
 from ..._data_classes.trace import Trace
 from ..._ir.refs import DtypeRef
@@ -37,6 +38,8 @@ from .._finalize import mirror_param_derived_grads, stable_callable_name as _cal
 from .._root_frames import strip_root_frames
 from .._validation_shared import float_replay_tolerances
 from ..registry import BackendUnsupportedError
+from ._edited_replay import preserved_module_counts, run_tf_gradient_replay
+from .interventions import tf_intervention_wrap, wire_eager_session
 from .modules import TFModuleTree
 from .op_callback_capture import TFEagerCaptureSession, TFOpCapture
 
@@ -160,6 +163,8 @@ def attach_tf_derived_grads(
     captured_output: Any,
     grad_options: GradOptions,
     module_tree: TFModuleTree | None,
+    intervene: Any = None,
+    halt: Any = None,
 ) -> None:
     """Compute and attach TensorFlow leaf and optional intermediate derived grads.
 
@@ -181,6 +186,9 @@ def attach_tf_derived_grads(
         TensorFlow derived-gradient options.
     module_tree
         Object-module discovery tree when object-module attribution is active.
+    intervene, halt
+        The capture's ``intervene=`` and ``stop_after=`` values; the replay runs
+        the edited program and ``loss_fn`` sees the halted boundary.
 
     Returns
     -------
@@ -199,16 +207,9 @@ def attach_tf_derived_grads(
     all_leaves = (*leaves, *param_leaves)
     if not all_leaves and not grad_options.intermediate_grads:
         refuse_tf_no_grad_leaves()
-    previous_call_counts = dict(module_tree.call_counts) if module_tree is not None else None
-    previous_forward_args = (
-        dict(module_tree.forward_args_by_call) if module_tree is not None else None
-    )
     candidates: list[tuple[TFOpCapture, tuple[str, ...]]] = []
     tape = tf.GradientTape(persistent=True, watch_accessed_variables=False)
     try:
-        if module_tree is not None:
-            module_tree.call_counts.clear()
-            module_tree.forward_args_by_call.clear()
         replay_session = TFEagerCaptureSession(
             tf=tf,
             callable_obj=callable_obj,
@@ -218,10 +219,17 @@ def attach_tf_derived_grads(
             save_payloads=False,
             output_tap=_output_tap(tf, tape, candidates, grad_options),
         )
-        with tape:
+        with preserved_module_counts(module_tree), tape:
             for leaf in all_leaves:
                 tape.watch(leaf.tensor)
-            replay_result = replay_session.run()
+            replay_result = run_tf_gradient_replay(
+                replay_session,
+                trace=trace,
+                intervene=intervene,
+                halt=halt,
+                wire=wire_eager_session,
+                wrap=tf_intervention_wrap,
+            )
             loss = (
                 grad_options.loss_fn(replay_result.output)
                 if grad_options.loss_fn
@@ -263,16 +271,8 @@ def attach_tf_derived_grads(
         )
     finally:
         del tape
-        if module_tree is not None and previous_call_counts is not None:
-            module_tree.call_counts.clear()
-            module_tree.call_counts.update(previous_call_counts)
-        if module_tree is not None and previous_forward_args is not None:
-            module_tree.forward_args_by_call.clear()
-            module_tree.forward_args_by_call.update(previous_forward_args)
     trace._autograd_derived_grads = DerivedGradAccessor(records)
     if grad_options.intermediate_grads:
-        from ..._data_classes.derived_grad import set_intermediate_derived_grads
-
         set_intermediate_derived_grads(trace, intermediate_accessor)
     mirror_param_derived_grads(trace, records)
 
