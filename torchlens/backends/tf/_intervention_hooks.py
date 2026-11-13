@@ -151,12 +151,3 @@ def _producer_label(session: Any, tensor: Any) -> str | None:
         return session.producer_by_ref.get(ref())
     except TypeError:
         return None
-
-
-__all__ = [
-    "_TFModuleExitContext",
-    "_producer_label",
-    "_selector_kinds",
-    "_tf_callable_hook",
-    "_tf_helper_hook",
-]

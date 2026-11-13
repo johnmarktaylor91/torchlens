@@ -151,6 +151,3 @@ def _is_generated_wrapper(module: Any, attr_name: str, value: Any) -> bool:
         and not attr_name.endswith("_eager_fallback")
         and getattr(value, "__module__", None) == module.__name__
     )
-
-
-__all__ = ["iter_wrap_targets"]

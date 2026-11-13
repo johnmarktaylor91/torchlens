@@ -42,7 +42,6 @@ from ..._postprocess._selective_save import (
     reject_selector_outside_kinds,
 )
 from ..._selection.selectors import BaseSelector
-from ...intervention._predicates import as_intervention_decision
 from ...intervention._types import Edit, InterventionDecision
 from ...recording._exceptions import PredicateError
 from ..registry import BackendUnsupportedError
@@ -364,6 +363,9 @@ def _site_due(site: TFInterventionSite, context: Any, tf: Any) -> TFIntervention
     result = site.predicate(context)
     if site.decision is not None:
         return site if result is not None else None
+    # deferred: intervention sits above the backends in the layer map
+    from ...intervention._predicates import as_intervention_decision
+
     try:
         decision = as_intervention_decision(result)
     except TypeError as exc:

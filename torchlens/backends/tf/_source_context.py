@@ -113,6 +113,3 @@ class TFSourceContext:
                 code.co_filename, self.num_context_lines, self._cache
             )
         return location
-
-
-__all__ = ["TFSourceContext"]
