@@ -10,7 +10,11 @@ import numpy as np
 
 from ... import _state
 from ..._utils._record_group_table import record_member
-from .._validation_shared import float_replay_tolerances, ops_by_label as _ops_by_label
+from .._validation_shared import (
+    float_replay_tolerances,
+    ops_by_label as _ops_by_label,
+    replay_payload,
+)
 from ._param_writes import PARAMETER_WRITE_MARKER
 from .validation_decisions import REASON_EFFECTFUL_REGION, REASON_PARENT_PAYLOAD_MISSING
 
@@ -595,13 +599,11 @@ def _saved_payload(op: Any) -> Any:
     Returns
     -------
     Any
-        Saved Paddle tensor payload.
+        Saved Paddle tensor payload: the public ``op.out``, or the replay-visible
+        copy a filtered or shaped trace keeps in ``_selective_save_hidden_payloads``.
     """
 
-    if not bool(getattr(op, "has_saved_activation", False)):
-        raise ValueError("Paddle validation requires saved activation payloads.")
-    output = op.out
-    if output is None:
+    if (output := replay_payload(op)) is None:
         raise ValueError("Paddle validation found a missing saved payload.")
     return output
 

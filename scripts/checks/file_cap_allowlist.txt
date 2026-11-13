@@ -804,10 +804,10 @@ torchlens/backends/tf/op_callback_capture.py::TFEagerCaptureSession._emit_source
 torchlens/backends/tf/op_callback_capture.py::TFEagerCaptureSession._event_for_output	159
 torchlens/backends/tf/op_callback_capture.py::TFEagerCaptureSession._parents_for_inputs	86
 torchlens/backends/tf/op_callback_capture.py::TFEagerCaptureSession._record_context	74
-torchlens/backends/tf/validation.py	1076
+torchlens/backends/tf/validation.py	1069
 torchlens/backends/tf/validation.py::_validate_self_consistency	85
 torchlens/backends/tf/validation.py::validate_tf_trace_detailed	80
-torchlens/backends/tinygrad/backend.py	3005
+torchlens/backends/tinygrad/backend.py	2999
 torchlens/backends/tinygrad/backend.py::TinygradBackend._append_event	168
 torchlens/backends/tinygrad/backend.py::TinygradBackend._attach_derived_grads	88
 torchlens/backends/tinygrad/backend.py::TinygradBackend._derive_intermediate_grads_no_realize	74

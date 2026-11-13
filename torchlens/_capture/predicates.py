@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import time
-import warnings
 import weakref
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
@@ -22,7 +21,7 @@ from .._ir.selector_eval import (
 from .._selection.selectors import BaseSelector
 from ..intervention._predicates import as_intervention_decision
 from ..intervention._types import InterventionDecision
-from ..recording._exceptions import PredicateError
+from ..recording._exceptions import PredicateError, warn_followed_by_parent_outside_window
 from ..recording._types import CaptureSpec, ModuleStackFrame, RecordContext
 from .projections import _build_record_context
 from .stop import StopDirective
@@ -423,12 +422,7 @@ def _matching_recent_parent_labels(
     for parent_label in parent_labels:
         recent = recent_by_label.get(parent_label)
         if recent is None:
-            warnings.warn(
-                f"followed_by parent {parent_label!r} is outside the lookback window; "
-                "increase lookback to make this dependency queryable.",
-                RuntimeWarning,
-                stacklevel=3,
-            )
+            warn_followed_by_parent_outside_window(parent_label, stacklevel=3)
             continue
         if candidate_selector(recent):
             matches.append(parent_label)

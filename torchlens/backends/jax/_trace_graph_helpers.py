@@ -101,7 +101,9 @@ def _saved_single_output(
         Saved output payload.
     """
 
-    if not getattr(op, "has_saved_activation", False):
+    # A dropped public payload (filtered ``save=``) or a cleared ``out`` (transform
+    # without ``save_raw_activations``) replays from the hidden raw copy.
+    if not getattr(op, "has_saved_activation", False) or op.out is None:
         for label in (getattr(op, "_label_raw", None), getattr(op, "label", None)):
             if (
                 isinstance(label, str)
@@ -111,10 +113,7 @@ def _saved_single_output(
                 outputs = hidden_outputs_by_label[label]
                 return outputs[0] if len(outputs) == 1 else outputs
         raise ValueError("JAX validation requires every equation payload to be saved.")
-    output = op.out
-    if output is None:
-        raise ValueError("JAX validation found a missing saved payload.")
-    return output
+    return op.out
 
 
 _NO_RECORDED_INPUT: Any = object()

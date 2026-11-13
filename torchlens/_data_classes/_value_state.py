@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .._comparison_tensor import _comparison_tensor
+from .._io.payload_codec import get_payload_codec
 from .._utils._display_card import REPR_COLS
 from .._utils._display_numbers import format_count, format_exact_count, plural
 from .._utils._display_text import tensor_text
@@ -14,7 +16,6 @@ NOT_SAVED = "(not saved)"
 FREED = "(freed)"
 METADATA_ONLY = "(metadata only)"
 LAZY_DISK = "(disk-backed: metadata only until read)"
-PREVIEW_BACKEND = "(preview backend: shape/dtype only)"
 EDITED = "(edited)"
 
 
@@ -109,10 +110,37 @@ def payload_facts(record: Any) -> tuple[str, Any, str]:
     payload = slot("out") if callable(slot) else fail_open(lambda: record.out, lambda _error: None)
     if payload is None:
         return metadata_text(record), None, FREED
+    identity = record_member(record, "site_key", None)
     if not isinstance(payload, torch.Tensor):
-        return metadata_text(record), None, PREVIEW_BACKEND
-    stats = _statistics(payload, compute=True, identity=record_member(record, "site_key", None))
+        host = _host_tensor(record, payload)
+        stats = None if host is None else _statistics(host, compute=True, identity=identity)
+        return metadata_text(record), stats, ""
+    stats = _statistics(payload, compute=True, identity=identity)
     return metadata_text(record, payload), stats, ""
+
+
+def _host_tensor(record: Any, payload: Any) -> Any:
+    """Convert a non-torch payload to a host torch tensor through its backend codec.
+
+    The same statistics torch shows are then computed on an exact host copy
+    (NumPy conversion through the producing backend's payload codec). Returns
+    ``None`` when no codec recognizes the payload.
+    """
+
+    codec = get_payload_codec(_record_backend(record) or "")
+    if not fail_open(lambda: bool(codec.can_encode(payload)), lambda _error: False):
+        return None
+    return _comparison_tensor(payload, codec)
+
+
+def _record_backend(record: Any) -> str | None:
+    """Return the producing backend of a record's live trace, when it is reachable."""
+
+    slot = getattr(record, "_slot", None)
+    ref = slot("_source_trace_ref") if callable(slot) else None
+    trace = ref() if callable(ref) else None
+    backend = getattr(trace, "_provenance_backend", None)
+    return None if backend is None else str(backend)
 
 
 def edited_token(record: Any) -> str:

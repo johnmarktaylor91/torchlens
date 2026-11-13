@@ -172,6 +172,21 @@ def test_tinygrad_codec_fixture_loads_lazy_refs_as_tensors(tmp_path: Path) -> No
     np.testing.assert_allclose(materialized.numpy(), expected)
 
 
+def test_tinygrad_payload_codec_round_trips_a_scalar_as_0d() -> None:
+    """A 0-d tinygrad payload stays 0-d through encode and decode (``output_device``)."""
+
+    codec = get_payload_codec("tinygrad")
+    value = Tensor(2.0).realize()
+    encoded = codec.to_numpy(value)
+    rebuilt = codec.from_numpy(
+        encoded.array, codec.manifest_fields(value, encoded), map_location="cpu"
+    )
+
+    assert encoded.array.shape == ()
+    assert tuple(rebuilt.shape) == ()
+    assert float(rebuilt.numpy()) == 2.0
+
+
 def test_tinygrad_payload_codec_rejects_unresolved_load_dtype() -> None:
     """tinygrad load should fail closed for unresolvable dtype strings."""
 
@@ -610,9 +625,7 @@ def test_tinygrad_rejects_tinyjit_callable() -> None:
 @pytest.mark.parametrize(
     ("kwargs", "pattern"),
     (
-        ({"save": tl.where(lambda op: op.out is not None)}, "concrete activation values"),
         ({"save": ["relu"]}, "full-save only.*save shaping"),
-        ({"lookback": 1}, "full-save only.*save-window"),
         # stop_after passes the can_intervene gate and refuses in the edit
         # resolver; save_grads refuses through the central capability gate.
         ({"stop_after": tl.func("where")}, "stop_after"),
@@ -620,10 +633,25 @@ def test_tinygrad_rejects_tinyjit_callable() -> None:
     ),
 )
 def test_tinygrad_save_shaping_rejected(kwargs: dict[str, Any], pattern: str) -> None:
-    """Reject save shaping because tinygrad preview is full-save only."""
+    """Reject save shaping because the tinygrad backend is full-save only."""
 
     with pytest.raises(BackendUnsupportedError, match=pattern):
         _trace(**kwargs)
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    (
+        {"save": tl.where(lambda ctx: ctx.func_name == "where")},
+        {"save": tl.func("where") & tl.preceded_by(tl.func("cmplt")), "lookback": 1},
+    ),
+    ids=("value_dependent", "lookback"),
+)
+def test_tinygrad_post_capture_save_policies_run(kwargs: dict[str, Any]) -> None:
+    """Value-dependent and lookback ``save=`` run on the finished tinygrad capture."""
+
+    trace = _trace(**kwargs)
+    assert {op.func_name for op in trace.saved_ops} == {"where"}
 
 
 def test_tinygrad_static_label_save_filters_public_payloads(tmp_path: Path) -> None:

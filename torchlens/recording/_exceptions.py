@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from typing import TYPE_CHECKING, Any, NoReturn
 
 from ..errors._base import CaptureError, ConfigurationError
@@ -162,3 +163,25 @@ class PredicateError(CaptureError, RuntimeError):
         self.failures = failures or []
         self.total_count = num_failures if num_failures is not None else len(self.failures)
         self.overflow = overflow
+
+
+def warn_followed_by_parent_outside_window(parent: str, *, stacklevel: int) -> None:
+    """Warn that a ``tl.followed_by`` successor's parent left the lookback window.
+
+    Torch's live predicate and the post-capture evaluator for preview backends
+    share this one warning, so both report the same text.
+
+    Parameters
+    ----------
+    parent:
+        Raw label of the parent outside the window.
+    stacklevel:
+        Caller's stack level; this helper adds its own frame.
+    """
+
+    warnings.warn(
+        f"followed_by parent {parent!r} is outside the lookback window; "
+        "increase lookback to make this dependency queryable.",
+        RuntimeWarning,
+        stacklevel=stacklevel + 1,
+    )

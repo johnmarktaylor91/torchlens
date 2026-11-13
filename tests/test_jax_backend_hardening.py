@@ -1054,7 +1054,6 @@ def test_jax_rejects_callback_effects() -> None:
     ("kwargs", "pattern"),
     (
         ({"save": ["tanh"]}, "full-save only"),
-        ({"lookback": 1}, "full-save only"),
         # Gated options refuse through the central capability gate, whose
         # canonical message names the owning flag and the refused option.
         (
@@ -1070,6 +1069,14 @@ def test_jax_rejects_save_shaping_kwargs(kwargs: dict[str, Any], pattern: str) -
 
     with pytest.raises(BackendUnsupportedError, match=pattern):
         _trace(**kwargs)
+
+
+def test_jax_lookback_runs_post_capture() -> None:
+    """``lookback`` alone no longer refuses: the window applies on the finished trace."""
+
+    assert [op.label for op in _trace(lookback=1).saved_ops] == [
+        op.label for op in _trace().saved_ops
+    ]
 
 
 @pytest.mark.parametrize(

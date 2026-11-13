@@ -14,6 +14,7 @@ future one edits exactly this module.
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from typing import Any, NamedTuple
 
 import numpy as np
@@ -69,6 +70,42 @@ class _FloatInfo(NamedTuple):
 _EXTENDED_FLOAT_INFO: dict[str, _FloatInfo] = {
     "bfloat16": _FloatInfo(eps=2.0**-7, tiny=float(np.finfo(np.float32).tiny)),
 }
+
+
+def replay_payload(op: Any, hidden: Mapping[str, Any] | None = None) -> Any:
+    """Return the payload a replay check reads for ``op``, or ``None`` when none was kept.
+
+    A filtered or shaped capture hides some public payloads (``save=`` dropped
+    them, or ``activation_transform`` without ``save_raw_activations`` cleared
+    ``out``) but keeps the raw copies replay-visible in the trace's
+    ``_selective_save_hidden_payloads``, keyed by raw and final op labels.
+
+    Parameters
+    ----------
+    op:
+        Materialized operation.
+    hidden:
+        Hidden payloads by label; ``None`` reads them from the op's owning trace.
+
+    Returns
+    -------
+    Any
+        The public ``op.out`` when saved, else the hidden raw copy, else ``None``
+        (callers fail closed on ``None``).
+    """
+
+    if bool(getattr(op, "has_saved_activation", False)):
+        output = getattr(op, "out", None)
+        if output is not None:
+            return output
+    if hidden is None:
+        owner = getattr(op, "_source_trace_or_none", None)
+        trace = owner() if callable(owner) else None
+        hidden = getattr(trace, "_selective_save_hidden_payloads", None) or {}
+    for label in (getattr(op, "_label_raw", None), getattr(op, "label", None)):
+        if isinstance(label, str) and label in hidden:
+            return hidden[label]
+    return None
 
 
 def float_replay_tolerances(finfo: Any) -> tuple[float, float]:

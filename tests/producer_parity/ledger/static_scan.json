@@ -3425,6 +3425,22 @@
  },
  {
   "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/_postprocess/_post_predicate.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/_postprocess/_post_predicate.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "seq",
   "file": "torchlens/_postprocess/_primitive_profile.py",
   "has_default": false,
@@ -8334,6 +8350,22 @@
   "has_default": false,
   "sites": 1,
   "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/debug/_unit_axis_layout.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/debug/_unit_axis_layout.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
  },
  {
   "ambiguous": true,

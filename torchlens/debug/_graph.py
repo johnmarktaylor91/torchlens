@@ -41,6 +41,7 @@ from ._compare_values import (
 )
 from ._cross_backend import resolve_align
 from ._unit_axis import unit_axis
+from ._unit_axis_layout import backend_unit_axis
 from ._xb_report import LABEL_COLUMNS, module_compare, module_first_divergence
 from ._xb_tolerance import SAME_BACKEND_ATOL, SAME_BACKEND_RTOL
 
@@ -586,7 +587,7 @@ def _feature_dim(
 
     if dim is None:
         if str(trace._provenance_backend) != TORCH_BACKEND_NAME and out.ndim > 2:
-            return None
+            return backend_unit_axis(trace, op, out, axes)
         return unit_axis(trace, op, out, axes)
     feature_dim = dim if dim >= 0 else out.ndim + dim
     return feature_dim if 0 <= feature_dim < out.ndim else None

@@ -28,7 +28,6 @@ from ._value_state import (
     LAZY_DISK as LAZY_DISK,
     METADATA_ONLY as METADATA_ONLY,
     NOT_SAVED as NOT_SAVED,
-    PREVIEW_BACKEND as PREVIEW_BACKEND,
     _payload_state as _payload_state,
     payload_core as payload_core,
 )

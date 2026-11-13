@@ -444,7 +444,7 @@ class TinygradPayloadCodec:
             array = np.asarray(value.tolist())
         _raise_for_unsupported_array_dtype(array, backend_name=self.backend_name)
         return EncodedArray(
-            array=np.ascontiguousarray(array),
+            array=_contiguous_keeping_shape(array),
             logical_dtype=str(getattr(value, "dtype", array.dtype)),
             logical_device=str(getattr(value, "device", "unknown")),
             codec_metadata=_json_ready_mapping(

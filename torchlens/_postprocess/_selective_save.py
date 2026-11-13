@@ -6,27 +6,24 @@ __tl_layer__ = "L3"
 
 import warnings
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 
-from .._ir.selector_eval import first_selector_kind_outside
+from .._capture.finalize.epilogue import _render_layer_visualizers
+from .._capture.projections import _build_record_context
+from .._ir.selector_eval import first_selector_kind_outside, split_followed_by_conjunction
 from .._quantities import Bytes
 from .._selection.selectors import BaseSelector
 from .._utils._record_group_table import record_member
 from ..backends.registry import BackendUnsupportedError
+from ._post_plan import BackendPostPlan, split_post_options
+from ._post_predicate import _STATIC_SELECTOR_KINDS, post_save_keep_labels
+from ._post_shaping import apply_save_shaping, reshapes_payloads
 from .saved_summary import refresh_pinned_autograd_memory, refresh_saved_module_call_count
 
-_STATIC_SELECTOR_KINDS = frozenset(
-    {
-        "label",
-        "func",
-        "module",
-        "output",
-        "contains",
-        "in_module",
-        "and",
-        "or",
-        "not",
-    }
+#: Selector kinds a finished capture can evaluate after the fact: the static
+#: kinds plus value-dependent ``tl.where`` and the lookback selectors.
+POST_SAVE_SELECTOR_KINDS = _STATIC_SELECTOR_KINDS | frozenset(
+    {"predicate", "preceded_by", "followed_by"}
 )
 
 # Intervention selectors resolve against ops that can be REWRITTEN mid-forward;
@@ -95,17 +92,29 @@ def apply_static_label_save_policy(
     predicate: Callable[[Any], Any] | BaseSelector | None,
     *,
     backend_name: str,
+    lookback: int = 0,
+    lookback_payload_policy: str = "metadata_only",
 ) -> None:
-    """Filter public saved activations with a static-label predicate.
+    """Filter public saved activations with a ``save=`` predicate on a finished trace.
+
+    Static-label selectors are evaluated on each ``Op``. Value-dependent
+    predicates (plain callables, ``tl.where``) and lookback selectors
+    (``tl.preceded_by``, ``candidate & tl.followed_by``) are evaluated on the
+    rebuilt torch ``RecordContext`` of each op, with the realized payload as
+    ``tensor`` (:func:`._post_predicate.post_save_keep_labels`).
 
     Parameters
     ----------
     trace
         Finalized trace whose public saved activation surface should be filtered.
     predicate
-        Static selector accepted by ``trace(save=...)``. ``None`` preserves full-save capture.
+        Predicate accepted by ``trace(save=...)``. ``None`` preserves full-save capture.
     backend_name
         Backend name used in diagnostic errors.
+    lookback
+        Predicate history size for lookback selectors (0 means torch's default).
+    lookback_payload_policy
+        Torch lookback payload policy.
 
     Returns
     -------
@@ -116,17 +125,139 @@ def apply_static_label_save_policy(
     if predicate is None:
         return
     _reject_non_static_save_predicate(predicate, backend_name=backend_name)
+    if _is_static_label_selector(predicate):
+        keep = {op.label for op in trace._layer_list if bool(predicate(op))}
+    else:
+        keep = post_save_keep_labels(
+            trace,
+            predicate,
+            split=split_followed_by_conjunction(predicate),
+            build_context=_build_record_context,
+            lookback_options=(lookback, lookback_payload_policy),
+        )
+    apply_save_keep_set(trace, keep, backend_name=backend_name)
+
+
+def apply_save_keep_set(trace: Any, keep: set[str], *, backend_name: str) -> None:
+    """Hide every public payload whose op label is not in ``keep``.
+
+    Parameters
+    ----------
+    trace
+        Finalized full-save trace.
+    keep
+        Final op labels whose payloads stay public.
+    backend_name
+        Backend name used in the zero-match diagnostic.
+
+    Returns
+    -------
+    None
+        Hidden payloads stay replay-visible; saved-summary counters are refreshed.
+    """
+
     hidden_payloads = _hidden_payloads_by_label(trace)
-    matched_any = False
     for op in trace._layer_list:
-        if bool(predicate(op)):
-            matched_any = True
-        else:
+        if op.label not in keep:
             _drop_public_activation_payload(op)
-    if not matched_any:
-        warn_zero_match_save_predicate(backend_name)
+    if not keep:
+        warn_zero_match_save_predicate(backend_name, stacklevel=4)
     trace._selective_save_hidden_payloads = hidden_payloads
     _refresh_saved_activation_summary(trace)
+
+
+def _is_static_label_selector(predicate: Any) -> bool:
+    """Return whether ``predicate`` is a selector of static-label kinds only."""
+
+    return (
+        isinstance(predicate, BaseSelector)
+        and first_selector_kind_outside(predicate, allowed=_STATIC_SELECTOR_KINDS) is None
+    )
+
+
+def needs_post_save_predicate(save: Any) -> bool:
+    """Return whether ``save`` is a value-dependent or lookback predicate.
+
+    Parameters
+    ----------
+    save
+        Public ``save=`` value after label routing.
+
+    Returns
+    -------
+    bool
+        ``True`` for a plain callable, or a selector tree that uses a kind beyond
+        the static label kinds while staying inside :data:`POST_SAVE_SELECTOR_KINDS`.
+    """
+
+    if save is None or isinstance(save, (str, list, tuple)):
+        return False
+    if not isinstance(save, BaseSelector):
+        return callable(save)
+    if _is_static_label_selector(save):
+        return False
+    return first_selector_kind_outside(save, allowed=POST_SAVE_SELECTOR_KINDS) is None
+
+
+def split_backend_post_options(kwargs: dict[str, Any], spec: Any) -> BackendPostPlan | None:
+    """Move options a finished non-torch capture applies out of the dispatch bundle.
+
+    Parameters
+    ----------
+    kwargs
+        Mutable public dispatch bundle (see :func:`._post_plan.split_post_options`).
+    spec
+        Resolved backend spec; torch keeps every option at capture time.
+
+    Returns
+    -------
+    BackendPostPlan | None
+        Plan for :func:`apply_backend_post_plan`, or ``None`` when nothing moved.
+    """
+
+    save = kwargs.get("save")
+    post_save = save if needs_post_save_predicate(save) else None
+    return split_post_options(kwargs, str(spec.name), post_save=post_save)
+
+
+def apply_backend_post_plan(trace: Any, plan: BackendPostPlan | None, spec: Any) -> Any:
+    """Apply a post-processing plan to a finished full-save non-torch trace.
+
+    Parameters
+    ----------
+    trace
+        Finished trace returned by the backend.
+    plan
+        Plan from :func:`split_backend_post_options`, or ``None``.
+    spec
+        Resolved backend spec; its name labels diagnostics and picks the payload codec.
+
+    Returns
+    -------
+    Any
+        The same trace, filtered and shaped in place.
+    """
+
+    if plan is None:
+        return trace
+    backend_name = str(spec.name)
+    apply_static_label_save_policy(
+        trace,
+        plan.save,
+        backend_name=backend_name,
+        lookback=plan.lookback,
+        lookback_payload_policy=plan.lookback_payload_policy,
+    )
+    if reshapes_payloads(plan):
+        trace._selective_save_hidden_payloads = {
+            **_hidden_payloads_by_label(trace),
+            **(getattr(trace, "_selective_save_hidden_payloads", None) or {}),
+        }
+    apply_save_shaping(trace, plan, backend_name=backend_name, set_field=_set_op_field)
+    if plan.layer_visualizers:
+        _render_layer_visualizers(trace, dict(plan.layer_visualizers))
+    _refresh_saved_activation_summary(trace)
+    return trace
 
 
 def warn_zero_match_save_predicate(backend_name: str, *, stacklevel: int = 3) -> None:
@@ -204,23 +335,16 @@ def pop_static_label_save_predicate(
     Returns
     -------
     Callable[[Any], Any] | BaseSelector | None
-        Static-label save predicate, or ``None`` for save-all (omitted or ``"all"``).
+        ``save=`` predicate evaluated after finalization by
+        :func:`apply_static_label_save_policy`, or ``None`` for save-all
+        (omitted or ``"all"``).
     """
 
     save_value = kwargs.pop("save", None)
     if save_value is None or (isinstance(save_value, str) and save_value == "all"):
         return None
-    if not isinstance(save_value, BaseSelector):
-        raise BackendUnsupportedError(
-            f"{backend_name} backend supports trace(save=...) only for static-label selectors "
-            "(for example tl.func, tl.label, tl.module, tl.in_module, or tl.label_contains). "
-            "Value-dependent predicates need concrete activation values at predicate time, "
-            "which traced/lazy non-torch captures do not expose without changing execution. "
-            "Use static-label save= selectors or the PyTorch backend for value-dependent "
-            "predicates, intervene=, and stop_after=."
-        )
     _reject_non_static_save_predicate(save_value, backend_name=backend_name)
-    return save_value
+    return cast("Callable[[Any], Any] | BaseSelector", save_value)
 
 
 def _drop_public_activation_payload(op: Any) -> None:
@@ -304,11 +428,11 @@ def _refresh_saved_activation_summary(trace: Any) -> None:
 
 
 def _reject_non_static_save_predicate(
-    predicate: Callable[[Any], Any] | BaseSelector,
+    predicate: Any,
     *,
     backend_name: str,
 ) -> None:
-    """Reject non-static save predicates for non-torch post-filtering.
+    """Reject ``save=`` predicates a finished capture cannot evaluate.
 
     Parameters
     ----------
@@ -320,25 +444,22 @@ def _reject_non_static_save_predicate(
     Returns
     -------
     None
-        Returns when the predicate can be evaluated from finalized graph labels.
+        Returns for plain callables and selectors of :data:`POST_SAVE_SELECTOR_KINDS`.
     """
 
     if not isinstance(predicate, BaseSelector):
+        if callable(predicate):
+            return
         raise BackendUnsupportedError(
-            f"{backend_name} backend supports trace(save=...) only for static-label selectors. "
-            "Value-dependent predicates need concrete activation values at predicate time, "
-            "which traced/lazy non-torch captures do not expose without changing execution. "
-            "Use static-label save= selectors or the PyTorch backend for value-dependent "
-            "predicates, intervene=, and stop_after=."
+            f"{backend_name} backend trace(save=...) takes a selector, a predicate "
+            f"callable, 'all' or None; received {type(predicate).__name__}."
         )
-    unsupported = first_selector_kind_outside(predicate, allowed=_STATIC_SELECTOR_KINDS)
+    unsupported = first_selector_kind_outside(predicate, allowed=POST_SAVE_SELECTOR_KINDS)
     if unsupported is None:
         return
     raise BackendUnsupportedError(
-        f"{backend_name} backend does not support value-dependent or runtime-mutation "
-        f"trace(save=...) predicates ({unsupported!r}). Static-label save= selectors are "
-        "supported, but value-dependent predicates need concrete activation values at "
-        "predicate time, which traced/lazy non-torch captures do not expose without changing "
-        "execution. Use the PyTorch backend for value-dependent predicates, intervene=, and "
-        "stop_after=."
+        f"{backend_name} backend cannot evaluate trace(save=...) selector kind "
+        f"{unsupported!r} on a finished capture. Supported: static-label selectors, "
+        "value-dependent predicates (callables, tl.where), tl.preceded_by and "
+        "candidate & tl.followed_by. Use the PyTorch backend for this selector."
     )
