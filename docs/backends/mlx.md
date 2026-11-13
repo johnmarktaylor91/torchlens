@@ -89,6 +89,50 @@ callable `stop_after` that never fires warns with `stop_after_never_fired_callab
 records the site in `trace.annotations`; a selector that never fires refuses with
 `stop_after_never_fired`, as on PyTorch.
 
+## Edits and gradients
+
+Ten built-in helpers have an MLX application: `tl.zero_ablate`, `tl.scale`, `tl.add`,
+`tl.clamp`, `tl.mean_ablate` (the self form, `dim=None`), `tl.replace_with`, `tl.steer`,
+`tl.project_onto`, `tl.project_out` and `tl.clip_norm`. Each is written against `mlx.core` with
+the PyTorch helper's math, and the same application runs in live capture (`intervene=`), on a
+finished trace and in the gradient rerun, so an edit means the same thing on every path. Any
+other helper refuses; an edit written as a callable on `mx.array` values covers the rest.
+
+A finished trace takes edits through `trace.fork().do(site, edit)`, with a helper or a
+callable. The fork applies the edit at the site, reruns each downstream op once from its
+updated parents through the MLX replay adapter, and the edited trace passes the same replay
+check as a capture.
+
+`grad_options=` combines with `intervene=` and `stop_after=`. The derived gradients are then
+the gradients of the program that actually ran: TorchLens reruns the model under
+`mx.value_and_grad` with the same edits applied, checks the rerun reproduces the capture's
+outputs, and refuses if it does not. With `stop_after=` the loss is taken on the output of the
+op where the capture stopped, and parameters past that op get zero gradients.
+
+`tl.grad(site)` edits the gradient that flows back through a forward op. The forward values
+are unchanged; the op's gradient and every gradient upstream of it use the edited value, as
+on PyTorch. A gradient site needs `grad_options=`:
+
+```python
+from torchlens.backends.mlx import GradOptions
+
+halved = tl.trace(
+    model,
+    x,
+    backend="mlx",
+    capture=tl.options.CaptureOptions(
+        grad_options=GradOptions(loss_fn=lambda out: mx.sum(out * out), input_grad_argnums=(0,))
+    ),
+    intervene=tl.when(tl.grad(tl.func("gelu")), tl.scale(0.5)),
+)
+```
+
+Gradient influence probes (`probe_grad`, `.of(method="gradient")`, both directions) replay the
+captured operations between the two units and differentiate them with `mx.vjp` / `mx.jvp`.
+
+A trace saved with `level="executable_with_callables"` also stores one replay recipe per op, so
+after `tl.load` it validates by real replay, also in a fresh process without the model.
+
 ## Can and cannot
 
 The rows are the backend's capability table in the scorecard's vocabulary: `supported` (the
@@ -111,7 +155,14 @@ named code), `not yet proven` (False, refusal not yet pinned by a passing suite 
 | Explicit `random_seed=` | unsupported | `explicit_seed_unsupported` |
 | Trace options outside `module_identity_mode`, `grad_options` | unsupported | `trace_option_unsupported` |
 | `mx.compile` / `mx.grad` / `mx.vmap` wrappers as the traced entry | unsupported | `traced_transform_entry_unsupported` |
-| `grad_options=` together with `intervene=` or `stop_after=` | unsupported (capture them in separate calls) | `intervention_with_derived_grads_unsupported` |
+| `grad_options=` together with `intervene=` or `stop_after=` at op sites (forward edits, `tl.grad` sites, early stop) | supported | |
+| `grad_options=` together with a module edit (`tl.module(...)` site) | unsupported | `intervention_with_derived_grads_unsupported` |
+| A `tl.grad` site edit without `grad_options=` | unsupported | `intervention_with_derived_grads_unsupported` |
+| `tl.grad` of a module site, and one selector mixing forward and gradient sites | unsupported | `backward_capture_unsupported` |
+| An edit that reads forward state (`tl.patch_from`) at a `tl.grad` site | unsupported | `edit_signal_mismatch` |
+| A built-in helper outside the MLX helper table, live | unsupported | `interventions_unsupported` |
+| A built-in helper outside the MLX helper table, on a fork | unsupported | `backend_replay_helper_unsupported` |
+| Helper arguments that do not fit the matched output (zero-norm projection direction, direction of the wrong length) | unsupported | `intervention_helper_arguments_invalid` |
 | An intervention that returns a non-`mx.array` or changes shape or dtype | unsupported | `intervention_result_invalid` |
 | `intervene=` as a raw decision callable (not `tl.when`) | unsupported | `backend_unsupported` |
 | A module selector combined with a non-module condition | unsupported | `interventions_unsupported` |
@@ -121,7 +172,7 @@ named code), `not yet proven` (False, refusal not yet pinned by a passing suite 
 
 Backward capture is a framework limit. MLX builds its backward pass inside C++, so TorchLens
 cannot list the backward operations. Gradient values for every recorded operation are
-available.
+available, and gradient edits work (`tl.grad` sites, below).
 
 ## Validation decisions
 
