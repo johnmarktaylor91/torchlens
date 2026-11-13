@@ -42,6 +42,7 @@ from ..._output_slot import returned
 from ..._postprocess._grouping_stamp import build_grouping_policy_stamp
 from ..._postprocess._materialize import materialize_from_events
 from ..._postprocess._selective_save import (
+    _is_static_label_selector,
     apply_static_label_save_policy,
     pop_static_label_save_predicate,
 )
@@ -109,7 +110,14 @@ from ._raw_relabel import (
     _jax_equivalent_labels_by_key,
     _relabel_jax_lineage_fields,
 )
+from ._retention import is_released
 from ._site_dialect import jax_site_keys
+from ._sparse_capture import (
+    jax_tensor_ref,
+    sparse_counts,
+    sparse_save_passes,
+    sparse_save_verdict,
+)
 from ._trace_graph_helpers import (
     _control_parent_labels,
     _data_parent_arg_positions,
@@ -439,6 +447,7 @@ class JAXBackend:
 
     name = "jax"
 
+    @sparse_save_passes(is_static=_is_static_label_selector)
     def capture_trace(
         self,
         model: Callable[..., Any],
@@ -718,14 +727,16 @@ class JAXBackend:
         flat_args, _args_treedef = flatten_dynamic_args(args, static_argnums)
         session_capture = (args, closure_consts, grad_options, save_code_context)
         session = open_equation_session(self, trace, intervene, session_capture)
-        with forward_scopes(session, backward_ready=cast(bool, backward_ready)) as hooks:
-            result = interpret_closed_jaxpr_with_inlining(
-                return_probe.jaxpr_to_interpret(tree, closed_jaxpr),
-                flat_args,
-                jax_control_flow=cast(str, jax_control_flow),
-                jax_max_control_flow_unroll=cast(int, jax_max_control_flow_unroll),
-                equation_hook=session.hook,
-                hooks=hooks,
+        with forward_scopes(session, backward_ready=cast(bool, backward_ready)) as scope:
+            result = scope.finish(
+                interpret_closed_jaxpr_with_inlining(
+                    return_probe.jaxpr_to_interpret(tree, closed_jaxpr),
+                    flat_args,
+                    jax_control_flow=cast(str, jax_control_flow),
+                    jax_max_control_flow_unroll=cast(int, jax_max_control_flow_unroll),
+                    equation_hook=scope.equation_hook(session.hook),
+                    hooks=scope.hooks,
+                )
             )
         result, output = session.finish(return_probe.split_outputs(result, tree), output)
         output_leaf_paths = self._output_leaf_paths(output)
@@ -874,19 +885,21 @@ class JAXBackend:
             "loaded" if getattr(trace, "_loaded_from_bundle", False) else "live"
         )
         payload_load_status = getattr(trace, "payload_load_status", None)
-        replayed_node_count = len(_jax_equation_ops(trace)) if passed else 0
+        not_replayed, sparse_unverified, sparse_reasons = sparse_counts(log)
+        replayed_node_count = len(_jax_equation_ops(trace)) - not_replayed if passed else 0
         unverified_node_count = count_importer_region_annotations(trace) if passed else 0
         decisions = tuple(log.decisions) if log is not None else ()
         status = ValidationStatus.from_replay_counts(
             backend="jax",
             source=source,
             num_replayed_ops=replayed_node_count,
-            num_unverified_ops=unverified_node_count,
+            num_unverified_ops=unverified_node_count + (sparse_unverified if passed else 0),
             num_failed_ops=0 if passed else 1,
             payload_load_status=payload_load_status,
             unverified_reason_counts=(
                 {"effectful_region": unverified_node_count} if unverified_node_count else {}
-            ),
+            )
+            | (sparse_reasons if passed else {}),
             exempted_reason_counts=dict(log.exempted_reason_counts) if log is not None else {},
             decisions=decisions,
         )
@@ -932,6 +945,8 @@ class JAXBackend:
         # The len(captures) != len(equation_ops) guard above already returned
         # False, so these pair exactly.
         for capture, op in zip(captures, equation_ops, strict=True):
+            if sparse_save_verdict(trace, op, ops_by_label, hidden_outputs_by_label, log):
+                continue
             if not _validate_one_jax_equation(
                 jax, capture, op, ops_by_label, hidden_outputs_by_label, log
             ):
@@ -1416,10 +1431,8 @@ class JAXBackend:
         reserved = trace.capture_events.reserve_label(layer_type)
         func_call_id = trace.capture_events.func_call_id_counter + 1
         trace.capture_events.func_call_id_counter = func_call_id
-        policy = CapturePolicy(
-            save_payload=True,
-            save_grad=False,
-        )
+        saved = not is_released(output)  # a sparse save= capture released this value
+        policy = CapturePolicy(save_payload=saved, save_grad=False)
         tensor_ref = self._tensor_ref(output, reserved.label_raw)
         module_calls, module_frames = jax_event_module_frames(module_stack, module_call_stack)
         input_ancestors = frozenset(
@@ -1461,7 +1474,7 @@ class JAXBackend:
             output=OutputRef(
                 tensor=tensor_ref,
                 transformed_tensor=None,
-                has_saved_activation=True,
+                has_saved_activation=saved,
                 output_device="same",
                 activation_transform=None,
                 detach_saved_activations=False,
@@ -1526,39 +1539,14 @@ class JAXBackend:
             fire_results=(),
             intervention_template_ref=None,
             record_context=self._record_context(reserved, output, func_name),
-            capture_spec=CaptureSpec(save_out=True, save_metadata=True),
+            capture_spec=CaptureSpec(save_out=saved, save_metadata=True),
         )
         return cast(OpEvent, append_session_event(self, trace, event))
 
     def _tensor_ref(self, value: object, label_raw: str) -> TensorRef:
-        """Build a tensor reference for a JAX payload.
+        """Build a tensor reference for a JAX payload (no payload for a released value)."""
 
-        Parameters
-        ----------
-        value
-            Captured output value.
-        label_raw
-            Raw TorchLens label.
-
-        Returns
-        -------
-        TensorRef
-            Backend-neutral tensor reference.
-        """
-
-        if not self.is_tensor(value):
-            return TensorRef(label_raw, None, None, None, None, 0, value, None, str(id(value)))
-        return TensorRef(
-            label_raw=label_raw,
-            shape=tuple(cast(Any, value).shape),
-            dtype=str(cast(Any, value).dtype),
-            device=str(cast(Any, value).device),
-            requires_grad=None,
-            memory=_nbytes(value),
-            payload=value,
-            blob_ref=None,
-            backend_handle_id=str(id(value)),
-        )
+        return jax_tensor_ref(value, label_raw, is_tensor=self.is_tensor(value))
 
     def _record_context(
         self, reserved: ReservedLabel, output: object, func_name: str

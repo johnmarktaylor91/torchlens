@@ -13,12 +13,14 @@ from __future__ import annotations
 
 import importlib
 import importlib.util
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import ExitStack, contextmanager
+from dataclasses import dataclass
 from types import ModuleType
 from typing import Any
 
 from ._interp_hooks import InterpreterHooks
+from ._retention import Release, pending_release
 
 _RNG_MODULE = "torchlens.backends._rng_capture.jax"
 _BACKWARD_MODULE = "torchlens.backends._backward_native.jax"
@@ -46,8 +48,26 @@ def _optional_module(name: str) -> ModuleType | None:
     return importlib.import_module(name)
 
 
+@dataclass(frozen=True)
+class CaptureScope:
+    """The interpreter hooks of one forward and its optional value release."""
+
+    hooks: InterpreterHooks
+    release: Release | None = None
+
+    def equation_hook(self, hook: Callable[..., Any]) -> Callable[..., Any]:
+        """Return the equation hook to pass the interpreter (wrapped when releasing)."""
+
+        return hook if self.release is None else self.release.wrap(hook)
+
+    def finish(self, result: Any) -> Any:
+        """Return the interpreter result with every unkept capture released."""
+
+        return result if self.release is None else self.release.finish(result)
+
+
 @contextmanager
-def forward_scopes(session: Any, *, backward_ready: bool) -> Iterator[InterpreterHooks]:
+def forward_scopes(session: Any, *, backward_ready: bool) -> Iterator[CaptureScope]:
     """Enter the installed capture-time scopes around one JAX forward.
 
     Parameters
@@ -59,9 +79,10 @@ def forward_scopes(session: Any, *, backward_ready: bool) -> Iterator[Interprete
 
     Yields
     ------
-    InterpreterHooks
-        The interpreter hooks for this forward. Retention is keyed on ``session``
-        (``_retention.retention_of``); a session with no policy keeps every value.
+    CaptureScope
+        The interpreter hooks for this forward, plus the release a pending
+        retention asked for (``_retention.pending_retention``); a plain capture
+        has no release and keeps every value.
     """
 
     with ExitStack() as stack:
@@ -71,7 +92,7 @@ def forward_scopes(session: Any, *, backward_ready: bool) -> Iterator[Interprete
         backward = _optional_module(_BACKWARD_MODULE) if backward_ready else None
         if backward is not None:
             stack.enter_context(backward.backward_ready_scope(session))
-        yield InterpreterHooks(session=session)
+        yield CaptureScope(InterpreterHooks(session=session), pending_release())
 
 
 def retain_backward_state(trace: Any, session: Any, events: Any, *, backward_ready: bool) -> None:
