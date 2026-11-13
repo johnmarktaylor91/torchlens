@@ -226,7 +226,7 @@ def test_checkable_mismatch_still_fails() -> None:
 def test_sparse_validation_state_matches_torch(selection: str) -> None:
     """The same selective save gives the same replay state on tinygrad and torch."""
 
-    torch = pytest.importorskip("torch")
+    import torch
 
     class TorchChain(torch.nn.Module):
         def forward(self, x: Any) -> Any:

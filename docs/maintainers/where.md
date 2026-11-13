@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1800 modules, 713910 lines, 0 modules without a docstring.
+85 packages, 1801 modules, 714343 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -60,7 +60,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.mlx` | MLX backend for TorchLens. | 18 | 7242 |
 | `torchlens.backends.paddle` | Paddle backend. | 16 | 6915 |
 | `torchlens.backends.tf` | TensorFlow backend exports. | 19 | 9370 |
-| `torchlens.backends.tinygrad` | tinygrad backend. | 16 | 5624 |
+| `torchlens.backends.tinygrad` | tinygrad backend. | 17 | 6057 |
 | `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 140 | 59498 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8876 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2741 |
@@ -1489,13 +1489,13 @@ TensorFlow backend exports. (19 modules, 9370 lines)
 
 ### `torchlens.backends.tinygrad`
 
-tinygrad backend. (16 modules, 5624 lines)
+tinygrad backend. (17 modules, 6057 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | tinygrad backend. | 7 |
-| `_capture_state` | Per-capture state of the tinygrad backend: call keywords, source lines, edits. | 158 |
-| `_captures` | Capture records the tinygrad backend keeps for validation and derived gradients. | 67 |
+| `_capture_state` | Per-capture state of the tinygrad backend: call keywords, source lines, edits. | 163 |
+| `_captures` | Capture records the tinygrad backend keeps for validation and derived gradients. | 219 |
 | `_derived_grads` | Derived-gradient helpers for the tinygrad backend. | 280 |
 | `_edit_plan` | Resolution of ''trace(intervene=tl.when(...))'' to a tinygrad edit. | 136 |
 | `_edits` | Static-selector edits applied during a tinygrad capture. | 349 |
@@ -1503,11 +1503,12 @@ tinygrad backend. (16 modules, 5624 lines)
 | `_module_tree` | tinygrad object-module tree, call frames, and the module returns each call records. | 155 |
 | `_observer` | Tensor-API observation for the tinygrad capture. | 160 |
 | `_raw_labels` | Resolve materialized tinygrad op labels back to their raw capture labels. | 37 |
-| `_realize_once` | Realize-once capture: every recorded tinygrad value comes from one evaluation. | 395 |
+| `_realize_once` | Realize-once capture: every recorded tinygrad value comes from one evaluation. | 412 |
+| `_retention` | Retention decided at capture for a tinygrad ''save='' selector. | 253 |
 | `_rules` | tinygrad adoption of the shared backend rules: typed refusals, named verdicts, constants. | 323 |
 | `_source_lines` | User source lines for the ops of a tinygrad capture. | 191 |
-| `_uop_graph` | UOp-graph walks the tinygrad capture records ops from. | 251 |
-| `backend` | UOp-snapshot tinygrad backend. | 2999 |
+| `_uop_graph` | UOp-graph walks the tinygrad capture records ops from. | 283 |
+| `backend` | UOp-snapshot tinygrad backend. | 2973 |
 | `capabilities` | Registry-backed capability exports for the tinygrad backend. | 38 |
 
 ### `torchlens.backends.torch`
