@@ -409,18 +409,32 @@ def test_paddle_unknown_helper_refuses_typed() -> None:
         )
 
 
-def test_paddle_backward_direction_refuses_typed() -> None:
-    """Backward-direction decisions refuse: paddle has no backward capture."""
+def test_paddle_gradient_site_arms_and_autograd_node_selector_refuses_typed() -> None:
+    """A tl.grad(...) site arms on the finished trace; autograd-node selectors refuse.
 
-    with pytest.raises(BackendUnsupportedError, match="forward interventions only"):
+    Paddle records no backward pass, so a gradient edit cannot fire during the
+    forward capture. It is armed on the trace for the gradient computations
+    (derived gradients); selectors that address recorded backward nodes still
+    refuse typed.
+    """
+
+    from torchlens.intervention._grad_site_neutral import armed_grad_sites
+
+    trace = tl.trace(
+        _mlp,
+        _inputs(),
+        backend="paddle",
+        intervene=tl.when(tl.grad(tl.func("functional.relu")), tl.zero_ablate()),
+    )
+    armed = armed_grad_sites(trace)
+    relu = next(op for op in trace._layer_list if "relu" in str(op.func_name))
+    assert [edit.label for edit in armed] == [relu._label_raw]
+    with pytest.raises(BackendUnsupportedError, match="autograd-node selectors"):
         tl.trace(
             _mlp,
             _inputs(),
             backend="paddle",
-            intervene=tl.when(
-                tl.grad(tl.func("functional.relu")),
-                tl.zero_ablate(),
-            ),
+            intervene=tl.when(tl.grad_fn("relu"), tl.zero_ablate()),
         )
 
 
@@ -473,28 +487,48 @@ def test_paddle_intervene_selector_match_emits_no_warning() -> None:
         _ablated_trace()
 
 
-def test_paddle_grad_options_with_intervene_refuses_typed() -> None:
-    """Derived-grad replay cannot honestly re-run an intervened forward."""
+def _hand_grads(scale: float, *, halted: bool) -> list[Any]:
+    """``paddle.grad`` of ``sum(y * y)`` over the MLP with the relu output scaled.
+
+    ``halted`` differentiates the relu output itself (a capture stopped there).
+    """
+
+    leaves = [value.detach() for value in _inputs()]
+    for leaf in leaves:
+        leaf.stop_gradient = False
+    x, w1, b1, w2, b2 = leaves
+    hidden = paddle.nn.functional.relu(paddle.nn.functional.linear(x, w1, b1)) * scale
+    out = hidden if halted else paddle.nn.functional.linear(hidden, w2, b2)
+    used = leaves[:3] if halted else leaves
+    return list(paddle.grad(paddle.sum(out * out), used))
+
+
+def test_paddle_grad_options_with_intervene_differentiate_the_edited_program() -> None:
+    """Derived gradients of an edited or halted capture are those of the executed program."""
 
     grad_options = tl.backends.paddle.GradOptions(
         loss_fn=lambda output: paddle.sum(output * output),
     )
-    with pytest.raises(BackendUnsupportedError, match="grad_options"):
-        tl.trace(
-            _mlp,
-            _inputs(),
-            backend="paddle",
-            intervene=tl.when(tl.func("functional.relu"), tl.zero_ablate()),
-            capture=tl.options.CaptureOptions(grad_options=grad_options),
-        )
-    with pytest.raises(BackendUnsupportedError, match="grad_options"):
-        tl.trace(
-            _mlp,
-            _inputs(),
-            backend="paddle",
-            stop_after=tl.func("functional.relu"),
-            capture=tl.options.CaptureOptions(grad_options=grad_options),
-        )
+    edited = tl.trace(
+        _mlp,
+        _inputs(),
+        backend="paddle",
+        intervene=tl.when(tl.func("functional.relu"), tl.scale(2.0)),
+        capture=tl.options.CaptureOptions(grad_options=grad_options),
+    )
+    for index, expected in enumerate(_hand_grads(2.0, halted=False)):
+        actual = edited.autograd.derived_grads[f"inputs.{index}"].grad
+        np.testing.assert_allclose(actual.numpy(), expected.numpy(), rtol=1e-5, atol=1e-6)
+    halted = tl.trace(
+        _mlp,
+        _inputs(),
+        backend="paddle",
+        stop_after=tl.func("functional.relu"),
+        capture=tl.options.CaptureOptions(grad_options=grad_options),
+    )
+    for index, expected in enumerate(_hand_grads(1.0, halted=True)):
+        actual = halted.autograd.derived_grads[f"inputs.{index}"].grad
+        np.testing.assert_allclose(actual.numpy(), expected.numpy(), rtol=1e-5, atol=1e-6)
 
 
 def test_paddle_recipes_snapshot_dispatches() -> None:
