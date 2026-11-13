@@ -38,7 +38,6 @@ from ..._ir.semantics import BackendSemantics, CapturePolicy
 from ..._output_slot import returned, stopped
 from ..._postprocess._materialize import materialize_from_events
 from ..._postprocess._selective_save import (
-    apply_static_label_save_policy,
     pop_static_label_save_predicate,
 )
 from ..._quantities import Duration
@@ -80,6 +79,7 @@ from .._protocols.paddle import (
 )
 from .._root_frames import strip_root_frames
 from .._validation_shared import replay_payload
+from . import _retention
 from ._capture_helpers import (
     _alias_to_primary,
     _append_intervention_events,
@@ -87,6 +87,7 @@ from ._capture_helpers import (
     _paddle_facet_snapshot,
     paddle_layer_type,
 )
+from ._capture_scopes import PaddleCaptureHooks
 from ._param_writes import PARAMETER_WRITE_MARKER, ParameterWriteGuard
 from .constants_rule import constant_labels, is_constant_capture, is_literal_producer_capture
 from .derived_grads import (
@@ -387,18 +388,6 @@ class PaddleBackend:
         module_identity_mode = _resolve_optional_capture_field(
             capture, "module_identity_mode", module_identity_mode
         )
-        # keep_orphans/output_device/detach_saved_activations/save_arg_values/
-        # save_code_context/save_rng_states/recurrence_detection/verbose/
-        # compute_input_output_distances/backward_ready/save_raw_input/batch_render/
-        # save_transformed_output/save_visualizations are CaptureOptions-native fields: the
-        # ``capture_options.<field>`` reads above already resolved each one to
-        # its concrete (non-MISSING) default via ``merge_capture_options``,
-        # with the same backend-local defaults this block used to re-apply.
-        # Re-running ``_default_if_missing`` on an already-concrete value was
-        # a no-op at runtime, but it widened mypy's view of the variable back
-        # to its MISSING-including parameter type (``_default_if_missing``
-        # returns ``Any``, which does not narrow); resolving once at the
-        # merge boundary is the fix, not a second pass here.
         activation_transform = _default_if_missing(activation_transform, None)
         save_raw_activations = _default_if_missing(save_raw_activations, True)
         save_grads = _default_if_missing(save_grads, None)
@@ -505,6 +494,7 @@ class PaddleBackend:
         trace._paddle_alias_annotations = []
         trace._paddle_capture_gap_markers = []
         trace._paddle_intervention_runtime = intervention_runtime
+        _retention.start_retention(trace, save_predicate, enabled=grad_options is None)
         if facet_recipes is not None:
             trace.facet_functions = _paddle_facet_snapshot(facet_recipes)
         trace._provenance_backend_version = str(getattr(self.paddle, "__version__", ""))
@@ -536,8 +526,12 @@ class PaddleBackend:
         # not been entered yet. ``unwrap_paddle`` on a partially-installed (or
         # empty) registry is safe, and the hook cleanup follows a completed
         # ``prepare_model_session``.
+        hooks = PaddleCaptureHooks(
+            self.tensor_store, trace, backward_ready=bool(backward_ready) or bool(save_grads)
+        )
         try:
             wrap_paddle(self)
+            hooks.open()
             self._label_source_tensors(trace, args, kwargs)
             trace._provenance_start_time = time.time()
             halt_signal: StopSignal | None = None
@@ -564,12 +558,14 @@ class PaddleBackend:
                 trace.transformed_output = (
                     output_transform(output) if callable(output_transform) else None
                 )
+            hooks.see_output(output)
             self._mark_outputs(trace, output)
             materialize_from_events(trace, trace.capture_events)
             delattr(trace, "capture_events")
             _attach_paddle_param_logs(trace, module_tree if use_object_module else None)
             self._finish_trace(trace, module_tree if use_object_module else None)
-            apply_static_label_save_policy(trace, save_predicate, backend_name="paddle")
+            hooks.retain(trace)
+            _retention.apply_save_with_retention(trace, save_predicate, backend_name="paddle")
             if grad_options is not None:
                 self._attach_derived_grads(
                     trace=trace,
@@ -586,6 +582,8 @@ class PaddleBackend:
                 delattr(trace, "_paddle_intervention_runtime")
             freeze_trace_relation_views(trace)
         finally:
+            hooks.close()
+            _retention.discard_retention(trace)
             self._param_address_by_id = {}
             self._param_write_guard = ParameterWriteGuard()
             self._source_leaves = PaddleSourceLeaves()
@@ -861,26 +859,26 @@ class PaddleBackend:
         *_args
             Ignored compatibility arguments.
         **kwargs
-            Compatibility keyword arguments. ``validate_metadata`` controls
-            whether backend-neutral invariant checks run.
+            ``validate_metadata`` runs the backend-neutral invariant checks.
 
         Returns
         -------
         bool or ValidationStatus
-            True for a verified live pass, False for a verified live failure,
-            or an explicit unavailable status for loaded payload-stripped traces.
+            True or False for a verified live pass or failure, else the
+            unavailable or unverified status of a loaded trace.
         """
 
         status = trace.validation_replay_status
-        if not status.is_available or _paddle_loaded_replay_unavailable(trace):
+        if not status.is_available:  # a loaded trace's replay recipe status is kept as is
+            return status
+        payload_load_status = getattr(trace, "payload_load_status", None)
+        if _paddle_loaded_replay_unavailable(trace):
             status_result = ValidationStatus.unavailable_loaded_runtime_stripped(
-                backend=self.name,
-                payload_load_status=getattr(trace, "payload_load_status", None),
+                backend=self.name, payload_load_status=payload_load_status
             )
             setattr(trace, "_validation_replay_status", status_result)
             return status_result
         source = _validation_source(trace)
-        payload_load_status = getattr(trace, "payload_load_status", None)
         try:
             from ..._validation_status import count_importer_region_annotations
 
@@ -1469,9 +1467,7 @@ class PaddleBackend:
     ) -> OpEvent:
         """Build one topology-complete Paddle operation event."""
 
-        tensor_ref = self.tensor_ref(
-            session, output, output if policy.save_payload else None, policy
-        )
+        tensor_ref = _retention.saved_ref(self, session, reserved, func_event_input, output, policy)
         input_ancestors = frozenset(
             edge.parent_label_raw for edge in parents if edge.parent_label_raw.startswith("input.")
         )
