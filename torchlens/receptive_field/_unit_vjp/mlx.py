@@ -24,6 +24,9 @@ from . import ReplayRefusal, single_parent_value
 
 __all__: list[str] = []
 
+#: MLX's message for a primitive without a forward-mode (jvp) rule.
+_NO_FORWARD_RULE = "[Primitive::jvp] Not implemented"
+
 _STRIPPED = (
     "This MLX trace holds no runtime call records (a loaded trace keeps none), so its "
     "ops cannot be replayed for a gradient probe. Capture the model again in this process."
@@ -110,12 +113,21 @@ def vjp(fn: Callable[..., Any], primals: tuple[Any, ...], cotangent: Any) -> tup
 
 def jvp(
     fn: Callable[..., tuple[Any, ...]], primals: tuple[Any, ...], tangents: tuple[Any, ...]
-) -> tuple[Any, ...]:
-    """``mx.jvp`` of a tuple-valued ``fn``: one tangent per output."""
+) -> tuple[Any, ...] | None:
+    """``mx.jvp`` of a tuple-valued ``fn``: one tangent per output.
+
+    Returns ``None`` when a primitive on the cone has no forward-mode rule in
+    this MLX release (convolution, for one), so the caller sweeps reverse probes.
+    """
 
     import mlx.core as mx  # deferred: optional dependency
 
-    _, outputs = mx.jvp(lambda *values: list(fn(*values)), list(primals), list(tangents))
+    try:
+        _, outputs = mx.jvp(lambda *values: list(fn(*values)), list(primals), list(tangents))
+    except ValueError as exc:
+        if _NO_FORWARD_RULE in str(exc):
+            return None
+        raise
     return tuple(outputs)
 
 

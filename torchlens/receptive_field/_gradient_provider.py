@@ -116,10 +116,23 @@ def _bind(env: dict[str, Any], op: Op, value: Any) -> None:
         env[label] = value
 
 
+def _canonical(trace: Trace, op: Op) -> Op:
+    """The trace-owned op behind a handle.
+
+    Trace accessors return lightweight handles that need not carry every
+    parent-reference label (the raw label children record), so the cone binds
+    and reads the canonical op from ``trace._layer_list`` instead.
+    """
+
+    return next((item for item in trace._layer_list if item.label == op.label), op)
+
+
 def _build_cone(trace: Trace, sources: Sequence[Op], targets: Sequence[Op]) -> _Cone:
     """Collect the executed sub-DAG between any source and any target, in trace order."""
 
     framework = _framework(trace)
+    sources = tuple(_canonical(trace, op) for op in sources)
+    targets = tuple(_canonical(trace, op) for op in targets)
     labels: set[str] = set()
     for source in sources:
         for target in targets:
@@ -392,6 +405,8 @@ def _columns_for_targets(
 ) -> tuple[torch.Tensor, ...]:
     """One Jacobian column per target; a target the source cannot reach gets zeros."""
 
+    source = _canonical(trace, source)
+    targets = tuple(_canonical(trace, op) for op in targets)
     connected = tuple(op for op in targets if between_labels(trace, source, op))
     columns: dict[str, torch.Tensor] = {}
     if connected:
