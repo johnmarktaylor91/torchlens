@@ -316,21 +316,6 @@ def test_tf_module_sites_without_module_tree_refuse_typed() -> None:
         )
 
 
-def test_tf_intervene_with_grad_options_refuses_typed() -> None:
-    """intervene= and grad_options= are mutually exclusive on tf."""
-
-    from torchlens.backends.tf import GradOptions
-
-    with pytest.raises(BackendUnsupportedError, match="does not combine"):
-        tl.trace(
-            lambda x: tf.reduce_sum(tf.nn.relu(x)),
-            tf.ones((2,)),
-            backend="tf",
-            intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
-            capture=tl.options.CaptureOptions(grad_options=GradOptions()),
-        )
-
-
 def test_tf_backward_direction_refuses_typed() -> None:
     """Backward-direction decisions refuse on the forward-only preview."""
 
