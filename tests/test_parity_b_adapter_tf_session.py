@@ -18,9 +18,11 @@ tf = pytest.importorskip("tensorflow")
 
 import torchlens as tl  # noqa: E402
 from torchlens.backends._replay_adapters import (  # noqa: E402
+    ReplayPlan,
     ReplaySession,
     ReplayStep,
     get_adapter,
+    merge_grads,
     pullback_step,
 )
 from torchlens.backends._validation_shared import ops_by_label  # noqa: E402
@@ -38,13 +40,20 @@ def _unique_ops(trace: Any) -> list[Any]:
     return list(trace._layer_list)
 
 
-def _is_model_output(op: Any) -> bool:
-    """Whether ``op``'s value is (part of) the model output: the tape seeds it with ones."""
+def _output_seeds(trace: Any) -> dict[str, Any]:
+    """Ones per model-output op (summed when one value is returned more than once).
 
-    if any(bool(getattr(op, name, False)) for name in ("is_output", "is_output_parent")):
-        return True
-    outputs = set(getattr(getattr(op, "_source_trace", None), "output_layers", ()) or ())
-    return bool(outputs & {getattr(op, "label", None), getattr(op, "_label_raw", None)})
+    The tape's loss is the sum over the flattened model outputs, so its seed on
+    each output op is ones, times the number of times that op's value is returned.
+    """
+
+    ops = ops_by_label(trace)
+    seeds: dict[str, Any] = {}
+    for name in trace.output_layers:
+        op = ops[name]
+        ones = ADAPTER.zeros_like(op.out) + 1
+        seeds[op.label] = ones if op.label not in seeds else ADAPTER.add(seeds[op.label], ones)
+    return seeds
 
 
 def _plan(trace: Any) -> tuple[list[ReplayStep], dict[str, Any]]:
@@ -68,23 +77,19 @@ def test_session_replays_the_graph_and_pullback_matches_the_tape(name: str) -> N
     trace = tl.trace(model, example, backend="tf")
     steps, initial = _plan(trace)
     assert steps
-    with ReplaySession(ADAPTER, trace, steps, initial=initial) as session:
+    with ReplaySession(ADAPTER, trace, ReplayPlan(tuple(steps), initial)) as session:
         values = session.run()
     ops = ops_by_label(trace)
     for step in steps:
         assert ADAPTER.close(ops[step.label].out, values[step.label]), f"{name}:{step.label}"
-    grads: dict[str, Any] = {
-        op.label: ADAPTER.zeros_like(op.out) + 1
-        for op in _unique_ops(trace)
-        if _is_model_output(op)
-    }
+    grads = _output_seeds(trace)
     assert grads, "no model-output op to seed"
     for step in reversed(steps):
         seed = grads.get(step.label)
         if seed is None:
             continue
         parents = [values.get(o.parent_label, initial.get(o.parent_label)) for o in step.inputs]
-        pullback_step(ADAPTER, trace, step, parents, [seed], grads)
+        grads = merge_grads(ADAPTER, grads, pullback_step(ADAPTER, trace, step, parents, [seed]))
     inputs = tf.convert_to_tensor(example)
     with tf.GradientTape() as tape:
         tape.watch(inputs)

@@ -20,7 +20,6 @@ not parent occurrences. Framework imports stay inside functions.
 
 from __future__ import annotations
 
-import weakref
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
@@ -80,35 +79,19 @@ _RESOURCE_REASON = (
 _MAX_LITERAL_ELEMENTS = 65536
 _REQUIRED_ATTRS = ("tf_op_type", "tf_attrs", "output_index", "init_op", "input_sources")
 
-_CacheEntry = tuple[Any, Any, dict[str, Any], dict[str, Any]]
-_INDEX_CACHE: dict[int, _CacheEntry] = {}
-
-
 # --- lookup ----------------------------------------------------------------
 
 
 def _index(trace: Any) -> tuple[dict[str, Any], dict[str, Any]]:
     """Return ``(ops by raw and public label, captures by raw label)`` for ``trace``.
 
-    Cached per trace object and keyed on the identity of its capture tuple, so a
-    cone replay does not rebuild the index per op; :func:`bind_recipes` replaces
-    the tuple and so invalidates the entry.
+    Built per call and never cached, so the adapter holds no module state and a
+    capture list replaced by :func:`bind_recipes` is always seen.
     """
 
     captures = getattr(trace, "_tf_op_captures", ())
-    entry = _INDEX_CACHE.get(id(trace))
-    if entry is not None and entry[0]() is trace and entry[1] is captures:
-        return entry[2], entry[3]
-
     ops = dict(ops_by_label(trace))
     by_raw = {c.label_raw: c for c in captures if isinstance(c, TFOpCapture)}
-    try:
-        ref = weakref.ref(trace)
-    except TypeError:
-        return ops, by_raw
-    for key in [k for k, v in _INDEX_CACHE.items() if v[0]() is None]:
-        del _INDEX_CACHE[key]
-    _INDEX_CACHE[id(trace)] = (ref, captures, ops, by_raw)
     return ops, by_raw
 
 
@@ -554,7 +537,6 @@ def bind_recipes(trace: Any, recipes: Mapping[str, OpRecipe]) -> None:
     # A cached replay status describes the capture list just replaced (for a
     # loaded trace: "stripped"); drop it so the next validation recomputes.
     trace._validation_replay_status = None
-    _INDEX_CACHE.pop(id(trace), None)
 
 
 def _checked_record(ops: Mapping[str, Any], label: str, item: OpRecipe) -> tuple[Any, str]:
@@ -620,7 +602,7 @@ def _payload_tensor(tf: Any, record: Any) -> Any:
     return tf.convert_to_tensor(to_host(record.out))
 
 
-__all__ = [
+__all__ = (
     "ALLOWLIST",
     "BACKEND",
     "INERT_IDENTITY",
@@ -634,4 +616,4 @@ __all__ = [
     "to_host",
     "vjp",
     "zeros_like",
-]
+)
