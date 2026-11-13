@@ -25,6 +25,7 @@ from torchlens.backends._reverse_engine import (
 from torchlens.errors import RunCapabilityUnavailableError
 from torchlens.intervention import _grad_site_neutral as neutral, _grad_site_plan
 from torchlens.intervention._grad_site_neutral import GradSiteEdit, edited_gradients
+from torchlens.intervention.hooks import _target_operands
 
 _A = np.array([0.5, -1.25, 2.0])
 _B = np.array([1.5, 0.75, -0.5])
@@ -199,23 +200,31 @@ def test_one_node_per_op_folds_repeated_multi_output_records() -> None:
 
 
 def test_grad_site_targets_reads_unions_and_pass_qualifiers() -> None:
-    targets = neutral.grad_site_targets(tl.grad("relu_1") | tl.grad("relu_2"))
+    targets = neutral.grad_site_targets(tl.grad("relu_1") | tl.grad("relu_2"), _target_operands)
     assert [inner for inner, _pass in targets] == ["relu_1", "relu_2"]
     assert all(qualifier is None for _inner, qualifier in targets)
-    ((inner, qualifier),) = neutral.grad_site_targets(tl.grad("relu_1") & tl.in_backward_pass(2))
+    ((inner, qualifier),) = neutral.grad_site_targets(
+        tl.grad("relu_1") & tl.in_backward_pass(2), _target_operands
+    )
     assert (inner, qualifier) == ("relu_1", 2)
     with pytest.raises(RunCapabilityUnavailableError, match="autograd-node selectors"):
-        neutral.grad_site_targets(tl.grad_fn("AddmmBackward0"))
+        neutral.grad_site_targets(tl.grad_fn("AddmmBackward0"), _target_operands)
 
 
 def test_build_arm_and_run_armed_grad_sites(monkeypatch: pytest.MonkeyPatch) -> None:
     trace, _graph = _setup()
     edits = neutral.build_grad_site_edits(
-        tl.grad("e") | tl.grad("c"), lambda g, call: 0 * g, lambda inner: (inner,), name="zero"
+        tl.grad("e") | tl.grad("c"),
+        lambda g, call: 0 * g,
+        lambda inner: (inner,),
+        operands=_target_operands,
+        name="zero",
     )
     assert [(e.label, e.name) for e in edits] == [("e", "zero"), ("c", "zero")]
     with pytest.raises(RunCapabilityUnavailableError, match="names no recorded op"):
-        neutral.build_grad_site_edits(tl.grad("e"), lambda g, call: g, lambda inner: ())
+        neutral.build_grad_site_edits(
+            tl.grad("e"), lambda g, call: g, lambda inner: (), operands=_target_operands
+        )
     neutral.arm_grad_sites(trace, edits[:1])
     neutral.arm_grad_sites(trace, edits[1:])
     assert neutral.armed_grad_sites(trace) == edits
@@ -253,3 +262,34 @@ def test_do_signal_plan_routes_a_non_torch_trace_to_its_backend_door(
     monkeypatch.setitem(sys.modules, "torchlens.backends.gsdoor._grad_site_door", door)
     assert _grad_site_plan.do_signal_plan(trace, plan, "request") is trace
     assert calls == [(trace, plan, "request")]
+
+
+def test_a_caller_supplied_operand_reader_drives_the_decomposition() -> None:
+    """The neutral module reads composites only through the caller's ``operands``."""
+
+    seen: list[Any] = []
+
+    def leaf_only(site: Any) -> tuple[str | None, tuple[Any, ...]]:
+        seen.append(site)
+        return None, ()
+
+    assert neutral.grad_site_targets(tl.grad("relu_1"), leaf_only) == (("relu_1", None),)
+    assert seen == []
+    with pytest.raises(RunCapabilityUnavailableError, match="not a tl.grad"):
+        neutral.grad_site_targets(tl.grad("relu_1") | tl.grad("relu_2"), leaf_only)
+    assert len(seen) == 1
+
+
+def test_the_neutral_module_imports_nothing_from_the_selector_or_hook_cycle() -> None:
+    """Backend runtimes import this module; it must not pull them into the largest cycle."""
+
+    import ast
+    from pathlib import Path
+
+    tree = ast.parse(Path(neutral.__file__).read_text(encoding="utf-8"))
+    imported = {
+        node.module or ""
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.level > 0
+    }
+    assert imported <= {"backends._reverse_engine", "backends._replay_adapters", "errors"}
