@@ -1445,7 +1445,11 @@ class MLXBackend:
         """
 
         status = trace.validation_replay_status
-        if not status.is_available or _mlx_loaded_replay_unavailable(trace):
+        if not status.is_available:
+            # A loaded trace's replay recipe status (unverified naming the ops
+            # without a recipe, or unavailable naming the cause) is kept as is.
+            return status
+        if _mlx_loaded_replay_unavailable(trace):
             return self._stamp_unavailable_status(trace)
         replayed_count = 0
         failed_count = 0

@@ -877,7 +877,11 @@ class PaddleBackend:
         """
 
         status = trace.validation_replay_status
-        if not status.is_available or _paddle_loaded_replay_unavailable(trace):
+        if not status.is_available:
+            # A loaded trace's replay recipe status (unverified naming the ops
+            # without a recipe, or unavailable naming the cause) is kept as is.
+            return status
+        if _paddle_loaded_replay_unavailable(trace):
             status_result = ValidationStatus.unavailable_loaded_runtime_stripped(
                 backend=self.name,
                 payload_load_status=getattr(trace, "payload_load_status", None),
