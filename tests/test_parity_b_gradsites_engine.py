@@ -7,6 +7,7 @@ their slot, and the module refuses what it cannot do.
 
 from __future__ import annotations
 
+import dataclasses
 import sys
 from types import SimpleNamespace
 from typing import Any
@@ -211,8 +212,18 @@ def test_grad_site_targets_reads_unions_and_pass_qualifiers() -> None:
         neutral.grad_site_targets(tl.grad_fn("AddmmBackward0"), _target_operands)
 
 
+class _ArmableTrace(fake.FakeTrace):
+    """The fake trace keyed by identity, as a real ``Trace`` is."""
+
+    __hash__ = object.__hash__
+
+
 def test_build_arm_and_run_armed_grad_sites(monkeypatch: pytest.MonkeyPatch) -> None:
-    trace, _graph = _setup()
+    plain, _graph = _setup()
+    with pytest.raises(RunCapabilityUnavailableError, match="cannot hold armed gradient edits"):
+        neutral.arm_grad_sites(plain, ())
+    assert neutral.armed_grad_sites(plain) == ()
+    trace = _ArmableTrace(**{f.name: getattr(plain, f.name) for f in dataclasses.fields(plain)})
     edits = neutral.build_grad_site_edits(
         tl.grad("e") | tl.grad("c"),
         lambda g, call: 0 * g,
