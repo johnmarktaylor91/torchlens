@@ -182,6 +182,13 @@ class SpillStore(Mapping[str, Any]):
         elif existing in self._memory:
             self._memory[label] = self._memory[existing]
 
+    def alias_final_labels(self, ops: Any) -> None:
+        """Make each op's final label resolve to the witness stored under its raw label."""
+
+        for op in ops:
+            if isinstance(op.label, str) and isinstance(op._label_raw, str):
+                self.alias(op.label, op._label_raw)
+
     @property
     def in_memory_count(self) -> int:
         """Number of witnesses kept in memory because they could not spill."""
@@ -306,14 +313,9 @@ class RetentionRun:
         if store is None:
             trace._options_structure_only = True
             return
-        selector = self.request.selector
-        for op in trace._layer_list:
-            if isinstance(op.label, str) and isinstance(op._label_raw, str):
-                store.alias(op.label, op._label_raw)
-        keep = {op.label for op in trace._layer_list if selector is None or bool(selector(op))}
-        for op in trace._layer_list:
-            if op.label in keep and op.out is None and op._label_raw in store:
-                _restore_public_payload(op, store[op._label_raw])
+        store.alias_final_labels(trace._layer_list)
+        keep = _final_keep_set(trace._layer_list, self.request.selector)
+        _restore_live_misses(trace._layer_list, keep, store)
         self._apply_keep_set(trace, keep)
         public: Mapping[str, Any] = trace._selective_save_hidden_payloads
         trace._selective_save_hidden_payloads = ChainMap(dict(public), store)
@@ -324,6 +326,20 @@ def start_retention(mx: Any, deps: RetentionDeps) -> RetentionRun | None:
 
     request = active_request()
     return None if request is None else RetentionRun(request, mx, deps)
+
+
+def _final_keep_set(ops: Any, selector: Any | None) -> set[str]:
+    """Return the labels the post-capture ``save=`` rule keeps on final ops."""
+
+    return {op.label for op in ops if selector is None or bool(selector(op))}
+
+
+def _restore_live_misses(ops: Any, keep: set[str], store: SpillStore) -> None:
+    """Restore the public payload of each kept op the live match turned into a witness."""
+
+    for op in ops:
+        if op.label in keep and op.out is None and op._label_raw in store:
+            _restore_public_payload(op, store[op._label_raw])
 
 
 def _restore_public_payload(op: Any, value: Any) -> None:
