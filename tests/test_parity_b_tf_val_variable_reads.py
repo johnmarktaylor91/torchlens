@@ -9,14 +9,16 @@ the handle, a training BatchNorm moving-statistics write, a variable outside the
 module tree, a graph-mode function call, and a saved read that differs from the
 snapshot (fails, naming the read).
 
-Until the capture lane wires :func:`variable_read_scope` into the TF backend, the
-``wired`` fixture wraps ``run_wired_session`` the same way the backend hunk does.
+The TF capture enters :func:`variable_read_scope` through its forward hooks; on a
+tree without those hooks the ``wired`` fixture wraps ``run_wired_session`` the same
+way.
 """
 
 from __future__ import annotations
 
 import warnings
 from collections.abc import Iterator
+from contextlib import contextmanager
 from types import SimpleNamespace
 from typing import Any
 
@@ -45,8 +47,8 @@ def wired(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     from torchlens import _state
     from torchlens.backends.tf import backend as tf_backend
 
-    if hasattr(tf_backend, "variable_read_scope"):
-        yield  # the capture lane has wired the scope itself
+    if _backend_wires_the_scope():
+        yield
         return
     original = tf_backend.run_wired_session
 
@@ -61,6 +63,16 @@ def wired(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 
     monkeypatch.setattr(tf_backend, "run_wired_session", run_wired_session)
     yield
+
+
+def _backend_wires_the_scope() -> bool:
+    """Whether the TF capture's forward hooks enter the variable-read scope themselves."""
+
+    try:
+        from torchlens.backends.tf import _capture_hooks
+    except ImportError:
+        return False
+    return getattr(_capture_hooks, "_VARIABLE_READS_MODULE", None) == _variable_reads.__name__
 
 
 def _row(family: str) -> tuple[Any, Any]:
@@ -134,13 +146,17 @@ def test_repeated_reads_bind_to_one_snapshot(wired: None) -> None:
 
 @_needs_tf
 @pytest.mark.tf_backend
-def test_without_the_scope_reads_stay_unverified() -> None:
-    """A capture made without the scope keeps the effectful_region verdict."""
+def test_without_a_ledger_reads_stay_unverified(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A capture that leaves no ledger keeps the effectful_region verdict."""
 
-    from torchlens.backends.tf import backend as tf_backend
+    @contextmanager
+    def no_ledger(tf_module: Any, module_tree: Any) -> Iterator[None]:
+        """Record nothing, as a capture without a module tree does."""
 
-    if hasattr(tf_backend, "variable_read_scope"):
-        pytest.skip("the backend wires the scope; the unwired path no longer exists")
+        del tf_module, module_tree
+        yield None
+
+    monkeypatch.setattr(_variable_reads, "variable_read_scope", no_ledger)
     status = _validate(_capture(*_row("mlp_module")))
     assert {item["reason"] for item in _read_decisions(status)} == {"effectful_region"}
     assert status.state == "unverified"
