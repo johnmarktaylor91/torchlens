@@ -332,13 +332,13 @@ def test_tf_intervene_with_grad_options_refuses_typed() -> None:
 
 
 def test_tf_backward_direction_refuses_typed() -> None:
-    """Backward-direction decisions refuse on the forward-only preview."""
+    """A clause mixing a gradient address with an activation address refuses typed."""
 
     x = tf.constant([1.0, -1.0, 2.0])
-    with pytest.raises(BackendUnsupportedError, match="forward-only"):
+    with pytest.raises(BackendUnsupportedError, match="Split it into separate clauses"):
         tl.trace(
             _relu_plus_ten,
             x,
             backend="tf",
-            intervene=tl.when(tl.grad(tl.func("relu")), tl.zero_ablate()),
+            intervene=tl.when(tl.grad(tl.func("relu")) | tl.func("relu"), tl.zero_ablate()),
         )

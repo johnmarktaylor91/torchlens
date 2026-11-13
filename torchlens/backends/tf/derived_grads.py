@@ -38,8 +38,8 @@ from .._finalize import mirror_param_derived_grads, stable_callable_name as _cal
 from .._root_frames import strip_root_frames
 from .._validation_shared import float_replay_tolerances
 from ..registry import BackendUnsupportedError
+from . import interventions
 from ._edited_replay import preserved_module_counts, run_tf_gradient_replay
-from .interventions import tf_intervention_wrap, wire_eager_session
 from .modules import TFModuleTree
 from .op_callback_capture import TFEagerCaptureSession, TFOpCapture
 
@@ -227,8 +227,7 @@ def attach_tf_derived_grads(
                 trace=trace,
                 intervene=intervene,
                 halt=halt,
-                wire=wire_eager_session,
-                wrap=tf_intervention_wrap,
+                runtime=interventions,
             )
             loss = (
                 grad_options.loss_fn(replay_result.output)

@@ -45,6 +45,7 @@ from ..._selection.selectors import BaseSelector
 from ...intervention._types import Edit, InterventionDecision
 from ...recording._exceptions import PredicateError
 from ..registry import BackendUnsupportedError
+from ._grad_sites import gradient_replay_intervene, stage_tf_grad_clauses
 from ._halt import CallbackAbort, TFHaltRuntime, apply_halt_outcome, chain_output_hooks
 from ._intervention_hooks import (
     _producer_label,
@@ -174,17 +175,42 @@ def _value_site(plan_id: str, predicate: Any) -> TFInterventionSite:
 
 
 def _reject_gradient_site(selector: BaseSelector) -> None:
-    """Refuse a site outside the activation universe: the tf backend is forward-only."""
+    """Refuse a site mixing a gradient or autograd-node address into an activation clause."""
+
+    if _site_universes(selector) != {"activation"}:
+        raise BackendUnsupportedError(
+            "the tf backend takes a gradient address only as a whole tl.when(tl.grad(...), "
+            f"edit) clause; the site {selector!r} mixes it with activation addresses or "
+            "names autograd nodes TensorFlow does not record. Split it into separate clauses.",
+            code=_TF_REFUSAL_BACKWARD,
+        )
+
+
+def _site_universes(selector: Any) -> set[str]:
+    """The site universes (activation, gradient, node) a clause's selector addresses."""
 
     from ...intervention.hooks import split_site_branches
 
-    if any(universe != "activation" for universe, _branch in split_site_branches(selector)):
-        raise BackendUnsupportedError(
-            "tf backend interventions are forward-only; the site "
-            f"{selector!r} addresses a gradient, which needs true backward capture "
-            "that the tf backend does not declare. Use the PyTorch backend for gradient edits.",
-            code=_TF_REFUSAL_BACKWARD,
-        )
+    if not isinstance(selector, BaseSelector):
+        return {"activation"}
+    return {universe for universe, _branch in split_site_branches(selector)}
+
+
+def split_tf_grad_clauses(intervene: Any) -> tuple[Any, tuple[Any, ...]]:
+    """Split whole ``tl.grad`` clauses off ``intervene``: ``(the rest or None, grad clauses)``."""
+
+    clauses = list(intervene) if isinstance(intervene, (list, tuple)) else [intervene]
+    grad = [c for c in clauses if _site_universes(getattr(c, "selector", None)) == {"gradient"}]
+    rest = [c for c in clauses if all(c is not g for g in grad)]
+    return (rest or None) if grad else intervene, tuple(grad)
+
+
+def tf_gradient_replay_intervene(trace: Any, tf: Any, intervene: Any) -> Any:
+    """``intervene`` for the derived-gradient replay, its ``tl.grad`` clauses as tape edits."""
+
+    from ...intervention import when  # deferred: the intervention package is in the import cycle
+
+    return gradient_replay_intervene(trace, tf, *split_tf_grad_clauses(intervene), when)
 
 
 def _resolve_tf_hook(decision: InterventionDecision, tf: Any) -> Callable[[Any], Any]:
@@ -621,14 +647,8 @@ def audit_tf_site_reachability(
             "points) or a module boundary can be substituted; refusing instead of "
             "silently not intervening."
         )
-    # Zero-match disclosure (the preview half of the torch-side fix): the
-    # reachability refusal above covers matched-but-unpresented ops only, so a
-    # selector matching NOTHING -- or a module site whose boundary the exit
-    # hook never reached (module sites get no reachability audit by
-    # construction) -- produced a trace byte-identical to plain capture with
-    # no signal. ``fired_site_labels`` is the accounting the fire path already
-    # writes; a planned site with zero fires warns, mirroring the torch
-    # forward/backward and paddle disclosures.
+    # Zero-match disclosure: a planned site with zero fires (a selector matching
+    # nothing, or a module boundary never reached) warns, as torch and paddle do.
     import warnings as _warnings
 
     fired_plan_ids = {plan_id for plan_id, _label in plan.fired_site_labels}
@@ -683,6 +703,8 @@ def wire_eager_session(trace: Any, session: Any, intervene: Any, halt: Any) -> T
     tf = session.tf
     plan = None
     edit_hook = None
+    intervene, grad_clauses = split_tf_grad_clauses(intervene)
+    stage_tf_grad_clauses(trace, grad_clauses)
     if intervene is not None:
         plan = normalize_tf_interventions(intervene, tf)
         if plan.module_sites and session.module_tree is None:
@@ -770,6 +792,8 @@ __all__ = [
     "normalize_tf_interventions",
     "observe_tf_op_sites",
     "run_wired_session",
+    "split_tf_grad_clauses",
+    "tf_gradient_replay_intervene",
     "tf_intervention_wrap",
     "wire_eager_session",
 ]
