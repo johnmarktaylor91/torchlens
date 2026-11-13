@@ -13,7 +13,6 @@ from typing import Any
 import pytest
 
 paddle = pytest.importorskip("paddle")
-pytest.importorskip("torchlens.recording._backend_events")
 
 import numpy as np  # noqa: E402
 

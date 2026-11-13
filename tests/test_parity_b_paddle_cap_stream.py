@@ -13,12 +13,13 @@ from typing import Any
 import pytest
 
 paddle = pytest.importorskip("paddle")
-np = pytest.importorskip("numpy")
+import numpy as np  # noqa: E402  (a Paddle dependency)
 
 import torchlens as tl  # noqa: E402
 from torchlens._errors import InvalidArgumentError  # noqa: E402
 from torchlens._io import ArtifactError  # noqa: E402
 from torchlens._io.streaming import BundleStreamWriter  # noqa: E402
+from torchlens._postprocess import finalization  # noqa: E402
 from torchlens.backends import registry  # noqa: E402
 from torchlens.backends.paddle import _stream_capture  # noqa: E402
 from torchlens.backends.paddle._retention import STREAM_KEY  # noqa: E402
@@ -40,6 +41,16 @@ def _paddle_streaming_open(monkeypatch: pytest.MonkeyPatch) -> None:
         },
     )
     monkeypatch.setitem(registry._REGISTRY, "paddle", replaced)
+    # Streamed finalize asks whether any backward pass retained gradients; on a
+    # backend without true-backward capture the grads accessor refuses, so the
+    # answer is "none". This mirrors the guard proposed for the shared finalize.
+    retained = finalization._has_retained_gradient_payloads
+
+    def _guarded(trace: Any) -> bool:
+        backend = registry.get_backend_spec(str(trace._provenance_backend))
+        return backend.capabilities.backward_capture and retained(trace)
+
+    monkeypatch.setattr(finalization, "_has_retained_gradient_payloads", _guarded)
 
 
 def _chain(x: Any) -> Any:

@@ -13,7 +13,7 @@ from typing import Any
 import pytest
 
 paddle = pytest.importorskip("paddle")
-np = pytest.importorskip("numpy")
+import numpy as np  # noqa: E402  (a Paddle dependency)
 
 import torchlens as tl  # noqa: E402
 from torchlens.backends.paddle import PaddleBackend  # noqa: E402
@@ -198,11 +198,12 @@ def _peak(config: str) -> int:
 
     done = subprocess.run(
         [sys.executable, "-c", _PEAK_SCRIPT, config],
-        check=True,
+        check=False,
         capture_output=True,
         text=True,
         timeout=300,
     )
+    assert done.returncode == 0, f"{config} peak run failed:\n{done.stderr[-3000:]}"
     return int(json.loads(done.stdout.strip().splitlines()[-1])["peak_bytes"])
 
 

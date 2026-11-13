@@ -599,10 +599,10 @@ class PaddleBackend:
                 )
             finally:
                 unwrap_paddle()
-        # Settlement is the LAST act, after ALL teardown (the path-20 stamp
-        # contract): a teardown raise escapes productless -- the object
-        # derives UNATTESTED, never carrying a COMPLETE/HALTED stamp.
-        _stream_capture.settle(trace, stamp_backend_finalized, _finalize_streamed_bundle)
+        # Settlement is the LAST act, after ALL teardown (path-20 stamp contract): a teardown
+        # raise escapes productless (UNATTESTED, never a COMPLETE/HALTED stamp).
+        stamp_backend_finalized(trace)
+        _stream_capture.settle(trace, _finalize_streamed_bundle)
         return trace
 
     def validate_entry(self, *args: Any, **kwargs: Any) -> bool:

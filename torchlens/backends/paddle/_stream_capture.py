@@ -282,21 +282,18 @@ def end_capture_mode(trace: Any) -> None:
         trace._out_writer = None
 
 
-def settle(trace: Any, stamp: Callable[[Any], Any], finalize_bundle: Callable[[Any], None]) -> None:
-    """Settle the capture outcome, then publish its streamed bundle.
+def settle(trace: Any, finalize_bundle: Callable[[Any], None]) -> None:
+    """Publish the streamed bundle of a trace whose capture outcome is stamped.
 
     Parameters
     ----------
     trace
-        The finished trace.
-    stamp
-        ``stamp_backend_finalized``: settles the capture outcome.
+        The finished trace, already stamped by ``stamp_backend_finalized``.
     finalize_bundle
         ``_finalize_streamed_bundle``: stages the bundle and, the outcome being
         settled, publishes it with the outcome attestation.
     """
 
-    stamp(trace)
     stream = trace.__dict__.pop(_retention.STREAM_KEY, None)
     if stream is not None and stream.writer(trace) is not None:
         finalize_bundle(trace)
@@ -345,7 +342,11 @@ class PaddleCodecWrites:
                 f"Unsupported Paddle payload for streaming at {label} (blob_id={blob_id}): {exc}"
             )
             self.abort(reason)  # type: ignore[attr-defined]
-            raise ArtifactError(reason) from exc
+            raise ArtifactError(
+                reason,
+                code="stream_payload_unsupported",
+                remedy="capture without storage= and save the finished trace with trace.save",
+            ) from exc
         self._paddle_codec_fields[blob_id] = (fields, str(encoded.logical_device))
         return transport
 
@@ -372,7 +373,7 @@ class PaddleCodecWrites:
         if duplicate:
             reason = f"Duplicate streaming blob_id={blob_id} for {label}."
             self.abort(reason)  # type: ignore[attr-defined]
-            raise ArtifactError(reason)
+            raise ArtifactError(reason, code="stream_blob_id_duplicate")
 
     def _write_prepared_blob(self, *, blob_id: str, prepared: Any, kind: str, label: str) -> Any:
         """Queue a prepared payload; Paddle transports go to the NumPy-codec chunk."""

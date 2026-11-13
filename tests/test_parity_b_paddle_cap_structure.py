@@ -95,7 +95,7 @@ def test_structure_only_refuses_validation_typed() -> None:
 
     with pytest.raises(StructureOnlyCapabilityError) as info:
         shell.validate_forward_pass(model(_input(4)))
-    assert info.value.code == "structure_only_validation_unsupported"
+    assert info.value.fields["code"] == "structure_only_validation_unsupported"
 
 
 def test_structure_only_is_refused_while_the_gate_is_closed(
