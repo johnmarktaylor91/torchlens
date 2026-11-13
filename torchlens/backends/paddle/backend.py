@@ -22,6 +22,7 @@ from ..._data_classes.derived_grad import (
 from ..._data_classes.param import Param, ParamAccessor
 from ..._data_classes.trace import Trace
 from ..._deprecations import MISSING, MissingType
+from ..._io.streaming import BundleStreamWriter
 from ..._ir.capture_events import CaptureEvents
 from ..._ir.events import (
     ArgTemplateRef,
@@ -42,6 +43,7 @@ from ..._postprocess._selective_save import (
     needs_post_save_predicate,
     pop_static_label_save_predicate,
 )
+from ..._postprocess.finalization import _finalize_streamed_bundle
 from ..._quantities import Duration
 from ..._trace_core.relation_views import freeze_trace_relation_views
 from ..._validation_status import ValidationReplaySource, ValidationStatus
@@ -496,7 +498,7 @@ class PaddleBackend:
         trace._paddle_alias_annotations = []
         trace._paddle_capture_gap_markers = []
         trace._paddle_intervention_runtime = intervention_runtime
-        _stream_capture.start_capture_mode(trace, capture_mode)
+        _stream_capture.start_capture_mode(trace, capture_mode, BundleStreamWriter)
         if facet_recipes is not None:
             trace.facet_functions = _paddle_facet_snapshot(facet_recipes)
         trace._provenance_backend_version = str(getattr(self.paddle, "__version__", ""))
@@ -585,7 +587,7 @@ class PaddleBackend:
             freeze_trace_relation_views(trace)
         finally:
             hooks.close()
-            _retention.discard_retention(trace)
+            _stream_capture.end_capture_mode(trace)
             self._param_address_by_id = {}
             self._param_write_guard = ParameterWriteGuard()
             self._source_leaves = PaddleSourceLeaves()
@@ -600,7 +602,7 @@ class PaddleBackend:
         # Settlement is the LAST act, after ALL teardown (the path-20 stamp
         # contract): a teardown raise escapes productless -- the object
         # derives UNATTESTED, never carrying a COMPLETE/HALTED stamp.
-        stamp_backend_finalized(trace)
+        _stream_capture.settle(trace, stamp_backend_finalized, _finalize_streamed_bundle)
         return trace
 
     def validate_entry(self, *args: Any, **kwargs: Any) -> bool:
@@ -2281,7 +2283,7 @@ def _reject_extra_kwargs(
 
     static = save_predicate is not None and not needs_post_save_predicate(save_predicate)
     retained = save_predicate if static and grad_options is None else None
-    mode = _stream_capture.pop_capture_mode(capture, extra_kwargs, retained)
+    mode = _stream_capture.pop_capture_mode(capture, extra_kwargs, retained, save_predicate)
     reject_extra_trace_kwargs(
         extra_kwargs,
         PADDLE_EXTRA_KWARG_POLICY,

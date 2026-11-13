@@ -34,6 +34,9 @@ from ... import _state
 STATE_KEY = "_paddle_retention_state"
 """Trace ``__dict__`` key holding the capture's :class:`PaddleRetention`."""
 
+STREAM_KEY = "_paddle_stream_state"
+"""Trace ``__dict__`` key holding the capture's streaming state (``_stream_capture``)."""
+
 
 @dataclass(frozen=True)
 class SpilledPayload:
@@ -215,10 +218,20 @@ def retained_payload(
 
 
 def saved_ref(backend: Any, session: Any, site: Any, call: Any, output: Any, policy: Any) -> Any:
-    """Build the output's tensor reference with the payload :func:`retained_payload` keeps."""
+    """Build the output's tensor reference with the payload :func:`retained_payload` keeps.
+
+    When the capture streams (``storage=``), the kept payload is handed to the
+    stream here, the one point every emitted output passes once its edges are
+    recorded; the reference then names the bundle blob and drops the payload
+    unless ``retain_in_memory``.
+    """
 
     payload = retained_payload(backend, session, site, call, output, policy)
-    return backend.tensor_ref(session, output, payload, policy)
+    ref = backend.tensor_ref(session, output, payload, policy)
+    stream = session.__dict__.get(STREAM_KEY)
+    if stream is None or payload is None or not backend.is_tensor(payload):
+        return ref
+    return stream.submit(session, ref, payload, site.label_raw)
 
 
 def _spillable(backend: Any, output: Any) -> bool:
