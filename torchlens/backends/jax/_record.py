@@ -24,11 +24,18 @@ import torch
 
 from ..._ir.capture_events import CaptureEvents
 from ...recording._backend_events import BackendOpEvent, RecordSink
+from . import _module_return_probe as return_probe
 from ._edits import _REGION_LAYER_TYPES
 from ._input_kwargs import bind_input_kwargs
 from ._interp_hooks import InterpreterHooks
 from ._module_frames import jax_event_module_frames
 from ._retention import KEEP_NONE, Retention
+from .backend import (
+    JAXBackend,
+    _derive_and_run,
+    _reject_tracer_inputs,
+    _reject_transformed_callable,
+)
 from .jaxpr import flatten_dynamic_args, interpret_closed_jaxpr_with_inlining
 from .modules import discover_equinox_module_tree, discover_nnx_module_tree
 
@@ -110,8 +117,6 @@ class JaxRecordProducer:
     def prepare(self, model: Any) -> _Prepared:
         """Discover the module tree of ``model`` once (``None`` for a raw function)."""
 
-        from .backend import _reject_transformed_callable
-
         _reject_transformed_callable(model)
         tree: Any = discover_equinox_module_tree(model)
         if tree is None:
@@ -126,9 +131,6 @@ class JaxRecordProducer:
         sink: RecordSink,
     ) -> Any:
         """Interpret one forward, emitting events; return the output, or ``None`` after a stop."""
-
-        from . import _module_return_probe as return_probe
-        from .backend import JAXBackend, _derive_and_run, _reject_tracer_inputs
 
         self.passes += 1
         backend = JAXBackend()
