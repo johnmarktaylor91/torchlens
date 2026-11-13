@@ -10,6 +10,10 @@ here, named in :data:`PRIOR_MODULES` and looked up by backend name.
 A prior module exposes these module-level functions (framework imports happen
 inside the functions, never at module import):
 
+``FRAMEWORK: str``
+    Top-level package name of the framework (``"paddle"``); a callable that
+    names no framework at all goes to the one prior whose framework is
+    imported (:func:`imported_priors`).
 ``handles(model) -> bool``
     Whether ``model`` is this framework's model object. Must not import the
     framework: check ``sys.modules`` first and return ``False`` when the
@@ -45,6 +49,8 @@ caller's native dtype object (or ``None``) and the prior interprets it.
 from __future__ import annotations
 
 import importlib
+import re
+import sys
 from collections.abc import Sequence
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
@@ -219,6 +225,248 @@ def resolve_priors(model: Any) -> tuple[str, ShapePriors] | None:
     return None
 
 
+def imported_priors() -> list[tuple[str, ShapePriors]]:
+    """Prior modules whose framework (``FRAMEWORK``) is already imported."""
+
+    found: list[tuple[str, ShapePriors]] = []
+    for backend_name, module_name in PRIOR_MODULES.items():
+        qualified = f"{__name__}.{module_name}"
+        try:
+            module = importlib.import_module(qualified)
+        except ModuleNotFoundError as exc:
+            if exc.name == qualified:
+                continue
+            raise
+        framework = getattr(module, "FRAMEWORK", None)
+        if isinstance(framework, str) and framework in sys.modules:
+            found.append((backend_name, module))  # type: ignore[arg-type]
+    return found
+
+
+#: Most objects :func:`walk_references` visits.
+MAX_WALK_NODES = 512
+#: Deepest attribute nesting :func:`walk_references` follows.
+MAX_WALK_DEPTH = 4
+
+
+def walk_references(root: Any) -> list[tuple[str, Any]]:
+    """Objects reachable from ``root`` in definition order, bounded and cycle-safe.
+
+    Follows instance ``__dict__`` entries, list, tuple and dict items, function
+    closure cells and the globals a function names, bound-method ``__self__``
+    and ``functools.partial`` targets. Modules, classes and tensors (anything
+    with ``shape`` and ``dtype``) are yielded but not entered. Used by priors for frameworks whose models are plain callables.
+
+    Parameters
+    ----------
+    root:
+        The caller's model object or function.
+
+    Returns
+    -------
+    list[tuple[str, Any]]
+        ``(path, object)`` pairs, ``root`` first as ``""``.
+    """
+
+    seen: set[int] = set()
+    found: list[tuple[str, Any]] = []
+    stack: list[tuple[str, Any, int]] = [("", root, 0)]
+    while stack and len(found) < MAX_WALK_NODES:
+        path, obj, depth = stack.pop(0)
+        if id(obj) in seen:
+            continue
+        seen.add(id(obj))
+        found.append((path, obj))
+        if depth < MAX_WALK_DEPTH and not isinstance(obj, (ModuleType, type, str, bytes)):
+            stack.extend((_join(path, name), child, depth + 1) for name, child in _children(obj))
+    return found
+
+
+def _join(path: str, name: str) -> str:
+    """Join a walk path and a child name."""
+
+    return f"{path}.{name}" if path else name
+
+
+def _children(obj: Any) -> list[tuple[str, Any]]:
+    """Direct references of one object for :func:`walk_references`."""
+
+    if hasattr(obj, "shape") and hasattr(obj, "dtype"):
+        return []  # A tensor is a leaf: its internals are framework state.
+    if isinstance(obj, (list, tuple)):
+        return [(str(index), item) for index, item in enumerate(obj)]
+    if isinstance(obj, dict):
+        return [(str(key), value) for key, value in obj.items() if isinstance(key, str)]
+    code = getattr(obj, "__code__", None)
+    if code is not None:
+        cells = zip(code.co_freevars, getattr(obj, "__closure__", None) or (), strict=False)
+        closure = [(name, _cell_value(cell)) for name, cell in cells]
+        globals_ = getattr(obj, "__globals__", {})
+        named = [(name, globals_[name]) for name in code.co_names if name in globals_]
+        return [(name, value) for name, value in closure + named if value is not None]
+    for attribute in ("__self__", "func"):
+        target = getattr(obj, attribute, None)
+        if target is not None and callable(target) and not isinstance(obj, ModuleType):
+            return [(attribute, target), *_instance_items(obj)]
+    return _instance_items(obj)
+
+
+def _instance_items(obj: Any) -> list[tuple[str, Any]]:
+    """An object's ``__dict__`` items, plus its ``__call__`` when user-defined."""
+
+    try:
+        items = list(vars(obj).items())
+    except TypeError:
+        return []
+    call = type(obj).__dict__.get("__call__")
+    if call is not None and getattr(call, "__code__", None) is not None:
+        items.append(("__call__", call))
+    return items
+
+
+def _cell_value(cell: Any) -> Any:
+    """A closure cell's contents, or ``None`` when empty."""
+
+    try:
+        return cell.cell_contents
+    except ValueError:
+        return None
+
+
+# ---------------------------------------------------------------- shared prior helpers
+#: Matrix-multiply mismatch texts: ``(AxB and CxD)`` and tinygrad's ``((B) != (C))``.
+_MATMUL_MISMATCH = (
+    re.compile(r"\((\d+)x(\d+) and (\d+)x(\d+)\)"),
+    re.compile(r"\(\((\d+)\) != \((\d+)\)\)"),
+    re.compile(r"K_lhs:(\d+) != K_rhs:(\d+)"),
+    re.compile(r"width_:(\d+) != dim_b\.height_:(\d+)"),
+    re.compile(r"cannot dot \((?:\d+, )*(\d+),?\) and \((\d+)(?:, \d+)*,?\)"),
+)
+
+
+def integer_range(high: int) -> ValueRange:
+    """Integer value recipe ``[0, high)`` (token ids below a vocabulary size)."""
+
+    return ("randint", 0.0, float(max(1, high)))
+
+
+def parse_feature_mismatch(message: str) -> tuple[int | None, int | None]:
+    """``(got, target)`` feature counts from a matrix-multiply mismatch, else ``None``s."""
+
+    four = _MATMUL_MISMATCH[0].search(message)
+    if four is not None:
+        return int(four.group(2)), int(four.group(3))
+    for pattern in _MATMUL_MISMATCH[1:]:
+        two = pattern.search(message)
+        if two is not None:
+            return int(two.group(1)), int(two.group(2))
+    return None, None
+
+
+def framework_of(obj: Any) -> str | None:
+    """Top-level package that defines ``obj`` (a module, a class or an instance)."""
+
+    if isinstance(obj, ModuleType):
+        name = obj.__name__
+    elif isinstance(obj, type):
+        name = obj.__module__
+    else:
+        name = type(obj).__module__
+    return name.split(".", 1)[0] if isinstance(name, str) else None
+
+
+def generic_ladder(request: SearchRequest, dtype: Any) -> list[ShapeCandidate]:
+    """Shapes for a callable no weight constrains; a win here is never determined."""
+
+    batch = request.batch_size
+    shapes = ((batch, 8), (8,), (batch, 2, 4), (batch, 4), (batch, 16), (batch, 3, 16, 16))
+    layouts = {1: "N", 2: "NC", 3: "NLC", 4: "NCHW"}
+    return [
+        ShapeCandidate(
+            "unknown",
+            shape,
+            dtype,
+            ("uniform", 0.0, 1.0),
+            layouts[len(shape)],
+            strategy="generic_probe",
+        )
+        for shape in shapes
+    ]
+
+
+def closure_matrix_candidates(
+    tensors: Sequence[tuple[str, tuple[int, ...]]], request: SearchRequest, dtype: Any
+) -> list[ShapeCandidate]:
+    """``(batch, rows)`` candidates from rank-2 tensors a function closes over."""
+
+    seen: set[int] = set()
+    found: list[ShapeCandidate] = []
+    for path, shape in tensors:
+        if len(shape) != 2 or shape[0] in seen:
+            continue
+        seen.add(shape[0])
+        found.append(
+            ShapeCandidate(
+                "matmul",
+                (request.batch_size, shape[0]),
+                dtype,
+                ("uniform", 0.0, 1.0),
+                "NC",
+                constraining_module=path or None,
+                constraining_op="closure weight",
+                strategy="closure_weight_prior",
+            )
+        )
+    return found
+
+
+def constraint_from_trace(
+    trace: Any, kinds: Sequence[tuple[str, str]]
+) -> ExecutedConstraint | None:
+    """The first op whose ``func_name`` contains a needle of ``kinds`` (``(needle, kind)``).
+
+    The input shape is the op's first parent's shape when the trace exposes it.
+    """
+
+    for op in getattr(trace, "ops", ()) or ():
+        func_name = str(getattr(op, "func_name", "") or "").lower()
+        kind = next((kind for needle, kind in kinds if needle in func_name), None)
+        if kind is None:
+            continue
+        return ExecutedConstraint(
+            kind=kind,
+            module=_op_text(op, "module_address", "module"),
+            op=_op_text(op, "layer_label", "label"),
+            source_line=_op_text(op, "source_line"),
+            input_shape=_first_parent_shape(trace, op),
+        )
+    return None
+
+
+def _op_text(op: Any, *names: str) -> str | None:
+    """The first non-empty string attribute of ``op`` among ``names``."""
+
+    for name in names:
+        value = getattr(op, name, None)
+        if value:
+            return str(getattr(value, "address", value))
+    return None
+
+
+def _first_parent_shape(trace: Any, op: Any) -> tuple[int, ...] | None:
+    """The shape of ``op``'s first parent, when the trace can resolve it."""
+
+    parents = list(getattr(op, "parents", ()) or ())
+    if not parents:
+        return None
+    try:
+        parent = trace[parents[0]] if isinstance(parents[0], str) else parents[0]
+        shape = getattr(parent, "shape", None) or getattr(parent, "tensor_shape", None)
+        return tuple(int(dim) for dim in shape) if shape is not None else None
+    except (KeyError, TypeError, ValueError, IndexError):
+        return None
+
+
 __all__ = [
     "PRIOR_MODULES",
     "ExecutedConstraint",
@@ -228,5 +476,13 @@ __all__ = [
     "ShapeCandidate",
     "ShapePriors",
     "ValueRange",
+    "closure_matrix_candidates",
+    "constraint_from_trace",
+    "framework_of",
+    "generic_ladder",
+    "imported_priors",
+    "integer_range",
+    "parse_feature_mismatch",
     "resolve_priors",
+    "walk_references",
 ]
