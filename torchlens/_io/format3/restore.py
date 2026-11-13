@@ -26,6 +26,7 @@ from typing import Any, Final
 from ..._data_classes._state_adapter import state_restore
 from ..._data_classes.field_policy import StorageKind
 from ..._utils._record_group_table import record_storage_attr
+from .._replay_recipe_codec import attach_replay_recipes
 from . import contract
 from .decode import CELL_CODE, cell_error
 from .schema import record_schema
@@ -183,3 +184,5 @@ def _stamp_loaded_context(
     trace._source_bundle_provenance = (
         parse_provenance(raw_provenance) if isinstance(raw_provenance, dict) else None
     )
+    # Replay recipes (listed, digest-checked) are bound on the first validation read.
+    attach_replay_recipes(trace, root, manifest)
