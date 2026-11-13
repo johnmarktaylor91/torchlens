@@ -97,6 +97,29 @@ def jaxpr_to_interpret(tree: Any, closed_jaxpr: Any) -> Any:
     return closed_jaxpr
 
 
+def _apply_call_renumbering(tree: Any, ledger: Any, renamed: Any) -> None:
+    """Move trace-time module calls to their runtime call index.
+
+    Module calls inside loop or jit bodies run once per iteration or bind (the
+    interpreter's ``CallNumbering``), which shifts the index of later calls of the same
+    module; their forward arguments and noted returns follow.
+    """
+
+    if tree is None or not renamed:
+        return
+    moved = {
+        (address, renamed.get((address, call), call)): value
+        for (address, call), value in tree.forward_args_by_call.items()
+    }
+    tree.forward_args_by_call.clear()  # the tree is frozen; its dict is the shared record
+    tree.forward_args_by_call.update(moved)
+    if isinstance(ledger, JaxReturnLedger):
+        ledger.pending = [
+            (address, renamed.get((address, call), call), value)
+            for address, call, value in ledger.pending
+        ]
+
+
 def split_outputs(result: Any, tree: Any) -> Any:
     """Move the extra outputs of an extended interpretation onto the ledger.
 
@@ -114,6 +137,7 @@ def split_outputs(result: Any, tree: Any) -> Any:
     """
 
     ledger = getattr(tree, "module_returns", None)
+    _apply_call_renumbering(tree, ledger, getattr(result, "module_call_renumbering", None))
     if not isinstance(ledger, JaxReturnLedger) or ledger.extended_jaxpr is None:
         return result
     ledger.extended_jaxpr = None
@@ -185,8 +209,9 @@ def _record_pending(trace: Any, ledger: JaxReturnLedger) -> None:
             warnings.warn(
                 CaptureGapWarning(
                     f"JAX module call '{address}:{call_index}' returned arrays of an inner trace "
-                    "(jax.vmap, or a scan, cond or while body: one trace-time call stands for "
-                    "every batch member or iteration), so no op is its output; its return is not recorded, so this call has no "
+                    "(jax.vmap, or a jit, scan, cond or while body: one trace-time call stands "
+                    "for every batch member, bind or iteration), so no op is its output; its "
+                    "return is not recorded, so this call has no "
                     "output_ops, output_paths or Module.out. Remedy: read the values through "
                     "the enclosing module's output",
                     code="module_return_unrecorded",

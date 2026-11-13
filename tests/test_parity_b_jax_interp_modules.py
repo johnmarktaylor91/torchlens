@@ -15,7 +15,7 @@ import numpy as np
 import pytest
 
 import torchlens as tl
-from torchlens.errors import BackendUnsupportedError
+from torchlens.errors import BackendUnsupportedError, CaptureGapWarning
 from torchlens.validation._invariants import check_metadata_invariants
 
 jax = pytest.importorskip("jax")
@@ -72,6 +72,18 @@ class _Twin(eqx.Module):
         return jax.jit(lambda v: self.b(self.a(v)))(value)
 
 
+class _JitTwice(eqx.Module):
+    """One jitted closure over a submodule, called twice (one cached nested jaxpr)."""
+
+    a: _Lin
+
+    def __call__(self, value: Any) -> Any:
+        """Apply the jitted submodule call twice."""
+
+        step = jax.jit(lambda v: self.a(v))
+        return step(step(value))
+
+
 class _SharedInScan(eqx.Module):
     """One submodule instance called twice per scan step."""
 
@@ -96,7 +108,7 @@ class _Remat(eqx.Module):
     def __call__(self, value: Any) -> Any:
         """Return the checkpointed submodule output."""
 
-        return jax.checkpoint(self.a)(value)
+        return jax.checkpoint(lambda v: self.a(v))(value)
 
 
 class _NnxTwin(nnx.Module):
@@ -137,6 +149,17 @@ def _labels(trace: Any, address: str) -> set[str]:
     return {op.label for op in trace._layer_list if any(m.startswith(prefix) for m in op.modules)}
 
 
+def _trace(model: Any, value: Any, **options: Any) -> Any:
+    """Trace ``model``; submodule calls inside transform bodies are disclosed as unrecorded.
+
+    Their returns are values of the body's inner trace (one trace-time call stands for
+    every run), so the return ledger leaves them unrecorded with a ``CaptureGapWarning``.
+    """
+
+    with pytest.warns(CaptureGapWarning, match="returned arrays of an inner trace"):
+        return tl.trace(model, value, backend="jax", **options)
+
+
 def _assert_sound(trace: Any, model: Any) -> None:
     """Assert invariants, validation and the output value."""
 
@@ -166,7 +189,7 @@ def test_equinox_same_shaped_submodules_stay_distinct(kind: str, steps: int) -> 
     """Same-shaped Equinox submodules inside scan, cond and jit keep their own ops."""
 
     model = _Twin(_Lin(1), _Lin(2), kind)
-    trace = tl.trace(model, _input(), backend="jax")
+    trace = _trace(model, _input())
 
     _assert_sound(trace, model)
     _assert_twins_distinct(trace, steps)
@@ -177,7 +200,7 @@ def test_nnx_same_shaped_children_stay_distinct(kind: str, steps: int) -> None:
     """Same-shaped NNX children inside scan, cond and jit keep their own ops."""
 
     model = _NnxTwin(kind)
-    trace = tl.trace(model, _input(), backend="jax")
+    trace = _trace(model, _input())
 
     assert check_metadata_invariants(trace) is True
     assert trace.validate_forward_pass([]) is True
@@ -192,38 +215,39 @@ def test_cond_untaken_branch_has_no_ops() -> None:
 
     model = _Twin(_Lin(1), _Lin(2), "cond")
     negative = -_input()
-    trace = tl.trace(model, negative, backend="jax")
+    trace = _trace(model, negative)
 
     assert trace.validate_forward_pass([]) is True
     assert _labels(trace, "a")
     assert not _labels(trace, "b")
 
 
-def test_shared_submodule_in_scan_keeps_two_calls() -> None:
-    """A shared submodule called twice per scan step is one module with two calls."""
+def test_shared_submodule_in_scan_gets_one_call_per_run() -> None:
+    """A shared submodule called twice per scan step is one module with a call per run.
+
+    As on PyTorch, each run of a module inside an unrolled loop is its own call: two
+    calls per step over two steps are four calls with disjoint, same-sized op sets.
+    """
 
     model = _SharedInScan(_Lin(3))
-    trace = tl.trace(model, _input(), backend="jax")
+    trace = _trace(model, _input())
 
     _assert_sound(trace, model)
     shared = trace.modules["shared"]
-    assert shared.num_calls == 2
-    first, second = shared.ops.get(1), shared.ops.get(2)
-    assert first is not None and second is not None
-    assert first.ops and second.ops
-    assert not set(first.ops) & set(second.ops)
-    assert len(first.ops) == len(second.ops)
+    assert shared.num_calls == 4
+    calls = [shared.ops.get(index) for index in range(1, 5)]
+    assert all(call is not None and call.ops for call in calls)
+    op_sets = [set(call.ops) for call in calls]
+    assert all(not op_sets[i] & op_sets[j] for i in range(4) for j in range(i + 1, 4))
+    assert len({len(ops) for ops in op_sets}) == 1
 
 
 def test_scan_over_unroll_cap_falls_back_to_region_inside_module() -> None:
     """Over the unroll cap, the scan inside an attributed module becomes one region."""
 
     model = _Twin(_Lin(1), _Lin(2), "scan", length=5)
-    trace = tl.trace(
-        model,
-        _input(),
-        backend="jax",
-        capture=tl.options.CaptureOptions(jax_max_control_flow_unroll=2),
+    trace = _trace(
+        model, _input(), capture=tl.options.CaptureOptions(jax_max_control_flow_unroll=2)
     )
 
     regions = [op for op in trace._layer_list if op.annotations.get("jax_capture_kind") == "region"]
@@ -255,3 +279,55 @@ def test_rematerialization_inside_module_is_a_typed_refusal() -> None:
     assert excinfo.value.code == "jax_nested_primitive_unsupported"
     notes = " ".join(getattr(excinfo.value, "__notes__", []))
     assert "inside attributed module" in notes
+
+
+@pytest.mark.parametrize(
+    "factory", [lambda: _Twin(_Lin(1), _Lin(2), "jit"), lambda: _NnxTwin("jit")]
+)
+def test_jit_closing_over_module_weights_records_params(factory: Any) -> None:
+    """Weights a nested ``jax.jit`` closes over are recorded constants and module params."""
+
+    model = factory()
+    trace = _trace(model, _input())
+
+    assert check_metadata_invariants(trace) is True
+    assert trace.validate_forward_pass([]) is True
+    constants = [op for op in trace._layer_list if op.func_name == "constant"]
+    assert constants
+    for address in ("a", "b"):
+        assert any(trace[label].num_params for label in _labels(trace, address))
+
+
+def test_jitted_submodule_called_twice_stays_sound() -> None:
+    """A cached nested jaxpr bound twice keeps its constants single and the trace sound."""
+
+    model = _JitTwice(_Lin(4))
+    trace = _trace(model, _input())
+
+    _assert_sound(trace, model)
+    constants = [op for op in trace._layer_list if op.func_name == "constant"]
+    assert len(constants) == 2
+
+
+def test_hoisted_jaxpr_evaluates_like_the_function() -> None:
+    """Hoisting moves the jit body's constants to the top level without changing values."""
+
+    from jax.extend import core
+
+    from torchlens.backends.jax.jaxpr import derive_closed_jaxpr
+
+    weight = jnp.arange(9.0).reshape(3, 3) / 9.0
+
+    def fn(x: Any) -> Any:
+        """Close a nested jit over ``weight``, twice."""
+
+        step = jax.jit(lambda v: jnp.tanh(weight @ v))
+        return step(step(x)) + weight[0]
+
+    closed = derive_closed_jaxpr(fn, (_input(),))
+    jits = [e for e in closed.jaxpr.eqns if e.primitive.name in {"jit", "pjit"}]
+
+    assert jits and all(not tuple(e.params["jaxpr"].consts) for e in jits)
+    assert sum(c is weight for c in closed.consts) == 1
+    got = core.jaxpr_as_fun(closed)(_input())[0]
+    np.testing.assert_allclose(np.asarray(got), np.asarray(fn(_input())), rtol=1e-6)

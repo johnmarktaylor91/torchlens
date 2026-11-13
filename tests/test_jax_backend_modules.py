@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 import torchlens as tl
-from torchlens.errors import BackendUnsupportedError
+from torchlens.errors import BackendUnsupportedError, CaptureGapWarning
 from torchlens.validation._invariants import check_metadata_invariants
 
 jax = pytest.importorskip("jax")
@@ -543,36 +543,52 @@ def test_jax_nnx_explicit_function_root_keeps_raw_callable_behavior() -> None:
     assert all(op.out is not None for op in constants)
 
 
-@pytest.mark.parametrize(
-    ("model", "owner"),
-    (
-        (JitInsideEquinox(), "core"),
-        (CondInsideEquinox(), "self"),
-        (ScanInsideEquinox(), "self"),
-        (WhileInsideEquinox(), "self"),
-    ),
-)
-def test_jax_equinox_pytree_module_attributes_inner_transforms(model: Any, owner: str) -> None:
-    """Ops inside jit, cond, scan and while bodies keep the enclosing module scope."""
+def test_jax_equinox_pytree_module_attributes_inner_jit() -> None:
+    """Ops inside a ``jax.jit`` call in an Equinox module belong to the called child module.
+
+    The child's weights, closed over by the jit body, are recorded constants; its return
+    is an inner-trace value, so the call is disclosed as unrecorded.
+    """
+
+    with pytest.warns(CaptureGapWarning, match=r"'core:1' returned arrays of an inner trace"):
+        trace = tl.trace(JitInsideEquinox(), jnp.ones(3, dtype=jnp.float32), backend="jax")
+
+    labels = trace[tl.in_module("core")].labels
+    assert labels
+    assert all("core:1" in trace[label].modules for label in labels)
+    assert check_metadata_invariants(trace) is True
+    assert trace.validate_forward_pass([]) is True
+
+
+@pytest.mark.parametrize("model", (CondInsideEquinox(), ScanInsideEquinox(), WhileInsideEquinox()))
+def test_jax_equinox_pytree_module_captures_inner_control_flow(model: Any) -> None:
+    """Cond, scan and while bodies inside an attributed root module are captured and validate."""
 
     trace = tl.trace(model, jnp.ones(3, dtype=jnp.float32), backend="jax")
 
-    labels = trace[tl.in_module(owner)].labels
-    assert labels
-    assert all(f"{owner}:1" in trace[label].modules for label in labels)
-    check_metadata_invariants(trace)
+    primitives = [
+        op for op in trace._layer_list if op.annotations.get("jax_capture_kind") == "primitive"
+    ]
+    assert primitives
+    assert check_metadata_invariants(trace) is True
     assert trace.validate_forward_pass([]) is True
+    np.testing.assert_allclose(
+        np.asarray(trace.ops[trace.output_layers[0]].out),
+        np.asarray(model(jnp.ones(3, dtype=jnp.float32))),
+        rtol=1e-6,
+    )
 
 
 def test_jax_nnx_pytree_module_attributes_inner_jit() -> None:
     """Ops inside a ``jax.jit`` call in an NNX module belong to the called child module."""
 
-    trace = tl.trace(JitInsideNnx(), jnp.ones(3, dtype=jnp.float32), backend="jax")
+    with pytest.warns(CaptureGapWarning, match=r"'core:1' returned arrays of an inner trace"):
+        trace = tl.trace(JitInsideNnx(), jnp.ones(3, dtype=jnp.float32), backend="jax")
 
     labels = trace[tl.in_module("core")].labels
     assert labels
     assert all("core:1" in trace[label].modules for label in labels)
-    check_metadata_invariants(trace)
+    assert check_metadata_invariants(trace) is True
     assert trace.validate_forward_pass([]) is True
 
 

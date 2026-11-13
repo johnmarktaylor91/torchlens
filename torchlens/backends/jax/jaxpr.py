@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import Any, Literal, NoReturn, TypeAlias, cast
 
 from ..._ir.events import JaxEquationKind
@@ -17,9 +17,15 @@ from ._interp_hooks import (
     binds_as_primitive,
     dead_after,
 )
+from ._jit_consts import hoist_nested_jit_consts
 from ._module_stacks import (
+    CallNumbering,
+    _became_region,
     _frame_stacks,
+    _inherited,
     _scoped_inner,
+    _stamp_synthetic_stacks,
+    marked,
     module_call_stack_from_eqn,
     module_stack_from_eqn,
 )
@@ -204,6 +210,9 @@ class JaxCaptureResult:
         Captures the retention policy did not keep.
     halt_frontier
         The capture a halt check matched (outputs are then empty), else ``None``.
+    module_call_renumbering
+        Trace-time module calls made outside any loop or jit body whose runtime call
+        index changed (``CallNumbering``), for the module tree and return ledger.
     """
 
     outputs: tuple[Any, ...]
@@ -213,6 +222,7 @@ class JaxCaptureResult:
     inlined_call_primitives: tuple[str, ...]
     released_capture_indices: frozenset[int] = frozenset()
     halt_frontier: JaxRuntimeCapture | None = None
+    module_call_renumbering: Mapping[tuple[str, int], int] = field(default_factory=dict)
 
 
 def derive_closed_jaxpr(fn: Any, args: Sequence[Any], static_argnums: Sequence[int] = ()) -> Any:
@@ -230,12 +240,18 @@ def derive_closed_jaxpr(fn: Any, args: Sequence[Any], static_argnums: Sequence[i
     Returns
     -------
     Any
-        ``jax.core.ClosedJaxpr`` on the installed JAX runtime.
+        ``jax.core.ClosedJaxpr`` on the installed JAX runtime. Constants that a
+        top-level ``jax.jit`` call closes over are hoisted to the top level
+        (``_jit_consts``), so they are recorded closure constants.
     """
 
     import jax
+    from jax.extend import core
 
-    return jax.make_jaxpr(fn, static_argnums=tuple(static_argnums))(*args)
+    closed = jax.make_jaxpr(fn, static_argnums=tuple(static_argnums))(*args)
+    return hoist_nested_jit_consts(
+        closed, core, call_primitives=PURE_JIT_CALL_PRIMITIVES, known_params=JIT_CALL_PARAM_NAMES
+    )
 
 
 def flatten_dynamic_args(
@@ -345,6 +361,7 @@ def interpret_closed_jaxpr_with_inlining(
     equation_hook = equation_hook or _unedited_outputs
     captures = HookedCaptures(hooks)
     inlined_calls: list[str] = []
+    numbering = CallNumbering()
     tap_values = {} if tap_values_by_capture_output is None else tap_values_by_capture_output
     replacement_values = (
         {} if replacement_values_by_capture_output is None else replacement_values_by_capture_output
@@ -419,7 +436,8 @@ def interpret_closed_jaxpr_with_inlining(
                 common = {"env": env, "core": core, "path": eqn_path, "captures": captures}
                 common["inlined_depth"] = inlined_depth
                 stacks = _frame_stacks(eqn, inherited_module_stack, inherited_module_call_stack)
-                scoped = _scoped_inner(interpret_inner, stacks)
+                scoped = _scoped_inner(interpret_inner, stacks, numbering)
+                numbering_state, start = numbering.snapshot(), len(captures)
                 outputs = _interpret_control_flow(
                     eqn,
                     jax_control_flow,
@@ -427,12 +445,13 @@ def interpret_closed_jaxpr_with_inlining(
                     region_kwargs={
                         **common,
                         "jax_max_control_flow_unroll": jax_max_control_flow_unroll,
-                        "inherited_module_stack": stacks[0],
-                        "inherited_module_call_stack": stacks[1],
+                        **_inherited(numbering.number(stacks)),
                         "rewrite_outputs": rewrite_outputs,
                     },
                     control_capture_indices=control_capture_indices,
                 )
+                if _became_region(captures, start, eqn_path):
+                    numbering.restore(numbering_state)
                 for var, value in zip(eqn.outvars, outputs, strict=True):
                     _write_env(env, var, value, core)
                 continue
@@ -447,8 +466,9 @@ def interpret_closed_jaxpr_with_inlining(
                     captures=captures,
                     jax_max_control_flow_unroll=jax_max_control_flow_unroll,
                     unverified_reason="custom_vjp_forward_region",
-                    inherited_module_stack=inherited_module_stack,
-                    inherited_module_call_stack=inherited_module_call_stack,
+                    **_inherited(
+                        numbering.number((inherited_module_stack, inherited_module_call_stack))
+                    ),
                     rewrite_outputs=rewrite_outputs,
                 )
                 for var, value in zip(eqn.outvars, outputs, strict=True):
@@ -479,13 +499,11 @@ def interpret_closed_jaxpr_with_inlining(
                         primitive=primitive_name,
                     )
                 inlined_calls.append(primitive_name)
-                outputs = interpret_inner(
-                    nested,
-                    inputs,
-                    eqn_path,
-                    inlined_depth + 1,
-                    control_capture_indices,
-                    *_frame_stacks(eqn, inherited_module_stack, inherited_module_call_stack),
+                stacks = _frame_stacks(eqn, inherited_module_stack, inherited_module_call_stack)
+                run = (nested, inputs, eqn_path, inlined_depth + 1, control_capture_indices)
+                # One runtime call per bind: a cached jitted body bound twice is two runs.
+                outputs = marked(
+                    numbering, len(stacks[1]), eqn_path, interpret_inner, (*run, *stacks)
                 )
                 for var, value in zip(eqn.outvars, outputs, strict=True):
                     _write_env(env, var, value, core)
@@ -494,7 +512,9 @@ def interpret_closed_jaxpr_with_inlining(
                 _refusals.refuse_nested_jaxpr(primitive_name)
             result = eqn.primitive.bind(*inputs, **eqn.params)
             outputs = tuple(result if eqn.primitive.multiple_results else (result,))
-            stacks = _frame_stacks(eqn, inherited_module_stack, inherited_module_call_stack)
+            stacks = numbering.number(
+                _frame_stacks(eqn, inherited_module_stack, inherited_module_call_stack)
+            )
             equation_module_stack, equation_module_call_stack = stacks
             outputs = equation_hook(captures, eqn, rewrite_outputs(len(captures), outputs), stacks)
             for var, value in zip(eqn.outvars, outputs, strict=True):
@@ -526,7 +546,10 @@ def interpret_closed_jaxpr_with_inlining(
         outputs = interpret_inner(closed_jaxpr, flat_args, ("root",), 0)
     except InterpreterHalt as halt:
         outputs, halt_frontier = (), halt.capture
-    return _capture_result(outputs, tuple(captures), inlined_calls, captures, halt_frontier)
+    return replace(
+        _capture_result(outputs, tuple(captures), inlined_calls, captures, halt_frontier),
+        module_call_renumbering=dict(numbering.renamed),
+    )
 
 
 def interpret_pullback_jaxpr(
@@ -627,24 +650,6 @@ def _interpret_control_flow(
             region_kwargs["inherited_module_call_stack"],
         )
         _stamp_synthetic_stacks(captures, start, stacks)
-
-
-_SYNTHETIC_CONTROL_KINDS = frozenset({"cond_decision", "scan_read", "scan_stack", "while_decision"})
-
-
-def _stamp_synthetic_stacks(captures: Any, start: int, stacks: tuple[Any, Any]) -> None:
-    """Give the scan, cond and while captures from ``start`` on the equation's module scope.
-
-    Synthetic captures (slice reads, stacks and branch/loop decisions) carry no name
-    stack of their own; they belong to the module that ran the control-flow equation.
-    """
-
-    if not stacks[0]:
-        return
-    for index in range(start, len(captures)):
-        capture = captures[index]
-        if capture.kind in _SYNTHETIC_CONTROL_KINDS and not capture.module_stack:
-            captures[index] = replace(capture, module_stack=stacks[0], module_call_stack=stacks[1])
 
 
 def _dispatch_control_flow(
