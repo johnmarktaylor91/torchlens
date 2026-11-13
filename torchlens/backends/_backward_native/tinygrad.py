@@ -115,10 +115,6 @@ PAYLOADS = PayloadPolicy(memory_of=_nbytes, retained_refs=_retained_refs)
 """How the neutral fold reads tinygrad gradient payloads."""
 
 
-class _Unavailable(Exception):
-    """The backward pass cannot be prepared; the message is the refusal reason."""
-
-
 def _uop_name(uop: Any) -> str:
     """The UOp's op name without the ``Ops.`` prefix (for example ``MUL``)."""
 
@@ -153,7 +149,7 @@ def _gradient_api() -> tuple[Callable[..., Any], Any]:
     compute = getattr(tg_gradient, "compute_gradient", None)
     rules = getattr(tg_gradient, "pm_gradient", None)
     if compute is None or rules is None:
-        raise _Unavailable(
+        raise ValueError(
             "this tinygrad has no compute_gradient or pm_gradient in tinygrad.gradient, "
             "so its backward graph cannot be built"
         )
@@ -245,7 +241,8 @@ class BackwardScope:
             self._prepare(tuple(plan.recorded), tuple(source_uops), raw_output)
         except Exception as error:  # noqa: BLE001 - kept as the typed refusal reason
             self.op_grads, self.nodes, self.root_uops, self.targets = [], [], [], {}
-            detail = str(error) if isinstance(error, _Unavailable) else repr(error)
+            # A plain ValueError raised here carries the reason; anything else keeps its type.
+            detail = str(error) if type(error) is ValueError else repr(error)
             self.unavailable = f"tinygrad could not build the backward graph: {detail}"
             return ()
         return tuple(tensor for _uop, tensor, _owned in self.targets.values())
@@ -257,7 +254,7 @@ class BackwardScope:
 
         loss = raw_output if self.loss_fn is None else self.loss_fn(raw_output)
         if not isinstance(loss, Tensor) or tuple(loss.shape) != () or not _is_float(loss.dtype):
-            raise _Unavailable(
+            raise ValueError(
                 "the loss must be a float scalar tinygrad Tensor; pass "
                 "grad_options=GradOptions(loss_fn=...) mapping the output to one"
             )
@@ -307,10 +304,10 @@ class BackwardScope:
         if not positions:
             return
         if _uop_name(uop) in _CALL_UOPS:
-            raise _Unavailable(f"a recorded {_uop_name(uop)} UOp has no per-op gradient rule")
+            raise ValueError(f"a recorded {_uop_name(uop)} UOp has no per-op gradient rule")
         local = rules.rewrite(uop, ctx=grad)
         if local is None or len(local) != len(uop.src):
-            raise _Unavailable(f"tinygrad has no gradient rule for UOp {_uop_name(uop)}")
+            raise ValueError(f"tinygrad has no gradient rule for UOp {_uop_name(uop)}")
         outgoing = []
         for pos in positions:
             value = local[pos]
