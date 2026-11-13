@@ -198,6 +198,16 @@ ENV_FLAG_REGISTRY: dict[str, EnvFlagSpec] = {
             ),
         ),
         EnvFlagSpec(
+            name="TORCHLENS_THIN_EMIT",
+            kind="bool",
+            reader="torchlens.backends.torch._thin_emit",
+            description=(
+                "Thin emit for admitted plain single-output calls (default TRUE; "
+                "FALSE forces today's emit for the process, the two-path field "
+                "differential)."
+            ),
+        ),
+        EnvFlagSpec(
             name="TORCHLENS_VALIDATE_PEAK_MEMORY",
             kind="bool",
             reader="torchlens.validation._consolidated",

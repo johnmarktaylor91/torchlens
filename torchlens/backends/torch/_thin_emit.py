@@ -18,13 +18,12 @@ the cycle side (``_ops_exhaustive.bound_thin_emit``) passes the helpers in once
 emit to ``_call_plan.commit_fast_call``.
 
 Every other call takes today's emit unchanged; today's emit is the reference.
-``TORCHLENS_THIN_EMIT=0`` in the environment forces the thin emit off for the
-process (the two-path field differential).
+``TORCHLENS_THIN_EMIT=0`` (any closed-vocabulary FALSE) in the environment forces the thin
+emit off for the process (the two-path field differential).
 """
 
 from __future__ import annotations
 
-import os
 import time
 import weakref
 from collections.abc import Callable
@@ -34,6 +33,7 @@ import torch
 
 from ..._utils._internal_read import internal_scalar_read
 from ..._utils.display import _record_phase_timing
+from ..._utils.env_flags import closed_bool_env
 from ._ops_freeze_refs import _module_frames_from_fields
 from ._thin_record import make_commit
 from ._thin_settle import plain_session
@@ -45,7 +45,7 @@ if TYPE_CHECKING:
 
 __all__ = ("ThinHelpers", "make_thin_emit", "thin_emit_enabled", "set_thin_emit_enabled")
 
-_ENABLED = [os.environ.get("TORCHLENS_THIN_EMIT", "1") != "0"]
+_ENABLED = [closed_bool_env("TORCHLENS_THIN_EMIT", default=True)]
 """Whether the thin emit serves admitted plain calls (one cell, so tests can flip it)."""
 
 _TENSOR = torch.Tensor
