@@ -208,7 +208,7 @@ def split_tf_grad_clauses(intervene: Any) -> tuple[Any, tuple[Any, ...]]:
 def tf_gradient_replay_intervene(trace: Any, tf: Any, intervene: Any) -> Any:
     """``intervene`` for the derived-gradient replay, its ``tl.grad`` clauses as tape edits."""
 
-    from ...intervention import when  # deferred: the intervention package is in the import cycle
+    from ...intervention._spec import when  # deferred: the import cycle
 
     return gradient_replay_intervene(trace, tf, *split_tf_grad_clauses(intervene), when)
 

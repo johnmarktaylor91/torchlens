@@ -94,5 +94,5 @@ def test_do_with_an_activation_half_refuses_before_arming() -> None:
     trace = tl.trace(_program, x, backend="tf")
     with pytest.raises(RunCapabilityUnavailableError, match="separate") as caught:
         trace.do(tl.grad(tl.func("relu")) | tl.func("sum"), tl.scale(0.5))
-    assert caught.value.code == "run_capability_unavailable"
+    assert caught.value.fields["code"] == "run_capability_unavailable"
     assert armed_grad_sites(trace) == ()
