@@ -45,6 +45,7 @@ __all__ = (
     "GradSiteCall",
     "GradSiteEdit",
     "GradSiteFire",
+    "GradSitePass",
     "GradSiteResult",
     "Operands",
     "arm_grad_sites",
@@ -127,6 +128,22 @@ class GradSiteFire:
     name: str
     order: int
     replaced: bool
+
+
+@dataclass(frozen=True)
+class GradSitePass:
+    """One backward pass to run: its seed cotangents, extra edits and its number.
+
+    ``seeds`` maps output-slot labels to cotangents (ones at a scalar loss op).
+    ``edits`` apply in declared order; :func:`run_armed_grad_sites` runs the
+    trace's armed edits first, then these. ``index`` is the backward pass
+    number (1 for the first), which ``tl.in_backward_pass(n)`` qualifiers and
+    :class:`GradSiteCall` read.
+    """
+
+    seeds: Mapping[str, Any]
+    edits: Sequence[GradSiteEdit] = ()
+    index: int = 1
 
 
 @dataclass(frozen=True)
@@ -245,24 +262,18 @@ def _check_sites_exist(graph: ReplayGraph, firing: _Firing) -> None:
 
 
 def edited_gradients(
-    trace: Any,
-    adapter: Any,
-    graph: ReplayGraph,
-    seeds: Mapping[str, Any],
-    edits: Sequence[GradSiteEdit],
-    *,
-    pass_index: int = 1,
+    trace: Any, adapter: Any, graph: ReplayGraph, backward: GradSitePass
 ) -> GradSiteResult:
-    """Propagate ``seeds`` backward over ``graph`` with the gradient edits applied.
+    """Propagate ``backward.seeds`` over ``graph`` with ``backward.edits`` applied.
 
     Parameters
     ----------
-    trace, adapter, graph, seeds:
+    trace, adapter, graph:
         As :func:`torchlens.backends._reverse_engine.reverse_gradients` takes them.
-    edits:
-        Edits on output-slot gradients; several on one label fire in this order.
-    pass_index:
-        Number of the backward pass being computed (for ``pass_index``-qualified edits).
+    backward:
+        The pass's seeds, edits and number (:class:`GradSitePass`). Several
+        edits on one label fire in declared order; an edit qualified with a
+        pass number fires only when it equals ``backward.index``.
 
     Returns
     -------
@@ -280,10 +291,10 @@ def edited_gradients(
     """
 
     _check_forward_order(graph)
-    firing = _Firing(edits, pass_index)
+    firing = _Firing(backward.edits, backward.index)
     _check_sites_exist(graph, firing)
     cotangents: dict[str, Any] = {}
-    for label, seed in seeds.items():
+    for label, seed in backward.seeds.items():
         _accumulate(adapter, cotangents, label, seed)
     produced: set[str] = set()
     for node in reversed(graph.nodes):
@@ -319,10 +330,7 @@ def edited_gradients_for_backend(
     backend: str,
     ops: Iterable[Any],
     value: Callable[[str], Any],
-    seeds: Mapping[str, Any],
-    edits: Sequence[GradSiteEdit],
-    *,
-    pass_index: int = 1,
+    backward: GradSitePass,
 ) -> GradSiteResult:
     """Build the graph from the backend adapter's recipes, then run :func:`edited_gradients`.
 
@@ -337,8 +345,8 @@ def edited_gradients_for_backend(
         records repeating a multi-output op's recipe are folded into one node.
     value:
         Saved value of an output-slot label.
-    seeds, edits, pass_index:
-        As :func:`edited_gradients` takes them.
+    backward:
+        As :func:`edited_gradients` takes it.
 
     Raises
     ------
@@ -353,7 +361,7 @@ def edited_gradients_for_backend(
     except ReplayRefusal as exc:
         raise _grad_site_refusal(str(exc), code=_CODE) from exc
     graph = _one_node_per_op(graph_from_recipes(trace, adapter, ops, value))
-    return edited_gradients(trace, adapter, graph, seeds, edits, pass_index=pass_index)
+    return edited_gradients(trace, adapter, graph, backward)
 
 
 def _one_node_per_op(graph: ReplayGraph) -> ReplayGraph:
@@ -481,19 +489,18 @@ def run_armed_grad_sites(
     backend: str,
     ops: Iterable[Any],
     value: Callable[[str], Any],
-    seeds: Mapping[str, Any],
-    *,
-    pass_index: int = 1,
+    backward: GradSitePass,
 ) -> GradSiteResult:
     """Compute one backward pass's gradients with the edits armed on ``trace`` applied.
 
-    The arguments are those of :func:`edited_gradients_for_backend`; the edits
-    stay armed, so a second pass applies them again, as torch's armed hooks do.
+    The arguments are those of :func:`edited_gradients_for_backend`. The armed
+    edits run first, then ``backward.edits``; they stay armed, so a second pass
+    applies them again, as torch's armed hooks do.
     """
 
-    return edited_gradients_for_backend(
-        trace, backend, ops, value, seeds, armed_grad_sites(trace), pass_index=pass_index
-    )
+    armed = (*armed_grad_sites(trace), *backward.edits)
+    run = GradSitePass(backward.seeds, armed, backward.index)
+    return edited_gradients_for_backend(trace, backend, ops, value, run)
 
 
 def do_signal_plan_off_torch(trace: Any, plan: Any, request: Any, backend: str) -> Any:

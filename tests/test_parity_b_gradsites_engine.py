@@ -25,7 +25,7 @@ from torchlens.backends._reverse_engine import (
 )
 from torchlens.errors import RunCapabilityUnavailableError
 from torchlens.intervention import _grad_site_neutral as neutral, _grad_site_plan
-from torchlens.intervention._grad_site_neutral import GradSiteEdit, edited_gradients
+from torchlens.intervention._grad_site_neutral import GradSiteEdit, GradSitePass, edited_gradients
 from torchlens.intervention.hooks import _target_operands
 
 _A = np.array([0.5, -1.25, 2.0])
@@ -60,7 +60,7 @@ def _edit(label: str, fn: Any, name: str = "edit", pass_index: int | None = None
 def test_no_edits_equals_the_reverse_engine() -> None:
     trace, graph = _setup()
     plain = reverse_gradients(trace, fake, graph, {"loss": 1.0})
-    result = edited_gradients(trace, fake, graph, {"loss": 1.0}, ())
+    result = edited_gradients(trace, fake, graph, GradSitePass({"loss": 1.0}, ()))
     assert set(result.grads) == set(plain)
     for label, grad in plain.items():
         np.testing.assert_array_equal(result.grads[label], grad)
@@ -72,7 +72,9 @@ def test_scale_at_a_site_equals_the_chain_rule_with_the_edit(with_inputs: bool) 
     """Scaling the gradient of ``e`` by k scales every path through ``e``."""
 
     trace, graph = _setup(with_inputs=with_inputs)
-    result = edited_gradients(trace, fake, graph, {"loss": 1.0}, [_edit("e", lambda g: 0.25 * g)])
+    result = edited_gradients(
+        trace, fake, graph, GradSitePass({"loss": 1.0}, [_edit("e", lambda g: 0.25 * g)])
+    )
     ge = np.full(3, 3.0) * 0.25
     np.testing.assert_allclose(result.grads["e"], ge)
     np.testing.assert_allclose(result.grads["a"], ge * _B + 2 * ge * _A + ge)
@@ -84,7 +86,9 @@ def test_an_edit_on_one_branch_leaves_the_other_paths_alone() -> None:
     """Editing ``c`` (the a*b branch) changes only that contribution to ``a``."""
 
     trace, graph = _setup()
-    result = edited_gradients(trace, fake, graph, {"loss": 1.0}, [_edit("c", np.zeros_like)])
+    result = edited_gradients(
+        trace, fake, graph, GradSitePass({"loss": 1.0}, [_edit("c", np.zeros_like)])
+    )
     ge = np.full(3, 3.0)
     np.testing.assert_allclose(result.grads["c"], np.zeros(3))
     np.testing.assert_allclose(result.grads["a"], 2 * ge * _A + ge)
@@ -97,27 +101,31 @@ def test_edits_fire_in_declared_order_on_the_complete_gradient() -> None:
     trace, graph = _setup()
     plain = reverse_gradients(trace, fake, graph, {"loss": 1.0})["a"]
     edits = [_edit("a", lambda g: 2.0 * g, "double"), _edit("a", lambda g: g + 1.0, "plus")]
-    result = edited_gradients(trace, fake, graph, {"loss": 1.0}, edits)
+    result = edited_gradients(trace, fake, graph, GradSitePass({"loss": 1.0}, edits))
     np.testing.assert_allclose(result.grads["a"], 2.0 * plain + 1.0)
     assert [(f.label, f.name, f.order, f.replaced) for f in result.fires] == [
         ("a", "double", 0, True),
         ("a", "plus", 1, True),
     ]
-    flipped = edited_gradients(trace, fake, graph, {"loss": 1.0}, edits[::-1])
+    flipped = edited_gradients(trace, fake, graph, GradSitePass({"loss": 1.0}, edits[::-1]))
     np.testing.assert_allclose(flipped.grads["a"], 2.0 * (plain + 1.0))
 
 
 def test_leaf_sites_fire_when_inputs_are_not_nodes() -> None:
     trace, graph = _setup(with_inputs=False)
     plain = reverse_gradients(trace, fake, graph, {"loss": 1.0})["b"]
-    result = edited_gradients(trace, fake, graph, {"loss": 1.0}, [_edit("b", lambda g: -g)])
+    result = edited_gradients(
+        trace, fake, graph, GradSitePass({"loss": 1.0}, [_edit("b", lambda g: -g)])
+    )
     np.testing.assert_allclose(result.grads["b"], -plain)
     assert [f.label for f in result.fires] == ["b"]
 
 
 def test_a_site_no_gradient_reaches_does_not_fire() -> None:
     trace, graph = _setup()
-    result = edited_gradients(trace, fake, graph, {"c": np.ones(3)}, [_edit("u", lambda g: 0 * g)])
+    result = edited_gradients(
+        trace, fake, graph, GradSitePass({"c": np.ones(3)}, [_edit("u", lambda g: 0 * g)])
+    )
     assert result.fires == ()
     assert "u" not in result.grads
 
@@ -131,7 +139,7 @@ def test_the_call_carries_torch_hook_context_fields() -> None:
         return grad
 
     result = edited_gradients(
-        trace, fake, graph, {"loss": 1.0}, [GradSiteEdit("e", record)], pass_index=3
+        trace, fake, graph, GradSitePass({"loss": 1.0}, [GradSiteEdit("e", record)], index=3)
     )
     assert seen == [neutral.GradSiteCall("e", 0, 0, 3)]
     assert result.fires[0].replaced is False
@@ -140,8 +148,8 @@ def test_the_call_carries_torch_hook_context_fields() -> None:
 def test_pass_qualified_edits_fire_only_in_their_pass() -> None:
     trace, graph = _setup()
     edits = [_edit("e", lambda g: 0 * g, pass_index=2)]
-    first = edited_gradients(trace, fake, graph, {"loss": 1.0}, edits, pass_index=1)
-    second = edited_gradients(trace, fake, graph, {"loss": 1.0}, edits, pass_index=2)
+    first = edited_gradients(trace, fake, graph, GradSitePass({"loss": 1.0}, edits, index=1))
+    second = edited_gradients(trace, fake, graph, GradSitePass({"loss": 1.0}, edits, index=2))
     assert first.fires == () and len(second.fires) == 1
     np.testing.assert_allclose(second.grads["a"], np.zeros(3))
 
@@ -162,7 +170,9 @@ def test_the_second_output_slot_of_a_multi_output_op_is_editable() -> None:
         seen.append(call.tuple_index)
         return 3.0 * grad
 
-    result = edited_gradients(trace, fake, graph, {"loss": 1.0}, [GradSiteEdit("s:1", tripled)])
+    result = edited_gradients(
+        trace, fake, graph, GradSitePass({"loss": 1.0}, [GradSiteEdit("s:1", tripled)])
+    )
     np.testing.assert_allclose(result.grads["a"], np.array([1.0, 3.0, 3.0]))
     assert seen == [1]
 
@@ -170,11 +180,17 @@ def test_the_second_output_slot_of_a_multi_output_op_is_editable() -> None:
 def test_refusals_are_typed() -> None:
     trace, graph = _setup()
     with pytest.raises(RunCapabilityUnavailableError, match="no recorded op has the output"):
-        edited_gradients(trace, fake, graph, {"loss": 1.0}, [_edit("nope", lambda g: g)])
+        edited_gradients(
+            trace, fake, graph, GradSitePass({"loss": 1.0}, [_edit("nope", lambda g: g)])
+        )
     with pytest.raises(RunCapabilityUnavailableError, match="returned None"):
-        edited_gradients(trace, fake, graph, {"loss": 1.0}, [_edit("e", lambda g: None)])
+        edited_gradients(
+            trace, fake, graph, GradSitePass({"loss": 1.0}, [_edit("e", lambda g: None)])
+        )
     with pytest.raises(RunCapabilityUnavailableError, match="no replay adapter"):
-        neutral.edited_gradients_for_backend(trace, "torch", [], lambda _l: None, {}, ())
+        neutral.edited_gradients_for_backend(
+            trace, "torch", [], lambda _l: None, GradSitePass({}, ())
+        )
 
 
 def test_an_edit_does_not_hide_an_unreplayable_op_on_the_path() -> None:
@@ -190,7 +206,9 @@ def test_an_edit_does_not_hide_an_unreplayable_op_on_the_path() -> None:
     trace.payloads.update({"o": np.ones(2), "loss": -np.ones(2)})
     graph = graph_from_recipes(trace, fake, list(trace.ops.values()), trace.payloads.__getitem__)
     with pytest.raises(RunCapabilityUnavailableError, match="cannot be replayed"):
-        edited_gradients(trace, fake, graph, {"loss": np.ones(2)}, [_edit("o", np.zeros_like)])
+        edited_gradients(
+            trace, fake, graph, GradSitePass({"loss": np.ones(2)}, [_edit("o", np.zeros_like)])
+        )
 
 
 def test_one_node_per_op_folds_repeated_multi_output_records() -> None:
@@ -242,7 +260,7 @@ def test_build_arm_and_run_armed_grad_sites(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr("torchlens.backends._replay_adapters.get_adapter", lambda name: fake)
     ops = [op for op in trace.ops.values() if op.op_identity != "input"]
     result = neutral.run_armed_grad_sites(
-        trace, "fake", ops, trace.payloads.__getitem__, {"loss": 1.0}
+        trace, "fake", ops, trace.payloads.__getitem__, GradSitePass({"loss": 1.0})
     )
     np.testing.assert_allclose(result.grads["a"], np.zeros(3))
     neutral.clear_grad_sites(trace)
@@ -251,7 +269,9 @@ def test_build_arm_and_run_armed_grad_sites(monkeypatch: pytest.MonkeyPatch) -> 
 
 def test_disagreeing_labels_uses_the_adapter_comparison() -> None:
     trace, graph = _setup()
-    result = edited_gradients(trace, fake, graph, {"loss": 1.0}, [_edit("e", lambda g: 0.5 * g)])
+    result = edited_gradients(
+        trace, fake, graph, GradSitePass({"loss": 1.0}, [_edit("e", lambda g: 0.5 * g)])
+    )
     native = dict(result.grads)
     assert neutral.disagreeing_labels(fake, result, native) == ()
     native["a"] = native["a"] + 1.0
