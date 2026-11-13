@@ -113,9 +113,7 @@ EXPECTED_GATED_CAPABILITIES: dict[str, dict[str, bool]] = {
         "structure_only_capture": False,
     },
     "jax": {
-        # Lifted 2026-11 (parity wave B): native backward capture through
-        # torchlens.backends._backward_native.jax (tests/test_parity_b_bwd_jax_records.py).
-        "backward_capture": True,
+        "backward_capture": False,
         "fastlog": False,
         "can_intervene": False,
         "rng_replay": False,
@@ -234,9 +232,9 @@ def test_option_policy_gates_are_fail_closed_biconditional(name: str) -> None:
     for option, flag in cases:
         options = dict(_OPTION_POLICY_DEFAULTS)
         options[option] = True
-        if not getattr(spec.capabilities, flag):
-            with pytest.raises(BackendUnsupportedError):
-                reject_unsupported_trace_options(options, policy, spec=spec)
+        assert not getattr(spec.capabilities, flag)
+        with pytest.raises(BackendUnsupportedError):
+            reject_unsupported_trace_options(options, policy, spec=spec)
         bare_flip = _spec_with_flag(name, flag, implementation=False)
         with pytest.raises(BackendCapabilityConformanceError):
             reject_unsupported_trace_options(options, policy, spec=bare_flip)
@@ -356,7 +354,7 @@ class _StubTrace:
         self._provenance_backend = backend
 
 
-@pytest.mark.parametrize("name", ("mlx", "tinygrad", "paddle", "tf"))
+@pytest.mark.parametrize("name", ("jax", "mlx", "tinygrad", "paddle", "tf"))
 def test_backward_accessor_guard_redirects_to_derived_grads(name: str) -> None:
     """Derived-grads backends refuse with the derived-gradient redirect."""
 
@@ -403,8 +401,6 @@ def test_backward_accessors_raise_for_all_non_backward_backends() -> None:
     trace = tl.trace(model, torch.randn(1, 2))
     try:
         for name in _PREVIEW_NAMES:
-            if tl.backends.spec(name).capabilities.backward_capture:
-                continue
             trace._provenance_backend = name
             with pytest.raises(ValueError):
                 _ = trace.autograd.backward_passes

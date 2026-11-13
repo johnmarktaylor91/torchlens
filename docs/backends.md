@@ -482,11 +482,7 @@ What it does:
 - Refused: transformed root callables (`jax.jit`, `jax.vmap`, `jax.grad`) and capture from inside
   them, unsupported nested-jaxpr primitives, callback effects, `intervene=`, `stop_after=`,
   streaming, `save_grads=` and `tl.record(backend="jax")`. `save=` applies after finalization.
-  For intervention and sparse recording, use the PyTorch backend.
-- Backward capture: `trace.backward(lambda out: jnp.sum(out ** 2))` records a backward pass from
-  JAX's own derivative rules, one `GradFn` per backward equation, with per-op gradients. The loss
-  is a callable of `trace.output` returning a real scalar; custom-VJP calls and whole control-flow
-  regions refuse.
+  For intervention, sparse recording and true backward graphs, use the PyTorch backend.
 - `.tlspec` saves use `payload_policy="array_payloads"` and load back as `jax.Array`; typed PRNG
   keys round-trip as typed keys. Fully addressable single-host sharded arrays are saved as
   assembled host values with versioned `jax_sharding_*` fields and a `jax_named_sharding` block
@@ -610,7 +606,7 @@ The implementation view of the same facts, one row per backend:
 |---|---|---|---|---|---|
 | `torch` | Stable eager wrapper capture | Replay validation | Materialized `.tlspec` payloads | `torch_module` | True backward capture |
 | `mlx` | Eager-dispatch capture; live `intervene=`/`stop_after=` (static or value-dependent) | Live per-op replay and parent perturbation over the captured (whitelisted) op set | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.autograd.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads` |
-| `jax` | Jaxpr-first functional capture | Live per-equation replay and parent perturbation | Materialized forward/derived array `.tlspec` payloads | `function_root`, Equinox/NNX `pytree_module` | `trace.autograd.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads`; true backward capture via `trace.backward(loss_fn)` |
+| `jax` | Jaxpr-first functional capture | Live per-equation replay and parent perturbation | Materialized forward/derived array `.tlspec` payloads | `function_root`, Equinox/NNX `pytree_module` | `trace.autograd.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads` |
 | `tinygrad` | UOp-snapshot functional capture; live static-selector `intervene=` | Live UOp replay and parent perturbation on `DEV=PYTHON` payloads | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.autograd.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads` |
 | `paddle` | Dygraph/eager capture with live forward `intervene=`/`stop_after=` | Live replay/perturbation plus static inventory guard; corroborated user-intervention carve-out | Materialized forward/derived array `.tlspec` payloads | `function_root`, object `object_module` | `trace.autograd.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads` |
 | `tf` | Eager op-callback capture with live `intervene=`/`stop_after=` (static or value-dependent); implemented graph-only FuncGraph static path for compiled/SavedModel entries | Callback self-consistency plus per-op replay/perturbation accounting | Materialized forward array `.tlspec` payloads | `function_root`, Keras/`tf.Module` object `object_module` | `trace.autograd.derived_grads`; opt-in `trace.autograd.intermediate_derived_grads` (eager entries only) |

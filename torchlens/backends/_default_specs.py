@@ -8,7 +8,6 @@ from typing import Any
 import torch
 from torch import nn
 
-from ._capability_bindings import capability_bindings
 from ._default_specs_tf import (
     _has_saved_model_signatures,
     _is_keras_object,
@@ -534,6 +533,107 @@ def _torch_capture_trace(*args: Any, **kwargs: Any) -> Any:
     return _trace_torch_model(*args, **kwargs)
 
 
+def _torch_interventions_implementation() -> object:
+    """Resolve the torch live-intervention implementing surface.
+
+    Returns
+    -------
+    object
+        The live hook applier the torch capture hot path invokes for
+        ``trace(intervene=...)`` sites.
+    """
+
+    from .torch._ops_emission import apply_live_hooks_to_outputs
+
+    return apply_live_hooks_to_outputs
+
+
+def _tf_interventions_implementation() -> object:
+    """Resolve the TensorFlow static-label intervention implementing surface.
+
+    Returns
+    -------
+    object
+        The writable-layer normalizer the tf capture path dispatches for
+        ``trace(intervene=...)`` sites.
+    """
+
+    from .tf.interventions import normalize_tf_interventions
+
+    return normalize_tf_interventions
+
+
+def _torch_fastlog_implementation() -> object:
+    """Resolve the torch sparse-recording implementing surface.
+
+    Returns
+    -------
+    object
+        The ``Recorder`` class ``tl.record()`` actually runs.
+    """
+
+    from ..recording._recorder import Recorder
+
+    return Recorder
+
+
+def _torch_structure_only_implementation() -> object:
+    """Resolve the torch structure-only capture implementing surface.
+
+    Returns
+    -------
+    object
+        The escalated escape-belt installer the torch capture path enters
+        for ``trace(structure_only=True)`` sessions.
+    """
+
+    from .torch.structure_only_belt import structure_only_escape_belt
+
+    return structure_only_escape_belt
+
+
+def _torch_streaming_implementation() -> object:
+    """Resolve the torch streaming-save implementing surface.
+
+    Returns
+    -------
+    object
+        The disk storage backend behind ``storage=`` / ``streaming=`` saves.
+    """
+
+    from ..recording._storage_disk import DiskStorageBackend
+
+    return DiskStorageBackend
+
+
+def _torch_backward_capture_implementation() -> object:
+    """Resolve the torch backward-capture implementing surface.
+
+    Returns
+    -------
+    object
+        The torch backward capture module.
+    """
+
+    from .torch import backward
+
+    return backward
+
+
+def _torch_rng_replay_implementation() -> object:
+    """Resolve the torch RNG snapshot/replay implementing surface.
+
+    Returns
+    -------
+    object
+        The RNG snapshot entry on the torch capture adapter.
+    """
+
+    from .torch.backend import TorchBackend
+
+    return TorchBackend.snapshot_rng
+
+
 def _torch_capture_backend() -> CaptureBackend:
     """Return the torch Protocol adapter registered for shared capture orchestration.
 
@@ -592,6 +692,30 @@ def _tinygrad_capture_trace(*args: Any, **kwargs: Any) -> Any:
     from .tinygrad.backend import TinygradBackend
 
     return TinygradBackend().capture_trace(*args, **kwargs)
+
+
+def _tinygrad_interventions_implementation() -> object:
+    """Resolve the tinygrad edit-plan resolver behind ``can_intervene`` (lazy import)."""
+
+    from .tinygrad._edit_plan import resolve_tinygrad_edit_plan
+
+    return resolve_tinygrad_edit_plan
+
+
+def _paddle_interventions_implementation() -> object:
+    """Resolve the Paddle live-intervention implementing surface.
+
+    Returns
+    -------
+    object
+        Runtime class the Paddle capture wrapper dispatches for
+        ``trace(intervene=...)`` / ``trace(halt=...)`` sites. Import-light:
+        the module defers the paddle import to apply time.
+    """
+
+    from .paddle.interventions import PaddleInterventionRuntime
+
+    return PaddleInterventionRuntime
 
 
 def _paddle_capture_trace(*args: Any, **kwargs: Any) -> Any:
@@ -822,6 +946,21 @@ def _mlx_validate_trace(*args: Any, **kwargs: Any) -> Any:
     return MLXBackend().validate_trace(*args, **kwargs)
 
 
+def _mlx_interventions_implementation() -> object:
+    """Resolve the MLX static-label intervention implementing surface.
+
+    Returns
+    -------
+    object
+        The plan resolver the MLX capture path invokes for
+        ``trace(intervene=...)`` / ``trace(halt=...)`` sites.
+    """
+
+    from .mlx.interventions import resolve_mlx_intervention_plan
+
+    return resolve_mlx_intervention_plan
+
+
 def _paddle_validate_trace(*args: Any, **kwargs: Any) -> Any:
     """Dispatch to Paddle trace replay validation.
 
@@ -934,7 +1073,14 @@ def _torch_backend_spec() -> BackendSpec:
             trace_options=TORCH_TRACE_OPTIONS,
         ),
         capture_backend=_torch_capture_backend,
-        capability_implementations=capability_bindings("torch"),
+        capability_implementations={
+            "backward_capture": _torch_backward_capture_implementation,
+            "fastlog": _torch_fastlog_implementation,
+            "can_intervene": _torch_interventions_implementation,
+            "rng_replay": _torch_rng_replay_implementation,
+            "has_streaming": _torch_streaming_implementation,
+            "structure_only_capture": _torch_structure_only_implementation,
+        },
         serialization_policy=SerializationPolicy(
             payload_policy="full",
             body_format="safetensors",
@@ -980,7 +1126,9 @@ def register_default_backend_specs() -> None:
                 module_identity_modes=("function_root", "object_module"),
                 trace_options=MLX_TRACE_OPTIONS,
             ),
-            capability_implementations=capability_bindings("mlx"),
+            capability_implementations={
+                "can_intervene": _mlx_interventions_implementation,
+            },
             serialization_policy=SerializationPolicy(
                 payload_policy="array_payloads",
                 body_format="safetensors",
@@ -1000,7 +1148,7 @@ def register_default_backend_specs() -> None:
             validate_entry=_jax_validate_entry,
             validate_trace=_jax_validate_trace,
             capabilities=BackendCapabilities(
-                backward_capture=True,
+                backward_capture=False,
                 has_validation_replay=True,
                 fastlog=False,
                 can_intervene=False,
@@ -1019,7 +1167,6 @@ def register_default_backend_specs() -> None:
                 manifest_schema_versions=(2,),
                 runtime_name="jax",
             ),
-            capability_implementations=capability_bindings("jax"),
             protocol=_jax_protocol,
             priority=20,
         ),
@@ -1046,7 +1193,7 @@ def register_default_backend_specs() -> None:
                 module_identity_modes=("function_root", "object_module"),
                 trace_options=TINYGRAD_TRACE_OPTIONS,
             ),
-            capability_implementations=capability_bindings("tinygrad"),
+            capability_implementations={"can_intervene": _tinygrad_interventions_implementation},
             serialization_policy=SerializationPolicy(
                 payload_policy="array_payloads",
                 manifest_schema_versions=(2,),
@@ -1079,7 +1226,9 @@ def register_default_backend_specs() -> None:
                 module_identity_modes=("function_root", "object_module"),
                 trace_options=PADDLE_TRACE_OPTIONS,
             ),
-            capability_implementations=capability_bindings("paddle"),
+            capability_implementations={
+                "can_intervene": _paddle_interventions_implementation,
+            },
             serialization_policy=SerializationPolicy(
                 payload_policy="array_payloads",
                 body_format="safetensors",
@@ -1114,7 +1263,9 @@ def register_default_backend_specs() -> None:
                 module_identity_modes=("function_root", "object_module"),
                 trace_options=TF_TRACE_OPTIONS,
             ),
-            capability_implementations=capability_bindings("tf"),
+            capability_implementations={
+                "can_intervene": _tf_interventions_implementation,
+            },
             serialization_policy=SerializationPolicy(
                 payload_policy="array_payloads",
                 body_format="safetensors",
