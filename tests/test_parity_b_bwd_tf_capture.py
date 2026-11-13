@@ -198,10 +198,21 @@ def _assert_valid(trace: Any, pass_number: int) -> BackwardCheckResult:
 def _param_grads(trace: Any, pass_number: int) -> dict[str, np.ndarray]:
     found = {}
     for address, param in trace._param_logs.items():
-        for record in param._slot("_grad_records") or ():
+        for record in param._grad_records:
             if record.backward_pass_number == pass_number and record.grad is not None:
                 found[str(address)] = np.asarray(record.grad)
     return found
+
+
+def _assert_same_grads(got: dict[str, np.ndarray], want: list[Any]) -> None:
+    """Recorded parameter gradients equal a plain tape's, exactly (matched by shape and sum)."""
+
+    assert len(got) == len(want)
+    order = lambda a: (a.shape, float(a.sum()))  # noqa: E731
+    recorded = sorted(got.values(), key=order)
+    expected = sorted((w.numpy() for w in want), key=order)
+    for value, ref in zip(recorded, expected, strict=True):
+        np.testing.assert_allclose(value, ref, rtol=0, atol=0)
 
 
 def test_raw_module_pass_validates_and_matches_a_plain_tape(backward_ready: Any) -> None:
@@ -215,10 +226,7 @@ def test_raw_module_pass_validates_and_matches_a_plain_tape(backward_ready: Any)
     with tf.GradientTape() as tape:
         loss = _square_sum(model(x))
     want = tape.gradient(loss, [model.weight, model.bias])
-    got = _param_grads(trace, 1)
-    assert len(got) == 2
-    for expected, value in zip(want, sorted(got.items()), strict=True):
-        np.testing.assert_allclose(value[1], expected.numpy(), rtol=0, atol=0)
+    _assert_same_grads(_param_grads(trace, 1), want)
     assert len(trace.autograd.backward_passes) == 1
     names = {grad_fn.class_name for grad_fn in trace.autograd.grad_fns}
     assert {"MatMul", "Relu"} <= names
@@ -253,12 +261,7 @@ def test_keras_mlp_two_passes_each_validate(backward_ready: Any) -> None:
     with tf.GradientTape() as tape:
         loss = tf.reduce_mean(model(x))
     want = tape.gradient(loss, model.trainable_variables)
-    got = _param_grads(trace, 2)
-    assert len(got) == len(want)
-    by_shape = sorted(got.values(), key=lambda a: (a.shape, a.sum()))
-    expected = sorted((w.numpy() for w in want), key=lambda a: (a.shape, a.sum()))
-    for value, ref in zip(by_shape, expected, strict=True):
-        np.testing.assert_allclose(value, ref, rtol=0, atol=0)
+    _assert_same_grads(_param_grads(trace, 2), want)
 
 
 def test_metadata_only_pass_keeps_no_values(backward_ready: Any) -> None:
@@ -318,3 +321,53 @@ def test_missing_binding_refuses_naming_it(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.delattr(backprop, "_gradient_function")
     with pytest.raises(RunCapabilityUnavailableError, match="backprop._gradient_function"):
         native_tf._require_bindings()
+
+
+class SmallCnn(keras.Model):
+    """Conv, pool, flatten and dense: the layer kinds a vision model starts with."""
+
+    def __init__(self) -> None:
+        super().__init__(name="small_cnn")
+        self.conv = keras.layers.Conv2D(2, 3, padding="same", activation="relu", name="conv")
+        self.pool = keras.layers.MaxPool2D(name="pool")
+        self.flat = keras.layers.Flatten(name="flat")
+        self.dense = keras.layers.Dense(3, name="dense")
+
+    def call(self, x: Any) -> Any:
+        return self.dense(self.flat(self.pool(self.conv(x))))
+
+
+def test_small_cnn_pass_validates(backward_ready: Any) -> None:
+    tf.keras.utils.set_random_seed(1)
+    model = SmallCnn()
+    x = tf.reshape(tf.range(2 * 4 * 4 * 1, dtype=tf.float32) / 9.0, (2, 4, 4, 1))
+    model(x)
+    trace = backward_ready(model, x)
+    trace.backward(_square_sum, save_grads=True)
+    _assert_valid(trace, 1)
+    with tf.GradientTape() as tape:
+        loss = _square_sum(model(x))
+    _assert_same_grads(_param_grads(trace, 1), tape.gradient(loss, model.trainable_variables))
+
+
+@tf.custom_gradient
+def clipped_square(x: Any) -> Any:
+    """x**2 whose gradient is clipped to [-1, 1]: a Python gradient rule."""
+
+    def grad(upstream: Any) -> Any:
+        return tf.clip_by_value(2.0 * x * upstream, -1.0, 1.0)
+
+    return x * x, grad
+
+
+def test_custom_gradient_rule_is_its_own_custom_node(backward_ready: Any) -> None:
+    x = tf.constant([0.1, 3.0])
+    trace = backward_ready(lambda v: tf.reduce_sum(clipped_square(tf.sin(v))), x)
+    trace.backward(trace.output, save_grads=True)
+    custom = [fn for fn in trace.autograd.grad_fns if fn.is_custom]
+    assert [fn.class_name for fn in custom] == ["clipped_square"]
+    with tf.GradientTape() as tape:
+        tape.watch(x)
+        loss = tf.reduce_sum(clipped_square(tf.sin(x)))
+    inputs = [op for op in trace._layer_list if getattr(op, "is_input", False)]
+    np.testing.assert_allclose(np.asarray(inputs[0].grad), tape.gradient(loss, x).numpy())
