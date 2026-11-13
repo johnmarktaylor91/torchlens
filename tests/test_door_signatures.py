@@ -97,10 +97,12 @@ def test_static_save_predicate_keeps_everything_for_all(value: object) -> None:
     assert "save" not in kwargs
 
 
-def test_static_save_predicate_passes_a_selector_and_refuses_a_callable() -> None:
-    """A static selector passes through; a value-dependent callable refuses typed."""
+def test_save_predicate_passes_selectors_and_callables_and_refuses_other_values() -> None:
+    """Selectors and predicate callables pass through; any other value refuses typed."""
 
     selector = tl.func("relu")
     assert pop_static_label_save_predicate({"save": selector}, backend_name="test") is selector
+    predicate = lambda op: True  # noqa: E731
+    assert pop_static_label_save_predicate({"save": predicate}, backend_name="test") is predicate
     with pytest.raises(BackendUnsupportedError):
-        pop_static_label_save_predicate({"save": lambda op: True}, backend_name="test")
+        pop_static_label_save_predicate({"save": 3}, backend_name="test")

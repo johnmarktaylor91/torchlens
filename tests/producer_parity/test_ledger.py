@@ -78,6 +78,7 @@ EXPECTED_APPEND_AMENDMENT_CALLER_FILES = {
     "torchlens/backends/paddle/interventions.py",  # module_exit_intervention (site fire)
     "torchlens/backends/jax/backend.py",  # preview_output_parent_rebind
     "torchlens/backends/tinygrad/backend.py",  # preview_output_parent_rebind
+    "torchlens/backends/tinygrad/_capture_state.py",  # module_exit_intervention (op edit fire)
     "torchlens/_ir/capture_events.py",  # concat lane transport (re-append)
 }
 

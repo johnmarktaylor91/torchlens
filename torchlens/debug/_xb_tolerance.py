@@ -34,6 +34,8 @@ from typing import Literal
 
 import torch
 
+from .._utils._torch_symbols import torch_attr
+
 #: Same-backend defaults: ``torch.allclose`` exactly as ``compare`` always used.
 SAME_BACKEND_RTOL = 1e-5
 SAME_BACKEND_ATOL = 1e-8
@@ -108,7 +110,7 @@ def _narrower_float(dtype_a: torch.dtype, dtype_b: torch.dtype) -> str | None:
 def _atol_floor(narrower: str | None, scale: float) -> float:
     """``CROSS_BACKEND_ATOL_FLOOR[narrower] * eps(narrower dtype) * scale``."""
 
-    eps = torch.finfo(getattr(torch, narrower or "float32")).eps
+    eps = torch.finfo(torch_attr(narrower or "float32")).eps
     return CROSS_BACKEND_ATOL_FLOOR[narrower or "float32"] * eps * scale
 
 

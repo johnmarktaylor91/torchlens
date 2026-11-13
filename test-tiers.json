@@ -301,14 +301,14 @@
         "tests/test_run_until_projection_cost.py"
       ],
       "torchlens/_capture/_nonfinite_prefix.py": [
+        "tests/backend_conformance/test_preview_label_numbering.py",
         "tests/test_backend_constants_rule.py",
-        "tests/test_backend_finalize_labels.py",
+        "tests/test_capture_outcome_gates.py",
         "tests/test_capture_settlement.py",
+        "tests/test_hon_crash_notes.py",
         "tests/test_nan_debugging.py",
         "tests/test_observe_kit_labels.py",
-        "tests/test_observe_kit_timeline.py",
-        "tests/test_preview_grad_tolerance_tripwires.py",
-        "tests/test_validation_reasons_structural.py"
+        "tests/test_observe_kit_timeline.py"
       ],
       "torchlens/_capture/_outcome_payload.py": [
         "tests/test_capture_outcome_authority.py",
@@ -459,6 +459,7 @@
         "tests/test_unpickle_c_security.py"
       ],
       "torchlens/_capture/finalize/__init__.py": [
+        "tests/backend_conformance/test_preview_label_numbering.py",
         "tests/test_capture_memory_guard.py",
         "tests/test_observe_kit_labels.py"
       ],
@@ -801,10 +802,10 @@
         "tests/test_bundle_diff_multipass.py",
         "tests/test_bundle_diff_renderer.py",
         "tests/test_bundle_draw.py",
+        "tests/test_debug_compare_structural_pairing.py",
         "tests/test_intervention_hardening_cert7.py",
-        "tests/test_module_edit_comparison_reads.py",
-        "tests/test_nan_debugging.py",
-        "tests/test_report_lane_debug_report.py"
+        "tests/test_report_lane_debug_report.py",
+        "tests/test_value_record_display.py"
       ],
       "torchlens/_constants.py": [
         "tests/surface_oracle/test_surface_oracle.py",
@@ -882,11 +883,11 @@
         "tests/test_validate_consolidated.py"
       ],
       "torchlens/_data_classes/_compaction.py": [
+        "tests/backend_conformance/test_preview_label_numbering.py",
         "tests/test_backend_constants_rule.py",
         "tests/test_backend_finalize_labels.py",
         "tests/test_capture_fields_dict_prune.py",
         "tests/test_capture_overhead_counters.py",
-        "tests/test_capture_row_ingest.py",
         "tests/test_postprocess_executor.py",
         "tests/test_preview_grad_tolerance_tripwires.py",
         "tests/test_validation_reasons_structural.py"
@@ -1038,10 +1039,10 @@
       ],
       "torchlens/_data_classes/_lookup_kinds.py": [
         "tests/test_backward_intervention.py",
+        "tests/test_debug_compare_structural_pairing.py",
         "tests/test_extract_fast_path.py",
         "tests/test_field_order_contract.py",
         "tests/test_indexing_coherence.py",
-        "tests/test_io_scrub_policy.py",
         "tests/test_pluck_fast_path.py",
         "tests/test_r18c_bridge_adapters.py",
         "tests/test_record_field_policy.py"
@@ -1070,7 +1071,7 @@
         "tests/test_bundle_compare_fork.py",
         "tests/test_bundle_diff_multipass.py",
         "tests/test_bundle_diff_renderer.py",
-        "tests/test_intervention_hardening_cert7.py",
+        "tests/test_debug_compare_structural_pairing.py",
         "tests/test_intervention_render_marks.py",
         "tests/test_module_edit_comparison_reads.py",
         "tests/test_report_lane_debug_report.py",
@@ -1081,6 +1082,16 @@
         "tests/test_facade_dx_contract.py",
         "tests/test_field_order_contract.py",
         "tests/test_glossary_v5_additions.py",
+        "tests/test_indexing_coherence.py",
+        "tests/test_io_scrub_policy.py",
+        "tests/test_module_log.py",
+        "tests/test_record_field_policy.py"
+      ],
+      "torchlens/_data_classes/_module_passthrough.py": [
+        "tests/surface_oracle/test_surface_oracle.py",
+        "tests/test_debug_cross_backend_modules.py",
+        "tests/test_facade_dx_contract.py",
+        "tests/test_field_order_contract.py",
         "tests/test_indexing_coherence.py",
         "tests/test_io_scrub_policy.py",
         "tests/test_module_log.py",
@@ -1377,13 +1388,13 @@
       ],
       "torchlens/_data_classes/_site_key.py": [
         "tests/test_backward_intervention.py",
-        "tests/test_grad_site_doors.py",
         "tests/test_grad_site_selector.py",
         "tests/test_predicate_review_regressions.py",
-        "tests/test_sae5_save_door.py",
         "tests/test_selector_semantics_matrix.py",
         "tests/test_site_key.py",
-        "tests/test_source_text_lazy.py"
+        "tests/test_site_key_portability.py",
+        "tests/test_source_text_lazy.py",
+        "tests/test_validation.py"
       ],
       "torchlens/_data_classes/_staged_spec.py": [
         "tests/test_run_inputs_staged_spec.py"
@@ -1916,7 +1927,7 @@
         "tests/test_w051_gate_layer_accessors.py"
       ],
       "torchlens/_data_classes/module.py": [
-        "tests/test_backward_p5_modules.py",
+        "tests/test_debug_cross_backend_modules.py",
         "tests/test_loop_module_rolling.py",
         "tests/test_module_do_replacement_parity.py",
         "tests/test_module_edit_comparison_reads.py",
@@ -2008,10 +2019,10 @@
       "torchlens/_debug_report.py": [
         "tests/test_checks_kit_scan.py",
         "tests/test_debug_analysis.py",
+        "tests/test_debug_cross_backend_modules.py",
         "tests/test_debug_findings_source_lines.py",
         "tests/test_debug_report_missing_text_cells.py",
         "tests/test_debug_truths.py",
-        "tests/test_observe_kit_backward.py",
         "tests/test_report_honesty_wave0.py",
         "tests/test_report_lane_debug_report.py"
       ],
@@ -2383,6 +2394,8 @@
         "tests/test_fast_run_faithfulness.py"
       ],
       "torchlens/_fast_live_plans.py": [
+        "tests/test_debug_cross_backend_modules.py",
+        "tests/test_debug_cross_backend_ports.py",
         "tests/test_fast_rerun_unedited.py",
         "tests/test_fast_run_faithfulness.py"
       ],
@@ -2808,11 +2821,11 @@
         "tests/test_tlspec_runnable_slice_literal.py"
       ],
       "torchlens/_io/accessor_rebuild.py": [
+        "tests/backend_conformance/test_preview_label_numbering.py",
         "tests/test_backend_constants_rule.py",
         "tests/test_backend_finalize_labels.py",
         "tests/test_column_passes_finalize.py",
         "tests/test_encoding_channels.py",
-        "tests/test_grind_b4_lane_p.py",
         "tests/test_postprocess_executor.py",
         "tests/test_tlspec_rehydrate_no_planted_call.py",
         "tests/test_tlspec_unified.py"
@@ -4356,6 +4369,24 @@
         "tests/test_postprocess_executor.py",
         "tests/test_tlspec_parse_fuzz.py"
       ],
+      "torchlens/_postprocess/_post_plan.py": [
+        "tests/test_door_signatures.py",
+        "tests/test_selective_save_zero_match_warning.py"
+      ],
+      "torchlens/_postprocess/_post_predicate.py": [
+        "tests/backend_conformance/test_deviceref_vocabulary.py",
+        "tests/backends/test_tf_derived_grads.py",
+        "tests/backends/test_tf_interventions.py",
+        "tests/backends/test_tf_recurrence_grouping.py",
+        "tests/backends/test_tf_registry.py",
+        "tests/test_door_signatures.py",
+        "tests/test_selective_save_zero_match_warning.py",
+        "tests/test_tf_parity_halt.py"
+      ],
+      "torchlens/_postprocess/_post_shaping.py": [
+        "tests/test_door_signatures.py",
+        "tests/test_selective_save_zero_match_warning.py"
+      ],
       "torchlens/_postprocess/_pre_hook_provenance.py": [
         "tests/test_column_passes_finalize.py",
         "tests/test_encoding_channels.py",
@@ -4374,6 +4405,7 @@
         "tests/test_wrapper_teardown_hygiene.py"
       ],
       "torchlens/_postprocess/_recurrence.py": [
+        "tests/backend_conformance/test_preview_label_numbering.py",
         "tests/test_backend_constants_rule.py",
         "tests/test_backend_finalize_labels.py",
         "tests/test_backends_finalize_cert10.py",
@@ -4404,9 +4436,9 @@
         "tests/test_preview_grad_tolerance_tripwires.py",
         "tests/test_preview_replay_tolerance_tripwires.py",
         "tests/test_refusal_gate_codes.py",
+        "tests/test_rulings_names_1103.py",
         "tests/test_selective_save_zero_match_warning.py",
-        "tests/test_validation_reasons_structural.py",
-        "tests/test_zero_match_disclosures.py"
+        "tests/test_validation_reasons_structural.py"
       ],
       "torchlens/_postprocess/_site_join.py": [
         "tests/test_auto_collapse_atomic_spans.py",
@@ -4816,11 +4848,11 @@
         "tests/test_tlspec_runnable_r79_seed_typing.py"
       ],
       "torchlens/_runnable/seam.py": [
-        "tests/test_checks_kit_range_seam.py",
         "tests/test_encoding_channels.py",
         "tests/test_indexing_coherence.py",
         "tests/test_intervened_rerun_guard_rows.py",
         "tests/test_lovely_glance_seams.py",
+        "tests/test_module_returns_seam.py",
         "tests/test_tlspec_runnable_r65_walker_parity.py",
         "tests/test_validation.py",
         "tests/test_zip_truncation_seals.py"
@@ -5909,6 +5941,7 @@
       ],
       "torchlens/_utils/_display_text.py": [
         "tests/test_display_helpers.py",
+        "tests/test_parity_post_rows.py",
         "tests/test_value_record_display.py"
       ],
       "torchlens/_utils/_exception_notes.py": [
@@ -5994,13 +6027,13 @@
         "tests/test_save_budget.py"
       ],
       "torchlens/_utils/_multipass_access.py": [
+        "tests/test_debug_compare_structural_pairing.py",
         "tests/test_draw_header_focus_key.py",
         "tests/test_encoding_channels.py",
         "tests/test_feature_maps_c2.py",
         "tests/test_format_helpers.py",
         "tests/test_intervention_render_marks.py",
         "tests/test_r18j_recurrent_render.py",
-        "tests/test_surgery_visuals_marks.py",
         "tests/test_themes_encoding_fixes.py"
       ],
       "torchlens/_utils/_mutation_names.py": [
@@ -6162,6 +6195,7 @@
         "tests/test_unpickle_c_security.py"
       ],
       "torchlens/_utils/_stochastic_funcs.py": [
+        "tests/test_debug_cross_backend_refusal.py",
         "tests/test_intervention_phase6.py",
         "tests/test_observe_kit_determinism.py",
         "tests/test_observe_kit_rerun.py",
@@ -8511,21 +8545,21 @@
       ],
       "torchlens/backends/__init__.py": [
         "tests/backend_conformance/test_capability_truth.py",
-        "tests/backend_parity/test_trace_option_honesty.py",
         "tests/test_backend_constants_rule.py",
         "tests/test_backend_docs_lockstep.py",
         "tests/test_backend_framework_pins.py",
         "tests/test_backend_protocol.py",
-        "tests/test_chunk_size.py",
+        "tests/test_debug_cross_backend_modules.py",
+        "tests/test_debug_cross_backend_refusal.py",
         "tests/test_doctor_backend_rows.py"
       ],
       "torchlens/backends/_backend_names.py": [
         "tests/backend_conformance/test_capability_truth.py",
-        "tests/test_backend_maturity.py",
         "tests/test_backend_protocol.py",
         "tests/test_capture_unification_p7.py",
+        "tests/test_debug_compare_structural_pairing.py",
+        "tests/test_debug_cross_backend_modules.py",
         "tests/test_doctor_backend_rows.py",
-        "tests/test_refusal_gate_codes.py",
         "tests/test_rf_schema_slots_cache.py",
         "tests/test_runnable_load_parse_hardening.py"
       ],
@@ -8540,13 +8574,13 @@
         "tests/test_refusal_gate_codes.py"
       ],
       "torchlens/backends/_constants.py": [
+        "tests/backend_conformance/test_preview_label_numbering.py",
         "tests/test_backend_constants_rule.py",
         "tests/test_backend_finalize_labels.py",
         "tests/test_column_passes_finalize.py",
         "tests/test_preview_grad_tolerance_tripwires.py",
         "tests/test_preview_oracle_compare.py",
         "tests/test_preview_replay_tolerance_tripwires.py",
-        "tests/test_preview_trace_declared_fields.py",
         "tests/test_validation_reasons_structural.py"
       ],
       "torchlens/backends/_default_specs.py": [
@@ -8598,29 +8632,46 @@
       ],
       "torchlens/backends/_finalize.py": [
         "tests/backend_conformance/test_deviceref_vocabulary.py",
+        "tests/backend_conformance/test_preview_label_numbering.py",
         "tests/test_backend_constants_rule.py",
         "tests/test_backend_finalize_labels.py",
         "tests/test_preview_grad_tolerance_tripwires.py",
         "tests/test_preview_replay_tolerance_tripwires.py",
         "tests/test_preview_trace_declared_fields.py",
-        "tests/test_rulings_names_1103.py",
         "tests/test_validation_reasons_structural.py"
       ],
       "torchlens/backends/_finalize_distances.py": [
         "tests/backend_conformance/test_deviceref_vocabulary.py",
+        "tests/backend_conformance/test_preview_label_numbering.py",
         "tests/test_backend_constants_rule.py",
         "tests/test_backend_finalize_labels.py",
-        "tests/test_backends_finalize_cert10.py",
         "tests/test_jax_backend_derived_grads.py",
         "tests/test_preview_grad_tolerance_tripwires.py",
         "tests/test_preview_trace_declared_fields.py",
         "tests/test_validation_reasons_structural.py"
       ],
-      "torchlens/backends/_finalize_totals.py": [
+      "torchlens/backends/_finalize_labels.py": [
         "tests/backend_conformance/test_deviceref_vocabulary.py",
+        "tests/backend_conformance/test_preview_label_numbering.py",
         "tests/test_backend_constants_rule.py",
         "tests/test_backend_finalize_labels.py",
-        "tests/test_capture_unification_p8.py",
+        "tests/test_jax_backend_derived_grads.py",
+        "tests/test_preview_grad_tolerance_tripwires.py",
+        "tests/test_preview_trace_declared_fields.py",
+        "tests/test_validation_reasons_structural.py"
+      ],
+      "torchlens/backends/_finalize_site_keys.py": [
+        "tests/backend_conformance/test_preview_label_numbering.py",
+        "tests/test_backend_constants_rule.py",
+        "tests/test_backend_finalize_labels.py",
+        "tests/test_backends_finalize_cert10.py",
+        "tests/test_preview_trace_declared_fields.py"
+      ],
+      "torchlens/backends/_finalize_totals.py": [
+        "tests/backend_conformance/test_deviceref_vocabulary.py",
+        "tests/backend_conformance/test_preview_label_numbering.py",
+        "tests/test_backend_constants_rule.py",
+        "tests/test_backend_finalize_labels.py",
         "tests/test_preview_grad_tolerance_tripwires.py",
         "tests/test_preview_replay_tolerance_tripwires.py",
         "tests/test_rulings_names_1103.py",
@@ -8631,13 +8682,23 @@
       ],
       "torchlens/backends/_invariants.py": [
         "tests/backend_conformance/test_deviceref_vocabulary.py",
-        "tests/test_capture_unification_p8.py",
+        "tests/backend_conformance/test_preview_label_numbering.py",
         "tests/test_events_metadata_invariants.py",
         "tests/test_preview_grad_tolerance_tripwires.py",
         "tests/test_preview_oracle_compare.py",
         "tests/test_preview_replay_tolerance_tripwires.py",
         "tests/test_rulings_names_1103.py",
         "tests/test_validation_reasons_structural.py"
+      ],
+      "torchlens/backends/_module_returns.py": [
+        "tests/backend_conformance/test_deviceref_vocabulary.py",
+        "tests/backend_conformance/test_preview_label_numbering.py",
+        "tests/test_backend_constants_rule.py",
+        "tests/test_backend_finalize_labels.py",
+        "tests/test_jax_module_returns.py",
+        "tests/test_module_return_cell.py",
+        "tests/test_module_returns_seam.py",
+        "tests/test_preview_trace_declared_fields.py"
       ],
       "torchlens/backends/_options.py": [
         "tests/backend_conformance/test_capability_truth.py",
@@ -8707,6 +8768,7 @@
         "tests/test_capture_unification_p3b.py",
         "tests/test_input_boundary_guards.py",
         "tests/test_tinygrad_backend_protocol.py",
+        "tests/test_tinygrad_parity_edits.py",
         "tests/test_tinygrad_realize_once.py",
         "tests/test_torch_compat.py"
       ],
@@ -8716,6 +8778,16 @@
         "tests/test_capture_unification_p3b.py",
         "tests/test_input_boundary_guards.py",
         "tests/test_torch_compat.py"
+      ],
+      "torchlens/backends/_root_frames.py": [
+        "tests/backend_conformance/test_deviceref_vocabulary.py",
+        "tests/backend_conformance/test_preview_label_numbering.py",
+        "tests/test_backend_constants_rule.py",
+        "tests/test_backend_finalize_labels.py",
+        "tests/test_paddle_equality_capture.py",
+        "tests/test_preview_grad_tolerance_tripwires.py",
+        "tests/test_preview_trace_declared_fields.py",
+        "tests/test_validation_reasons_structural.py"
       ],
       "torchlens/backends/_scorecard_rows.py": [
         "tests/test_backend_graduation.py",
@@ -8748,63 +8820,166 @@
         "tests/test_doctor_backend_rows.py"
       ],
       "torchlens/backends/jax/__init__.py": [
-        "tests/test_backend_registry.py",
+        "tests/backend_conformance/test_deviceref_vocabulary.py",
+        "tests/backend_conformance/test_preview_label_numbering.py",
         "tests/test_capture_unification_p3b.py",
         "tests/test_input_boundary_guards.py",
-        "tests/test_jax_backend_derived_grads.py",
-        "tests/test_jax_backend_hardening.py",
         "tests/test_jax_zero_annihilator.py",
-        "tests/test_private_submodules.py",
-        "tests/test_torch_compat.py"
+        "tests/test_preview_grad_tolerance_tripwires.py",
+        "tests/test_torch_compat.py",
+        "tests/test_validation_reasons_structural.py"
       ],
       "torchlens/backends/jax/_closure_consts.py": [
         "tests/backend_conformance/test_deviceref_vocabulary.py",
+        "tests/backend_conformance/test_preview_label_numbering.py",
         "tests/test_jax_backend_capture.py",
         "tests/test_jax_backend_derived_grads.py",
+        "tests/test_jax_parity_edits.py",
+        "tests/test_jax_parity_kwargs_grads.py",
+        "tests/test_preview_grad_tolerance_tripwires.py",
+        "tests/test_validation_reasons_structural.py"
+      ],
+      "torchlens/backends/jax/_converted_grads.py": [
+        "tests/backend_conformance/test_deviceref_vocabulary.py",
+        "tests/backend_conformance/test_preview_label_numbering.py",
+        "tests/test_jax_backend_capture.py",
+        "tests/test_jax_backend_derived_grads.py",
+        "tests/test_jax_parity_edits.py",
+        "tests/test_jax_parity_kwargs_grads.py",
+        "tests/test_preview_grad_tolerance_tripwires.py",
+        "tests/test_validation_reasons_structural.py"
+      ],
+      "torchlens/backends/jax/_edit_helpers.py": [
+        "tests/backend_conformance/test_deviceref_vocabulary.py",
+        "tests/backend_conformance/test_preview_label_numbering.py",
+        "tests/test_capture_unification_p3b.py",
+        "tests/test_input_boundary_guards.py",
+        "tests/test_jax_zero_annihilator.py",
+        "tests/test_preview_grad_tolerance_tripwires.py",
+        "tests/test_torch_compat.py",
+        "tests/test_validation_reasons_structural.py"
+      ],
+      "torchlens/backends/jax/_edits.py": [
+        "tests/backend_conformance/test_deviceref_vocabulary.py",
+        "tests/backend_conformance/test_preview_label_numbering.py",
+        "tests/test_jax_backend_capture.py",
+        "tests/test_jax_backend_derived_grads.py",
+        "tests/test_jax_parity_edits.py",
+        "tests/test_jax_parity_kwargs_grads.py",
+        "tests/test_preview_grad_tolerance_tripwires.py",
+        "tests/test_validation_reasons_structural.py"
+      ],
+      "torchlens/backends/jax/_equinox_children.py": [
+        "tests/test_preview_teardown_contract.py"
+      ],
+      "torchlens/backends/jax/_host_state.py": [
+        "tests/backend_conformance/test_deviceref_vocabulary.py",
+        "tests/backend_conformance/test_preview_label_numbering.py",
+        "tests/test_jax_backend_capture.py",
+        "tests/test_jax_backend_derived_grads.py",
+        "tests/test_jax_parity_edits.py",
+        "tests/test_jax_parity_kwargs_grads.py",
+        "tests/test_preview_grad_tolerance_tripwires.py",
+        "tests/test_validation_reasons_structural.py"
+      ],
+      "torchlens/backends/jax/_input_kwargs.py": [
+        "tests/backend_conformance/test_deviceref_vocabulary.py",
+        "tests/backend_conformance/test_preview_label_numbering.py",
+        "tests/test_jax_backend_capture.py",
+        "tests/test_jax_backend_derived_grads.py",
+        "tests/test_jax_parity_edits.py",
+        "tests/test_jax_parity_kwargs_grads.py",
+        "tests/test_preview_grad_tolerance_tripwires.py",
+        "tests/test_validation_reasons_structural.py"
+      ],
+      "torchlens/backends/jax/_module_frames.py": [
+        "tests/backend_conformance/test_deviceref_vocabulary.py",
+        "tests/backend_conformance/test_preview_label_numbering.py",
+        "tests/test_jax_backend_capture.py",
+        "tests/test_jax_backend_derived_grads.py",
+        "tests/test_jax_parity_edits.py",
+        "tests/test_jax_parity_kwargs_grads.py",
+        "tests/test_preview_grad_tolerance_tripwires.py",
+        "tests/test_validation_reasons_structural.py"
+      ],
+      "torchlens/backends/jax/_module_return_probe.py": [
+        "tests/backend_conformance/test_deviceref_vocabulary.py",
+        "tests/backend_conformance/test_preview_label_numbering.py",
+        "tests/test_jax_backend_capture.py",
+        "tests/test_jax_backend_derived_grads.py",
+        "tests/test_jax_parity_edits.py",
+        "tests/test_jax_parity_kwargs_grads.py",
         "tests/test_preview_grad_tolerance_tripwires.py",
         "tests/test_validation_reasons_structural.py"
       ],
       "torchlens/backends/jax/_perturbation_probes.py": [
         "tests/backend_conformance/test_deviceref_vocabulary.py",
+        "tests/backend_conformance/test_preview_label_numbering.py",
         "tests/test_jax_backend_capture.py",
         "tests/test_jax_backend_derived_grads.py",
+        "tests/test_jax_parity_kwargs_grads.py",
         "tests/test_jax_zero_annihilator.py",
+        "tests/test_preview_grad_tolerance_tripwires.py",
+        "tests/test_validation_reasons_structural.py"
+      ],
+      "torchlens/backends/jax/_pytree_param_barcodes.py": [
+        "tests/backend_conformance/test_deviceref_vocabulary.py",
+        "tests/backend_conformance/test_preview_label_numbering.py",
+        "tests/test_jax_backend_capture.py",
+        "tests/test_jax_backend_derived_grads.py",
+        "tests/test_jax_parity_edits.py",
+        "tests/test_jax_parity_kwargs_grads.py",
         "tests/test_preview_grad_tolerance_tripwires.py",
         "tests/test_validation_reasons_structural.py"
       ],
       "torchlens/backends/jax/_raw_relabel.py": [
         "tests/backend_conformance/test_deviceref_vocabulary.py",
+        "tests/backend_conformance/test_preview_label_numbering.py",
         "tests/test_jax_backend_capture.py",
         "tests/test_jax_backend_derived_grads.py",
+        "tests/test_jax_parity_edits.py",
+        "tests/test_jax_parity_kwargs_grads.py",
         "tests/test_preview_grad_tolerance_tripwires.py",
         "tests/test_validation_reasons_structural.py"
       ],
+      "torchlens/backends/jax/_return_ledger.py": [
+        "tests/test_preview_teardown_contract.py"
+      ],
       "torchlens/backends/jax/_site_dialect.py": [
         "tests/backend_conformance/test_deviceref_vocabulary.py",
+        "tests/backend_conformance/test_preview_label_numbering.py",
         "tests/test_flops2_persisted_counts.py",
         "tests/test_format3_family_schemas.py",
         "tests/test_preview_grad_tolerance_tripwires.py",
         "tests/test_schema_v9_audit_rows.py",
         "tests/test_validation_reasons_structural.py",
-        "tests/test_weightsfree_disclosure.py",
         "tests/test_weightsfree_persistence.py"
+      ],
+      "torchlens/backends/jax/_source_lines.py": [
+        "tests/test_jax_parity_source_lines.py"
       ],
       "torchlens/backends/jax/_source_path_components.py": [
         "tests/test_jax_backend_derived_grads.py",
-        "tests/test_jax_backend_validation.py"
+        "tests/test_jax_backend_validation.py",
+        "tests/test_jax_parity_edits.py"
       ],
       "torchlens/backends/jax/_trace_graph_helpers.py": [
         "tests/backend_conformance/test_deviceref_vocabulary.py",
+        "tests/backend_conformance/test_preview_label_numbering.py",
         "tests/test_jax_backend_capture.py",
         "tests/test_jax_backend_derived_grads.py",
+        "tests/test_jax_parity_kwargs_grads.py",
         "tests/test_jax_zero_annihilator.py",
         "tests/test_preview_grad_tolerance_tripwires.py",
         "tests/test_validation_reasons_structural.py"
       ],
       "torchlens/backends/jax/_validation_log.py": [
         "tests/backend_conformance/test_deviceref_vocabulary.py",
+        "tests/backend_conformance/test_preview_label_numbering.py",
         "tests/test_jax_backend_capture.py",
         "tests/test_jax_backend_derived_grads.py",
+        "tests/test_jax_parity_edits.py",
+        "tests/test_jax_parity_kwargs_grads.py",
         "tests/test_preview_grad_tolerance_tripwires.py",
         "tests/test_validation_reasons_structural.py"
       ],
@@ -8814,12 +8989,12 @@
       ],
       "torchlens/backends/jax/backend.py": [
         "tests/backend_conformance/test_deviceref_vocabulary.py",
+        "tests/backend_conformance/test_preview_label_numbering.py",
         "tests/test_backend_rosters_tf_jax.py",
         "tests/test_capture_unification_p3b.py",
         "tests/test_input_boundary_guards.py",
         "tests/test_jax_zero_annihilator.py",
         "tests/test_preview_grad_tolerance_tripwires.py",
-        "tests/test_torch_compat.py",
         "tests/test_validation_reasons_structural.py"
       ],
       "torchlens/backends/jax/capabilities.py": [
@@ -8828,19 +9003,20 @@
       ],
       "torchlens/backends/jax/jaxpr.py": [
         "tests/backend_conformance/test_deviceref_vocabulary.py",
-        "tests/test_jax_backend_capture.py",
+        "tests/backend_conformance/test_preview_label_numbering.py",
         "tests/test_jax_backend_derived_grads.py",
         "tests/test_jax_backend_validation.py",
+        "tests/test_jax_parity_edits.py",
         "tests/test_jax_zero_annihilator.py",
         "tests/test_preview_grad_tolerance_tripwires.py",
         "tests/test_validation_reasons_structural.py"
       ],
       "torchlens/backends/jax/modules.py": [
         "tests/backend_conformance/test_deviceref_vocabulary.py",
-        "tests/test_jax_backend_capture.py",
+        "tests/backend_conformance/test_preview_label_numbering.py",
         "tests/test_jax_backend_derived_grads.py",
         "tests/test_jax_backend_modules.py",
-        "tests/test_jax_backend_validation.py",
+        "tests/test_jax_module_returns.py",
         "tests/test_preview_grad_tolerance_tripwires.py",
         "tests/test_preview_teardown_contract.py",
         "tests/test_validation_reasons_structural.py"
@@ -8862,7 +9038,7 @@
         "tests/test_mlx_compile_honesty.py",
         "tests/test_mlx_hardening.py",
         "tests/test_mlx_interventions.py",
-        "tests/test_mlx_operator_capture.py",
+        "tests/test_mlx_parity_value_edits.py",
         "tests/test_mlx_recurrence_grouping.py"
       ],
       "torchlens/backends/mlx/_capture_records.py": [
@@ -8892,7 +9068,7 @@
         "tests/test_mlx_compile_honesty.py",
         "tests/test_mlx_hardening.py",
         "tests/test_mlx_interventions.py",
-        "tests/test_mlx_operator_capture.py",
+        "tests/test_mlx_parity_value_edits.py",
         "tests/test_mlx_recurrence_grouping.py"
       ],
       "torchlens/backends/mlx/_replay_args.py": [
@@ -8910,13 +9086,23 @@
         "tests/test_refusal_gate_codes.py",
         "tests/test_structure_only_entry.py"
       ],
-      "torchlens/backends/mlx/_tap_observers.py": [
+      "torchlens/backends/mlx/_source_frames.py": [
         "tests/backend_conformance/test_deviceref_vocabulary.py",
         "tests/test_capture_unification_p8.py",
         "tests/test_mlx_backend_validation.py",
         "tests/test_mlx_compile_honesty.py",
         "tests/test_mlx_hardening.py",
         "tests/test_mlx_interventions.py",
+        "tests/test_mlx_parity_value_edits.py",
+        "tests/test_mlx_recurrence_grouping.py"
+      ],
+      "torchlens/backends/mlx/_tap_observers.py": [
+        "tests/backend_conformance/test_deviceref_vocabulary.py",
+        "tests/test_capture_unification_p8.py",
+        "tests/test_mlx_backend_validation.py",
+        "tests/test_mlx_hardening.py",
+        "tests/test_mlx_interventions.py",
+        "tests/test_mlx_parity_value_edits.py",
         "tests/test_mlx_recurrence_grouping.py",
         "tests/test_preview_grad_tolerance_tripwires.py"
       ],
@@ -8947,7 +9133,7 @@
         "tests/test_mlx_compile_honesty.py",
         "tests/test_mlx_hardening.py",
         "tests/test_mlx_interventions.py",
-        "tests/test_mlx_operator_capture.py",
+        "tests/test_mlx_parity_value_edits.py",
         "tests/test_mlx_recurrence_grouping.py"
       ],
       "torchlens/backends/mlx/interventions.py": [
@@ -8956,8 +9142,8 @@
         "tests/test_capture_unification_p3b.py",
         "tests/test_capture_unification_p8.py",
         "tests/test_input_boundary_guards.py",
-        "tests/test_mlx_backend_validation.py",
         "tests/test_mlx_interventions.py",
+        "tests/test_mlx_parity_value_edits.py",
         "tests/test_torch_compat.py"
       ],
       "torchlens/backends/mlx/model_prep.py": [
@@ -8987,7 +9173,7 @@
         "tests/test_mlx_compile_honesty.py",
         "tests/test_mlx_hardening.py",
         "tests/test_mlx_interventions.py",
-        "tests/test_mlx_operator_capture.py",
+        "tests/test_mlx_parity_value_edits.py",
         "tests/test_mlx_recurrence_grouping.py"
       ],
       "torchlens/backends/mlx/validation.py": [
@@ -9026,16 +9212,16 @@
         "tests/test_paddle_backend_interventions.py",
         "tests/test_paddle_backend_validation.py",
         "tests/test_paddle_equality_capture.py",
-        "tests/test_paddle_protocol_rules.py",
+        "tests/test_paddle_parity_buffers.py",
         "tests/test_paddle_recurrence_grouping.py",
         "tests/test_preview_grad_tolerance_tripwires.py"
       ],
       "torchlens/backends/paddle/_param_writes.py": [
         "tests/backend_conformance/test_deviceref_vocabulary.py",
-        "tests/test_paddle_backend_derived_grads.py",
         "tests/test_paddle_backend_interventions.py",
         "tests/test_paddle_backend_validation.py",
         "tests/test_paddle_equality_capture.py",
+        "tests/test_paddle_parity_buffers.py",
         "tests/test_preview_grad_tolerance_tripwires.py",
         "tests/test_preview_oracle_compare.py",
         "tests/test_preview_replay_tolerance_tripwires.py"
@@ -9074,7 +9260,7 @@
         "tests/test_paddle_backend_interventions.py",
         "tests/test_paddle_backend_validation.py",
         "tests/test_paddle_equality_capture.py",
-        "tests/test_paddle_protocol_rules.py",
+        "tests/test_paddle_parity_buffers.py",
         "tests/test_paddle_recurrence_grouping.py",
         "tests/test_preview_grad_tolerance_tripwires.py"
       ],
@@ -9098,13 +9284,33 @@
         "tests/test_preview_grad_tolerance_tripwires.py",
         "tests/test_preview_teardown_contract.py"
       ],
+      "torchlens/backends/paddle/source_frames.py": [
+        "tests/backend_conformance/test_deviceref_vocabulary.py",
+        "tests/test_paddle_backend_derived_grads.py",
+        "tests/test_paddle_backend_interventions.py",
+        "tests/test_paddle_backend_validation.py",
+        "tests/test_paddle_equality_capture.py",
+        "tests/test_paddle_parity_buffers.py",
+        "tests/test_paddle_recurrence_grouping.py",
+        "tests/test_preview_grad_tolerance_tripwires.py"
+      ],
+      "torchlens/backends/paddle/source_leaves.py": [
+        "tests/backend_conformance/test_deviceref_vocabulary.py",
+        "tests/test_paddle_backend_derived_grads.py",
+        "tests/test_paddle_backend_interventions.py",
+        "tests/test_paddle_backend_validation.py",
+        "tests/test_paddle_equality_capture.py",
+        "tests/test_paddle_parity_buffers.py",
+        "tests/test_paddle_recurrence_grouping.py",
+        "tests/test_preview_grad_tolerance_tripwires.py"
+      ],
       "torchlens/backends/paddle/tensor_store.py": [
         "tests/backend_conformance/test_deviceref_vocabulary.py",
         "tests/test_paddle_backend_derived_grads.py",
         "tests/test_paddle_backend_interventions.py",
         "tests/test_paddle_backend_validation.py",
         "tests/test_paddle_equality_capture.py",
-        "tests/test_paddle_protocol_rules.py",
+        "tests/test_paddle_parity_buffers.py",
         "tests/test_paddle_recurrence_grouping.py",
         "tests/test_preview_grad_tolerance_tripwires.py"
       ],
@@ -9158,6 +9364,31 @@
         "tests/test_tf_compat.py",
         "tests/test_torch_compat.py"
       ],
+      "torchlens/backends/tf/_callback_attrs.py": [
+        "tests/backends/test_tf_capture.py",
+        "tests/test_selective_save_zero_match_warning.py"
+      ],
+      "torchlens/backends/tf/_halt.py": [
+        "tests/backend_conformance/test_deviceref_vocabulary.py",
+        "tests/backends/test_tf_derived_grads.py",
+        "tests/backends/test_tf_interventions.py",
+        "tests/backends/test_tf_recurrence_grouping.py",
+        "tests/backends/test_tf_registry.py",
+        "tests/test_exception_taxonomy.py",
+        "tests/test_tf_parity_halt.py",
+        "tests/test_zero_match_disclosures.py"
+      ],
+      "torchlens/backends/tf/_intervention_hooks.py": [
+        "tests/backends/test_tf_interventions.py",
+        "tests/test_preview_teardown_contract.py",
+        "tests/test_zero_match_disclosures.py"
+      ],
+      "torchlens/backends/tf/_intervention_plan.py": [
+        "tests/backends/test_tf_interventions.py",
+        "tests/test_exception_taxonomy.py",
+        "tests/test_preview_teardown_contract.py",
+        "tests/test_zero_match_disclosures.py"
+      ],
       "torchlens/backends/tf/_raw_op_replay.py": [
         "tests/backends/test_tf_protocol_p2.py",
         "tests/backends/test_tf_validation.py",
@@ -9166,13 +9397,21 @@
         "tests/test_preview_replay_tolerance_tripwires.py",
         "tests/test_validation_reasons_structural.py"
       ],
+      "torchlens/backends/tf/_source_context.py": [
+        "tests/backends/test_tf_interventions.py",
+        "tests/test_preview_teardown_contract.py",
+        "tests/test_zero_match_disclosures.py"
+      ],
       "torchlens/backends/tf/_tensor_leaves.py": [
+        "tests/backend_conformance/test_deviceref_vocabulary.py",
         "tests/backends/test_tf_interventions.py",
         "tests/test_preview_teardown_contract.py",
         "tests/test_zero_match_disclosures.py"
       ],
       "torchlens/backends/tf/_tensor_probe.py": [
+        "tests/backend_conformance/test_deviceref_vocabulary.py",
         "tests/backends/test_tf_capture.py",
+        "tests/test_preview_teardown_contract.py",
         "tests/test_selective_save_zero_match_warning.py"
       ],
       "torchlens/backends/tf/_tf_compat.py": [
@@ -9184,6 +9423,11 @@
         "tests/test_report_honesty_wave0.py",
         "tests/test_tf_compat.py",
         "tests/test_tlspec_unpickler_first_party_rce.py"
+      ],
+      "torchlens/backends/tf/_wrap_registry.py": [
+        "tests/backends/test_tf_interventions.py",
+        "tests/test_preview_teardown_contract.py",
+        "tests/test_zero_match_disclosures.py"
       ],
       "torchlens/backends/tf/backend.py": [
         "tests/backend_conformance/test_deviceref_vocabulary.py",
@@ -9214,24 +9458,24 @@
         "tests/backends/test_tf_interventions.py",
         "tests/backends/test_tf_recurrence_grouping.py",
         "tests/backends/test_tf_registry.py",
-        "tests/backends/test_tf_static.py",
-        "tests/backends/test_tf_validation.py",
-        "tests/test_private_probe_gate.py"
+        "tests/test_private_probe_gate.py",
+        "tests/test_tf_parity_halt.py",
+        "tests/test_tf_parity_value_edits.py"
       ],
       "torchlens/backends/tf/interventions.py": [
         "tests/backend_conformance/test_deviceref_vocabulary.py",
         "tests/backends/test_tf_interventions.py",
         "tests/producer_parity/test_ledger.py",
         "tests/test_capture_unification_p3b.py",
-        "tests/test_exception_taxonomy.py",
         "tests/test_input_boundary_guards.py",
+        "tests/test_preview_teardown_contract.py",
         "tests/test_torch_compat.py",
         "tests/test_zero_match_disclosures.py"
       ],
       "torchlens/backends/tf/modules.py": [
         "tests/backend_conformance/test_deviceref_vocabulary.py",
         "tests/backends/test_tf_derived_grads.py",
-        "tests/backends/test_tf_interventions.py",
+        "tests/backends/test_tf_module_returns.py",
         "tests/backends/test_tf_recurrence_grouping.py",
         "tests/backends/test_tf_registry.py",
         "tests/test_preview_grad_tolerance_tripwires.py",
@@ -9259,23 +9503,32 @@
         "tests/test_validation_reasons_structural.py"
       ],
       "torchlens/backends/tinygrad/__init__.py": [
-        "tests/test_capture_unification_p3b.py",
-        "tests/test_input_boundary_guards.py",
+        "tests/test_backend_registry.py",
         "tests/test_private_submodules.py",
         "tests/test_rulings_names_1103.py",
         "tests/test_tinygrad_backend_capture.py",
         "tests/test_tinygrad_backend_validation.py",
-        "tests/test_tinygrad_recurrence_grouping.py",
-        "tests/test_torch_compat.py"
+        "tests/test_tinygrad_parity_edits.py",
+        "tests/test_tinygrad_recurrence_grouping.py"
+      ],
+      "torchlens/backends/tinygrad/_capture_state.py": [
+        "tests/backend_conformance/test_deviceref_vocabulary.py",
+        "tests/producer_parity/test_ledger.py",
+        "tests/test_frozen_param_capture_state.py",
+        "tests/test_preview_replay_tolerance_tripwires.py",
+        "tests/test_rulings_names_1103.py",
+        "tests/test_tinygrad_backend_capture.py",
+        "tests/test_tinygrad_parity_edits.py",
+        "tests/test_tinygrad_recurrence_grouping.py"
       ],
       "torchlens/backends/tinygrad/_captures.py": [
         "tests/backend_conformance/test_deviceref_vocabulary.py",
         "tests/test_auto_capture.py",
         "tests/test_capture_targets.py",
         "tests/test_preview_replay_tolerance_tripwires.py",
-        "tests/test_preview_teardown_contract.py",
         "tests/test_rulings_names_1103.py",
         "tests/test_tinygrad_backend_capture.py",
+        "tests/test_tinygrad_parity_edits.py",
         "tests/test_tinygrad_recurrence_grouping.py"
       ],
       "torchlens/backends/tinygrad/_derived_grads.py": [
@@ -9285,6 +9538,24 @@
         "tests/test_rulings_names_1103.py",
         "tests/test_tinygrad_backend_capture.py",
         "tests/test_tinygrad_backend_validation.py",
+        "tests/test_tinygrad_parity_edits.py",
+        "tests/test_tinygrad_recurrence_grouping.py"
+      ],
+      "torchlens/backends/tinygrad/_edit_plan.py": [
+        "tests/backends/test_tf_registry.py",
+        "tests/test_backend_registry.py",
+        "tests/test_capture_unification_p3b.py",
+        "tests/test_input_boundary_guards.py",
+        "tests/test_torch_compat.py"
+      ],
+      "torchlens/backends/tinygrad/_edits.py": [
+        "tests/backend_conformance/test_deviceref_vocabulary.py",
+        "tests/test_preview_replay_tolerance_tripwires.py",
+        "tests/test_preview_teardown_contract.py",
+        "tests/test_rulings_names_1103.py",
+        "tests/test_tinygrad_backend_capture.py",
+        "tests/test_tinygrad_backend_validation.py",
+        "tests/test_tinygrad_parity_edits.py",
         "tests/test_tinygrad_recurrence_grouping.py"
       ],
       "torchlens/backends/tinygrad/_execution_guard.py": [
@@ -9294,7 +9565,28 @@
         "tests/test_rulings_names_1103.py",
         "tests/test_tinygrad_backend_capture.py",
         "tests/test_tinygrad_backend_validation.py",
+        "tests/test_tinygrad_parity_edits.py",
         "tests/test_tinygrad_recurrence_grouping.py"
+      ],
+      "torchlens/backends/tinygrad/_module_tree.py": [
+        "tests/backend_conformance/test_deviceref_vocabulary.py",
+        "tests/test_preview_replay_tolerance_tripwires.py",
+        "tests/test_preview_teardown_contract.py",
+        "tests/test_rulings_names_1103.py",
+        "tests/test_tinygrad_backend_capture.py",
+        "tests/test_tinygrad_backend_validation.py",
+        "tests/test_tinygrad_parity_edits.py",
+        "tests/test_tinygrad_recurrence_grouping.py"
+      ],
+      "torchlens/backends/tinygrad/_observer.py": [
+        "tests/backend_conformance/test_deviceref_vocabulary.py",
+        "tests/test_observers_backward.py",
+        "tests/test_preview_replay_tolerance_tripwires.py",
+        "tests/test_rulings_names_1103.py",
+        "tests/test_tinygrad_backend_capture.py",
+        "tests/test_tinygrad_parity_edits.py",
+        "tests/test_tinygrad_recurrence_grouping.py",
+        "tests/test_validate_observer.py"
       ],
       "torchlens/backends/tinygrad/_raw_labels.py": [
         "tests/backend_conformance/test_deviceref_vocabulary.py",
@@ -9303,6 +9595,7 @@
         "tests/test_rulings_names_1103.py",
         "tests/test_tinygrad_backend_capture.py",
         "tests/test_tinygrad_backend_validation.py",
+        "tests/test_tinygrad_parity_edits.py",
         "tests/test_tinygrad_recurrence_grouping.py"
       ],
       "torchlens/backends/tinygrad/_realize_once.py": [
@@ -9311,18 +9604,28 @@
         "tests/test_preview_teardown_contract.py",
         "tests/test_rulings_names_1103.py",
         "tests/test_tinygrad_backend_capture.py",
-        "tests/test_tinygrad_backend_validation.py",
+        "tests/test_tinygrad_parity_edits.py",
         "tests/test_tinygrad_realize_once.py",
         "tests/test_tinygrad_recurrence_grouping.py"
       ],
       "torchlens/backends/tinygrad/_rules.py": [
         "tests/backend_conformance/test_deviceref_vocabulary.py",
         "tests/test_preview_replay_tolerance_tripwires.py",
-        "tests/test_preview_teardown_contract.py",
         "tests/test_rulings_names_1103.py",
         "tests/test_tinygrad_backend_capture.py",
         "tests/test_tinygrad_backend_protocol.py",
+        "tests/test_tinygrad_parity_edits.py",
         "tests/test_tinygrad_realize_once.py",
+        "tests/test_tinygrad_recurrence_grouping.py"
+      ],
+      "torchlens/backends/tinygrad/_source_lines.py": [
+        "tests/backend_conformance/test_deviceref_vocabulary.py",
+        "tests/test_preview_replay_tolerance_tripwires.py",
+        "tests/test_preview_teardown_contract.py",
+        "tests/test_rulings_names_1103.py",
+        "tests/test_tinygrad_backend_capture.py",
+        "tests/test_tinygrad_backend_validation.py",
+        "tests/test_tinygrad_parity_edits.py",
         "tests/test_tinygrad_recurrence_grouping.py"
       ],
       "torchlens/backends/tinygrad/_uop_graph.py": [
@@ -9331,7 +9634,7 @@
         "tests/test_preview_teardown_contract.py",
         "tests/test_rulings_names_1103.py",
         "tests/test_tinygrad_backend_capture.py",
-        "tests/test_tinygrad_backend_validation.py",
+        "tests/test_tinygrad_parity_edits.py",
         "tests/test_tinygrad_realize_once.py",
         "tests/test_tinygrad_recurrence_grouping.py"
       ],
@@ -11230,11 +11533,11 @@
       ],
       "torchlens/debug/__init__.py": [
         "tests/test_capopts_truth_amp_grads.py",
+        "tests/test_debug_cross_backend_modules.py",
+        "tests/test_debug_cross_backend_refusal.py",
         "tests/test_deploy_env_grad_fn_walk.py",
         "tests/test_observe_kit_backward.py",
-        "tests/test_observe_kit_determinism.py",
         "tests/test_observe_kit_rerun.py",
-        "tests/test_report_honesty_pandas_free.py",
         "tests/test_report_lane_debug_report.py",
         "tests/test_torchnative_consumers.py"
       ],
@@ -11282,8 +11585,8 @@
         "tests/test_capopts_truth_amp_grads.py",
         "tests/test_checks_kit_provocations.py",
         "tests/test_checks_kit_scan.py",
-        "tests/test_deploy_env_grad_fn_walk.py",
-        "tests/test_observe_kit_backward.py",
+        "tests/test_debug_cross_backend_modules.py",
+        "tests/test_debug_cross_backend_refusal.py",
         "tests/test_observe_kit_rerun.py",
         "tests/test_report_lane_debug_report.py",
         "tests/test_torchnative_consumers.py"
@@ -11373,11 +11676,41 @@
       ],
       "torchlens/debug/_common.py": [
         "tests/test_debug_analysis.py",
+        "tests/test_debug_compare_structural_pairing.py",
+        "tests/test_debug_cross_backend_modules.py",
+        "tests/test_debug_cross_backend_refusal.py",
         "tests/test_debug_findings_source_lines.py",
         "tests/test_debug_truths.py",
         "tests/test_nan_debugging.py",
-        "tests/test_observe_kit_backward.py",
-        "tests/test_observe_kit_determinism.py",
+        "tests/test_report_lane_debug_report.py"
+      ],
+      "torchlens/debug/_compare_guard.py": [
+        "tests/test_debug_analysis.py",
+        "tests/test_debug_compare_structural_pairing.py",
+        "tests/test_debug_cross_backend_modules.py",
+        "tests/test_debug_cross_backend_refusal.py",
+        "tests/test_debug_findings_source_lines.py",
+        "tests/test_debug_truths.py",
+        "tests/test_report_honesty_pandas_free.py",
+        "tests/test_report_lane_debug_report.py"
+      ],
+      "torchlens/debug/_compare_pairing.py": [
+        "tests/test_debug_analysis.py",
+        "tests/test_debug_compare_structural_pairing.py",
+        "tests/test_debug_cross_backend_modules.py",
+        "tests/test_debug_cross_backend_refusal.py",
+        "tests/test_debug_findings_source_lines.py",
+        "tests/test_debug_truths.py",
+        "tests/test_report_honesty_pandas_free.py",
+        "tests/test_report_lane_debug_report.py"
+      ],
+      "torchlens/debug/_compare_values.py": [
+        "tests/test_debug_analysis.py",
+        "tests/test_debug_compare_structural_pairing.py",
+        "tests/test_debug_cross_backend_modules.py",
+        "tests/test_debug_cross_backend_refusal.py",
+        "tests/test_debug_findings_source_lines.py",
+        "tests/test_debug_truths.py",
         "tests/test_report_honesty_pandas_free.py",
         "tests/test_report_lane_debug_report.py"
       ],
@@ -11400,6 +11733,16 @@
         "tests/test_report_honesty_pandas_free.py",
         "tests/test_report_honesty_preamble.py",
         "tests/test_torchnative_consumers.py"
+      ],
+      "torchlens/debug/_cross_backend.py": [
+        "tests/test_debug_analysis.py",
+        "tests/test_debug_compare_structural_pairing.py",
+        "tests/test_debug_cross_backend_modules.py",
+        "tests/test_debug_cross_backend_refusal.py",
+        "tests/test_debug_findings_source_lines.py",
+        "tests/test_debug_truths.py",
+        "tests/test_report_honesty_pandas_free.py",
+        "tests/test_report_lane_debug_report.py"
       ],
       "torchlens/debug/_determinism.py": [
         "tests/test_arg_hash_determinism.py",
@@ -11478,11 +11821,11 @@
       ],
       "torchlens/debug/_graph.py": [
         "tests/test_debug_analysis.py",
+        "tests/test_debug_compare_structural_pairing.py",
+        "tests/test_debug_cross_backend_modules.py",
+        "tests/test_debug_cross_backend_refusal.py",
         "tests/test_debug_findings_source_lines.py",
         "tests/test_debug_truths.py",
-        "tests/test_module_edit_comparison_reads.py",
-        "tests/test_observe_kit_rerun.py",
-        "tests/test_r18e_debug.py",
         "tests/test_report_honesty_pandas_free.py",
         "tests/test_report_lane_debug_report.py"
       ],
@@ -11504,7 +11847,7 @@
       ],
       "torchlens/debug/_infer_input_shape.py": [
         "tests/test_capopts_truth_amp_grads.py",
-        "tests/test_deploy_env_grad_fn_walk.py",
+        "tests/test_debug_cross_backend_modules.py",
         "tests/test_infer_input_shape.py",
         "tests/test_infer_input_shape_hardening.py",
         "tests/test_observe_kit_rerun.py",
@@ -11520,10 +11863,10 @@
       ],
       "torchlens/debug/_infer_report.py": [
         "tests/test_capopts_truth_amp_grads.py",
-        "tests/test_deploy_env_grad_fn_walk.py",
+        "tests/test_debug_cross_backend_modules.py",
+        "tests/test_debug_cross_backend_refusal.py",
         "tests/test_infer_input_shape.py",
         "tests/test_infer_input_shape_hardening.py",
-        "tests/test_observe_kit_backward.py",
         "tests/test_observe_kit_rerun.py",
         "tests/test_r18e_debug.py",
         "tests/test_torchnative_consumers.py"
@@ -11546,28 +11889,28 @@
       ],
       "torchlens/debug/_nan_backward.py": [
         "tests/test_capopts_truth_amp_grads.py",
+        "tests/test_debug_cross_backend_modules.py",
+        "tests/test_debug_cross_backend_refusal.py",
         "tests/test_deploy_env_grad_fn_walk.py",
         "tests/test_observe_kit_backward.py",
-        "tests/test_observe_kit_determinism.py",
         "tests/test_observe_kit_rerun.py",
-        "tests/test_report_honesty_pandas_free.py",
         "tests/test_report_lane_debug_report.py",
         "tests/test_torchnative_consumers.py"
       ],
       "torchlens/debug/_params.py": [
         "tests/test_capopts_truth_amp_grads.py",
         "tests/test_debug_analysis.py",
+        "tests/test_debug_cross_backend_modules.py",
+        "tests/test_debug_cross_backend_refusal.py",
         "tests/test_deploy_env_grad_fn_walk.py",
-        "tests/test_observe_kit_backward.py",
-        "tests/test_observe_kit_determinism.py",
         "tests/test_observe_kit_rerun.py",
         "tests/test_report_lane_debug_report.py",
         "tests/test_torchnative_consumers.py"
       ],
       "torchlens/debug/_precision.py": [
         "tests/test_capopts_truth_amp_grads.py",
-        "tests/test_deploy_env_grad_fn_walk.py",
-        "tests/test_observe_kit_backward.py",
+        "tests/test_debug_cross_backend_modules.py",
+        "tests/test_debug_cross_backend_refusal.py",
         "tests/test_observe_kit_determinism.py",
         "tests/test_observe_kit_rerun.py",
         "tests/test_report_lane_debug_report.py",
@@ -11577,8 +11920,8 @@
       "torchlens/debug/_recompute.py": [
         "tests/test_capopts_truth_amp_grads.py",
         "tests/test_debug_analysis.py",
+        "tests/test_debug_cross_backend_modules.py",
         "tests/test_debug_findings_source_lines.py",
-        "tests/test_deploy_env_grad_fn_walk.py",
         "tests/test_observe_kit_rerun.py",
         "tests/test_report_honesty_preamble.py",
         "tests/test_report_lane_debug_report.py",
@@ -11587,8 +11930,8 @@
       "torchlens/debug/_rerun.py": [
         "tests/test_capopts_truth_amp_grads.py",
         "tests/test_capture_selection_fields.py",
-        "tests/test_deploy_env_grad_fn_walk.py",
-        "tests/test_observe_kit_backward.py",
+        "tests/test_debug_cross_backend_modules.py",
+        "tests/test_debug_cross_backend_refusal.py",
         "tests/test_observe_kit_determinism.py",
         "tests/test_observe_kit_rerun.py",
         "tests/test_report_lane_debug_report.py",
@@ -11596,13 +11939,57 @@
       ],
       "torchlens/debug/_unit_axis.py": [
         "tests/test_debug_analysis.py",
+        "tests/test_debug_compare_structural_pairing.py",
+        "tests/test_debug_cross_backend_modules.py",
+        "tests/test_debug_cross_backend_refusal.py",
         "tests/test_debug_findings_source_lines.py",
         "tests/test_debug_truths.py",
-        "tests/test_module_edit_comparison_reads.py",
-        "tests/test_observe_kit_rerun.py",
-        "tests/test_r18e_debug.py",
         "tests/test_report_honesty_pandas_free.py",
         "tests/test_report_lane_debug_report.py"
+      ],
+      "torchlens/debug/_unit_axis_layout.py": [
+        "tests/test_debug_analysis.py",
+        "tests/test_debug_compare_structural_pairing.py",
+        "tests/test_debug_cross_backend_modules.py",
+        "tests/test_debug_cross_backend_refusal.py",
+        "tests/test_debug_findings_source_lines.py",
+        "tests/test_debug_truths.py",
+        "tests/test_report_honesty_pandas_free.py",
+        "tests/test_report_lane_debug_report.py"
+      ],
+      "torchlens/debug/_xb_calls.py": [
+        "tests/test_debug_cross_backend_modules.py",
+        "tests/test_debug_cross_backend_ports.py"
+      ],
+      "torchlens/debug/_xb_pairing.py": [
+        "tests/test_debug_cross_backend_modules.py"
+      ],
+      "torchlens/debug/_xb_refusals.py": [
+        "tests/test_debug_cross_backend_modules.py"
+      ],
+      "torchlens/debug/_xb_report.py": [
+        "tests/test_debug_analysis.py",
+        "tests/test_debug_compare_structural_pairing.py",
+        "tests/test_debug_cross_backend_modules.py",
+        "tests/test_debug_cross_backend_refusal.py",
+        "tests/test_debug_findings_source_lines.py",
+        "tests/test_debug_truths.py",
+        "tests/test_report_honesty_pandas_free.py",
+        "tests/test_report_lane_debug_report.py"
+      ],
+      "torchlens/debug/_xb_tolerance.py": [
+        "tests/test_debug_analysis.py",
+        "tests/test_debug_compare_structural_pairing.py",
+        "tests/test_debug_cross_backend_modules.py",
+        "tests/test_debug_cross_backend_refusal.py",
+        "tests/test_debug_findings_source_lines.py",
+        "tests/test_debug_truths.py",
+        "tests/test_report_honesty_pandas_free.py",
+        "tests/test_report_lane_debug_report.py"
+      ],
+      "torchlens/debug/_xb_values.py": [
+        "tests/test_debug_cross_backend_modules.py",
+        "tests/test_debug_cross_backend_refusal.py"
       ],
       "torchlens/differential.py": [
         "tests/test_differential_capture.py",
@@ -14580,15 +14967,16 @@
         "tests/test_unhide_surfaces.py"
       ],
       "torchlens/stats/_record_values.py": [
+        "tests/test_parity_post_rows.py",
         "tests/test_value_record_display.py"
       ],
       "torchlens/stats/_seams.py": [
-        "tests/oracles/test_oracle_w0_deprecation.py",
         "tests/test_checks_kit_range_seam.py",
         "tests/test_grad_site_doors.py",
         "tests/test_grad_site_observers.py",
         "tests/test_lovely_containers_reprs.py",
         "tests/test_lovely_glance_seams.py",
+        "tests/test_module_returns_seam.py",
         "tests/test_stats_cka.py",
         "tests/test_unhide_surfaces.py"
       ],
@@ -16014,6 +16402,7 @@
         "torchlens/agent/_registry.py": "registry-name",
         "torchlens/agent/_schemas.py": "schema-name",
         "torchlens/backends/registry.py": "registry-callsites",
+        "torchlens/backends/tf/_wrap_registry.py": "registry-name",
         "torchlens/errors/__init__.py": "refusal-registry",
         "torchlens/errors/_base.py": "refusal-registry",
         "torchlens/errors/_episode.py": "refusal-registry",

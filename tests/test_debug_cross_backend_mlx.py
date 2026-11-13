@@ -9,6 +9,7 @@ bug is in, localized there because that module's inputs agree.
 
 from __future__ import annotations
 
+import sys
 from typing import Any
 
 import numpy as np
@@ -160,14 +161,13 @@ def test_label_join_across_real_backends_refuses() -> None:
         tl.debug.compare(torch_trace, mlx_trace, align="label")
 
 
+@pytest.mark.skipif(
+    sys.platform.startswith("linux") and mx.default_device().type == mx.cpu,
+    reason="MLX's Linux CPU AddMM supports float32 only, so a bfloat16 matmul refuses",
+)
 def test_bfloat16_twin_compares_at_the_bfloat16_tolerance() -> None:
     """MLX bfloat16 values read without crashing and keep their dtype for the tolerance."""
 
-    ones = mx.ones((4, 4), dtype=mx.bfloat16)
-    try:
-        mx.eval(mx.addmm(ones, ones, ones))
-    except (RuntimeError, ValueError) as exc:  # Linux CPU AddMM supports float32 only
-        pytest.skip(f"this MLX device refuses a bfloat16 matmul: {exc}")
     torch_trace, mlx_trace = _pair(dtype="bfloat16")
     assert tl.debug.first_divergence(torch_trace, mlx_trace) is None
     paired = tl.debug.compare(torch_trace, mlx_trace).to_pandas()
