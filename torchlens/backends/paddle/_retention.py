@@ -207,9 +207,7 @@ def retention_policy(session: Any) -> Callable[[Any], bool]:
     return (lambda _ctx: True) if state is None else state.keeps
 
 
-def retained_payload(
-    backend: Any, session: Any, site: Any, call: Any, output: Any, policy: Any
-) -> Any:
+def retained_payload(backend: Any, session: Any, site: Any, call: Any, output: Any) -> Any:
     """Return the payload one emitted output carries: the tensor, or ``None`` when unsaved.
 
     Parameters
@@ -224,17 +222,13 @@ def retained_payload(
         The wrapped call's ``FunctionEventInput``.
     output
         The output tensor.
-    policy
-        The capture's ``CapturePolicy``; no payload when it saves none.
 
     Returns
     -------
     Any
-        ``output`` when it stays in RAM, else ``None`` (unsaved, or the spool holds it).
+        ``output`` when it stays in RAM, else ``None`` (the spool holds it).
     """
 
-    if not policy.save_payload:
-        return None
     state = session.__dict__.get(STATE_KEY)
     if state is None or site.layer_type == "input" or not _spillable(backend, output):
         return output
@@ -253,7 +247,8 @@ def saved_ref(backend: Any, session: Any, site: Any, call: Any, output: Any, pol
     unless ``retain_in_memory``.
     """
 
-    payload = retained_payload(backend, session, site, call, output, policy)
+    saving = policy.save_payload
+    payload = retained_payload(backend, session, site, call, output) if saving else None
     ref = backend.tensor_ref(session, output, payload, policy)
     stream = session.__dict__.get(STREAM_KEY)
     if stream is None or payload is None or not backend.is_tensor(payload):
