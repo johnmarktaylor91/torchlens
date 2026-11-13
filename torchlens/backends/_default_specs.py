@@ -198,7 +198,7 @@ def _tinygrad_can_handle(
     -------
     bool
         ``True`` when tinygrad is installed, ``model`` is callable, and any
-        input leaf is a tinygrad tensor.
+        positional or keyword input leaf is a tinygrad tensor.
     """
 
     if not callable(model):
@@ -209,7 +209,8 @@ def _tinygrad_can_handle(
         from tinygrad import Tensor
     except ImportError:
         return False
-    return any(isinstance(leaf, Tensor) for leaf in _simple_leaves(input_args))
+    leaves = (*_simple_leaves(input_args), *_simple_leaves(input_kwargs))
+    return any(isinstance(leaf, Tensor) for leaf in leaves)
 
 
 def _paddle_can_handle(
