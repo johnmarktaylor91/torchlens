@@ -273,17 +273,25 @@ def test_zero_matches_warns_and_returns_the_plain_capture() -> None:
     assert not any(op.is_edited for op in trace._layer_list)
 
 
-def test_value_dependent_edit_refuses_typed() -> None:
-    """A value-dependent predicate stays refused (lazy forward has no values yet)."""
+def test_value_condition_edits_like_its_static_selector() -> None:
+    """A callable condition over the predicate context edits the ops it selects."""
 
-    with pytest.raises(BackendUnsupportedError, match="value-dependent") as info:
-        tl.trace(
-            _TinyMLP(),
-            Tensor(_X),
-            backend="tinygrad",
-            intervene=tl.when(lambda op: op.out is not None, tl.zero_ablate()),
-        )
-    assert info.value.code == "interventions_unsupported"
+    by_value = tl.trace(
+        _TinyMLP(),
+        Tensor(_X),
+        backend="tinygrad",
+        intervene=tl.when(lambda ctx: ctx.func_name == "where", tl.zero_ablate()),
+    )
+    by_selector = tl.trace(
+        _TinyMLP(),
+        Tensor(_X),
+        backend="tinygrad",
+        intervene=tl.when(tl.func("where"), tl.zero_ablate()),
+    )
+    assert [op.is_edited for op in by_value._layer_list] == [
+        op.is_edited for op in by_selector._layer_list
+    ]
+    assert TinygradBackend().validate_trace(by_value) is True
 
 
 def test_stop_after_refuses_typed() -> None:

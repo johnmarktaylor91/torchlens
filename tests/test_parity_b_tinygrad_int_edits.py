@@ -271,3 +271,75 @@ def test_edited_gradients_leave_input_grad_untouched() -> None:
         ),
     )
     assert x.grad is None
+
+
+_CONDITIONS = [
+    pytest.param(
+        lambda ctx: ctx.func_name in {"relu", "where"} and tuple(ctx.shape) == (2, 3),
+        id="callable",
+    ),
+    pytest.param(
+        tl.where(lambda ctx: ctx.func_name in {"relu", "where"} and ctx.dtype is not None),
+        id="where",
+    ),
+]
+
+
+@pytest.mark.parametrize("condition", _CONDITIONS)
+def test_value_condition_matches_torch_twin_and_validates(condition: Any) -> None:
+    """A condition over the predicate context edits the op torch edits, and validates."""
+
+    edited = tl.trace(
+        _TinyMLP(), Tensor(_X), backend="tinygrad", intervene=tl.when(condition, tl.scale(0.5))
+    )
+    torch_edited = tl.trace(
+        _TorchTwin(), torch.tensor(_X), intervene=tl.when(condition, tl.scale(0.5))
+    )
+    assert [op.func_name for op in edited._layer_list if op.is_edited] == ["where"]
+    np.testing.assert_allclose(
+        _np(_relu_op(edited).out), _np(_relu_op(torch_edited).out), atol=1e-6
+    )
+    np.testing.assert_allclose(_final_output(edited), _final_output(torch_edited), atol=1e-5)
+    assert TinygradBackend().validate_trace(edited) is True
+
+
+def test_value_condition_combined_with_static_selector() -> None:
+    """``tl.func(...) & tl.where(...)`` evaluates the static leaf on the op."""
+
+    condition = tl.func("where") & tl.where(lambda ctx: tuple(ctx.shape) == (2, 3))
+    edited = tl.trace(
+        _TinyMLP(), Tensor(_X), backend="tinygrad", intervene=tl.when(condition, tl.add(1.0))
+    )
+    assert _relu_op(edited).is_edited is True
+    assert sum(op.is_edited for op in edited._layer_list) == 1
+
+
+def test_value_condition_with_derived_gradients() -> None:
+    """Derived gradients of a value-condition edit are the edited program's."""
+
+    trace = tl.trace(
+        _TinyMLP(),
+        Tensor(_X),
+        backend="tinygrad",
+        intervene=tl.when(lambda ctx: ctx.func_name == "where", tl.scale(0.5)),
+        capture=tl.options.CaptureOptions(
+            grad_options=GradOptions(loss_fn=lambda out: out.sum(), input_grad_argnums=(0,))
+        ),
+    )
+    input_grad, _relu_grad = _hand_gradients(lambda h: h * 0.5)
+    np.testing.assert_allclose(
+        _np(trace.autograd.derived_grads["inputs.0"].grad), input_grad, atol=1e-6
+    )
+
+
+def test_value_condition_matching_nothing_warns() -> None:
+    """A condition that matches no op warns like a static selector and edits nothing."""
+
+    with pytest.warns(UserWarning, match="matched zero sites"):
+        trace = tl.trace(
+            _TinyMLP(),
+            Tensor(_X),
+            backend="tinygrad",
+            intervene=tl.when(lambda ctx: ctx.func_name == "conv2d", tl.zero_ablate()),
+        )
+    assert not any(op.is_edited for op in trace._layer_list)
