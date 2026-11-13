@@ -150,6 +150,8 @@ class TFOpCapture:
         Recorded callback input slots.
     output_tensor
         Live TensorFlow output tensor for this output slot, or ``None`` once released.
+    payload_declined
+        Whether the user's ``save=`` selector declined this output's payload.
     """
 
     label_raw: str
@@ -158,6 +160,7 @@ class TFOpCapture:
     output_index: int
     inputs: tuple[TFInputCapture, ...]
     output_tensor: Any
+    payload_declined: bool = False
 
 
 @dataclass(frozen=True)
@@ -354,11 +357,6 @@ class TFEagerCaptureSession:
             Optional operation name.
         graph
             Callback graph object. Eager callbacks pass ``None``.
-
-        Returns
-        -------
-        None
-            Mutates capture state.
         """
 
         if graph is not None:
@@ -410,6 +408,7 @@ class TFEagerCaptureSession:
                     output_index=output_index,
                     inputs=input_captures,
                     output_tensor=output,
+                    payload_declined=not save_payload,
                 )
             )
             recorded.append((label.label_raw, record_context, output))
@@ -783,22 +782,7 @@ class TFEagerCaptureSession:
         tensor: Any,
         consumer_op_type: str,
     ) -> TFSourceRecord:
-        """Return or create a typed source record for an input tensor.
-
-        Parameters
-        ----------
-        ref_key
-            Tensor reference key.
-        tensor
-            TensorFlow tensor.
-        consumer_op_type
-            Consuming op type.
-
-        Returns
-        -------
-        TFSourceRecord
-            Registered source record.
-        """
+        """Return the registered source record for ``tensor`` (keyed by ``ref_key``), creating it once."""
 
         existing = self.source_by_ref.get(ref_key)
         if existing is not None:
