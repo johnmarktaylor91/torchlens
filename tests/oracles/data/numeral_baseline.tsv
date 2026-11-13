@@ -3397,8 +3397,8 @@ docs-md	docs/maintainers/where.md	128
 docs-md	docs/maintainers/where.md	1283
 docs-md	docs/maintainers/where.md	1284
 docs-md	docs/maintainers/where.md	12844
+docs-md	docs/maintainers/where.md	1285
 docs-md	docs/maintainers/where.md	129
-docs-md	docs/maintainers/where.md	1291
 docs-md	docs/maintainers/where.md	13
 docs-md	docs/maintainers/where.md	130
 docs-md	docs/maintainers/where.md	1305
@@ -3987,6 +3987,7 @@ docs-md	docs/maintainers/where.md	6105
 docs-md	docs/maintainers/where.md	612
 docs-md	docs/maintainers/where.md	614
 docs-md	docs/maintainers/where.md	615
+docs-md	docs/maintainers/where.md	619
 docs-md	docs/maintainers/where.md	62
 docs-md	docs/maintainers/where.md	623
 docs-md	docs/maintainers/where.md	625
@@ -3998,7 +3999,6 @@ docs-md	docs/maintainers/where.md	634
 docs-md	docs/maintainers/where.md	635
 docs-md	docs/maintainers/where.md	636
 docs-md	docs/maintainers/where.md	637
-docs-md	docs/maintainers/where.md	638
 docs-md	docs/maintainers/where.md	639
 docs-md	docs/maintainers/where.md	64
 docs-md	docs/maintainers/where.md	642
@@ -4049,7 +4049,7 @@ docs-md	docs/maintainers/where.md	703
 docs-md	docs/maintainers/where.md	704
 docs-md	docs/maintainers/where.md	705
 docs-md	docs/maintainers/where.md	707
-docs-md	docs/maintainers/where.md	708519
+docs-md	docs/maintainers/where.md	708478
 docs-md	docs/maintainers/where.md	71
 docs-md	docs/maintainers/where.md	711
 docs-md	docs/maintainers/where.md	712
@@ -4076,10 +4076,10 @@ docs-md	docs/maintainers/where.md	749
 docs-md	docs/maintainers/where.md	75
 docs-md	docs/maintainers/where.md	750
 docs-md	docs/maintainers/where.md	751
+docs-md	docs/maintainers/where.md	7517
 docs-md	docs/maintainers/where.md	752
 docs-md	docs/maintainers/where.md	754
 docs-md	docs/maintainers/where.md	755
-docs-md	docs/maintainers/where.md	7552
 docs-md	docs/maintainers/where.md	756
 docs-md	docs/maintainers/where.md	757
 docs-md	docs/maintainers/where.md	759
@@ -4161,10 +4161,10 @@ docs-md	docs/maintainers/where.md	913
 docs-md	docs/maintainers/where.md	914
 docs-md	docs/maintainers/where.md	917
 docs-md	docs/maintainers/where.md	92
+docs-md	docs/maintainers/where.md	922
 docs-md	docs/maintainers/where.md	9242
 docs-md	docs/maintainers/where.md	925
 docs-md	docs/maintainers/where.md	927
-docs-md	docs/maintainers/where.md	928
 docs-md	docs/maintainers/where.md	93
 docs-md	docs/maintainers/where.md	930
 docs-md	docs/maintainers/where.md	931
@@ -8409,6 +8409,9 @@ test-docstrings	tests/conformance/_adapters.py	18
 test-docstrings	tests/conformance/_rosters/tinygrad.py	1.0
 test-docstrings	tests/conformance/_rosters/tinygrad.py	2.0
 test-docstrings	tests/conformance/_rosters/torch.py	18_
+test-docstrings	tests/conformance/_scorecard.py	11
+test-docstrings	tests/conformance/_scorecard.py	12,
+test-docstrings	tests/conformance/_scorecard.py	2026
 test-docstrings	tests/conformance/_scorecard.py	256
 test-docstrings	tests/conformance/_scorecard.py	4.5
 test-docstrings	tests/conftest.py	12
