@@ -30,7 +30,7 @@ from ...backends.paddle.validation import (
 )
 from . import ReplayRefusal, single_parent_value
 
-__all__: list[str] = []
+__all__: tuple[str, ...] = ()
 
 _STRIPPED = (
     "This Paddle trace holds no runtime call records (a loaded trace keeps none), so its "
@@ -59,7 +59,7 @@ class _PaddleReplayer:
     def _saved_by_label(self, label: str) -> Any:
         return self.saved(self._ops_by_label[label])
 
-    def replay(self, op: Any, env: Mapping[str, Any]) -> Any:
+    def run_op(self, op: Any, env: Mapping[str, Any]) -> Any:
         """Replay the call that produced ``op`` with gradients enabled."""
 
         import paddle  # deferred: optional dependency

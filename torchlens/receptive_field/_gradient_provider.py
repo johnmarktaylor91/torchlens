@@ -49,7 +49,7 @@ if TYPE_CHECKING:
     from .._data_classes.trace import Trace
     from ._unit_vjp import UnitReplayer
 
-__all__: list[str] = []
+__all__: tuple[str, ...] = ()
 
 #: Largest target site a projective probe answers by one reverse probe per element
 #: on a framework without forward-mode autodiff.
@@ -151,7 +151,7 @@ def _run_cone(cone: _Cone, source_values: Sequence[Any]) -> tuple[Any, ...]:
     for source, value in zip(cone.sources, source_values, strict=True):
         _bind(env, source, value)
     for op in cone.order:
-        _bind(env, op, cone.replayer.replay(op, env))
+        _bind(env, op, cone.replayer.run_op(op, env))
     return tuple(env[target.label] for target in cone.targets)
 
 
@@ -162,7 +162,7 @@ def _verify_cone(cone: _Cone, source_values: Sequence[Any]) -> None:
     for source, value in zip(cone.sources, source_values, strict=True):
         _bind(env, source, value)
     for op in cone.order:
-        replayed = cone.replayer.replay(op, env)
+        replayed = cone.replayer.run_op(op, env)
         try:
             saved = cone.replayer.saved(op)
         except ReplayRefusal:
@@ -394,7 +394,7 @@ def _row_sweep_column(trace: Trace, cone: _Cone, index: int, unit: tuple[int, ..
         element = np.unravel_index(flat, target_host.shape)
         cotangent = _one_hot(cone, target_native, target_host, tuple(int(i) for i in element))
         (grad,) = _differentiate(
-            trace, cone, lambda: cone.framework.vjp(fn, (source_native,), cotangent)
+            trace, cone, functools.partial(cone.framework.vjp, fn, (source_native,), cotangent)
         )
         column[element] = np.asarray(cone.framework.to_numpy(grad))[unit]
     return torch.from_numpy(column)

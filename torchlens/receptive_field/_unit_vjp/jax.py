@@ -26,7 +26,7 @@ from ...backends.jax._trace_graph_helpers import (
 from ...backends.jax.jaxpr import replay_equation
 from . import ReplayRefusal
 
-__all__: list[str] = []
+__all__: tuple[str, ...] = ()
 
 _STRIPPED = (
     "This JAX trace holds no runtime equation records (a loaded trace keeps none), so its "
@@ -43,7 +43,9 @@ class _JaxReplayer:
         equation_ops = jax_backend._jax_equation_ops(trace)
         if not captures or len(captures) != len(equation_ops):
             raise ReplayRefusal(_STRIPPED)
-        self._captures = {op.label: capture for capture, op in zip(captures, equation_ops)}
+        self._captures = {
+            op.label: capture for capture, op in zip(captures, equation_ops, strict=True)
+        }
         self._ops_by_label = jax_backend._jax_ops_by_label(trace)
         self._hidden = {
             label: value if isinstance(value, tuple) else (value,)
@@ -75,7 +77,7 @@ class _JaxReplayer:
             f"Multi-output parent {parent_label!r} saved no output matching its child's input."
         )
 
-    def replay(self, op: Any, env: Mapping[str, Any]) -> Any:
+    def run_op(self, op: Any, env: Mapping[str, Any]) -> Any:
         """Replay one equation op; an output marker passes its single parent through."""
 
         capture = self._captures.get(op.label)

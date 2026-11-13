@@ -28,7 +28,7 @@ from ...backends.tinygrad.backend import (
 )
 from . import ReplayRefusal, single_parent_value
 
-__all__: list[str] = []
+__all__: tuple[str, ...] = ()
 
 _STRIPPED = (
     "This tinygrad trace holds no runtime UOp records (a loaded or audit-only trace keeps "
@@ -88,7 +88,7 @@ class _TinygradReplayer:
                 replacements[position] = env[raw]
         return replacements
 
-    def replay(self, op: Any, env: Mapping[str, Any]) -> Any:
+    def run_op(self, op: Any, env: Mapping[str, Any]) -> Any:
         """Replay the UOp that produced ``op`` as a lazy, differentiable tensor."""
 
         raw = str(getattr(op, "_label_raw", None) or op.label)

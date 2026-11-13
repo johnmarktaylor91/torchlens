@@ -35,7 +35,7 @@ from collections.abc import Callable, Mapping
 from types import ModuleType
 from typing import Any, Protocol
 
-__all__: list[str] = []
+__all__: tuple[str, ...] = ()
 
 #: Backend name to the module implementing its cone replay.
 _MODULES: Mapping[str, str] = {
@@ -63,7 +63,7 @@ class UnitReplayer(Protocol):
     def saved(self, op: Any) -> Any:
         """Return the op's saved payload in its native framework type."""
 
-    def replay(self, op: Any, env: Mapping[str, Any]) -> Any:
+    def run_op(self, op: Any, env: Mapping[str, Any]) -> Any:
         """Re-run one op, reading parents in ``env`` from it and others from the capture.
 
         Returns the op's output with the structure of its saved payload. Raises

@@ -22,7 +22,7 @@ from ...backends.mlx._capture_records import _iter_output_arrays, _payloads_clos
 from ...backends.mlx._replay_args import _reconstruct_call, _saved_payload
 from . import ReplayRefusal, single_parent_value
 
-__all__: list[str] = []
+__all__: tuple[str, ...] = ()
 
 #: MLX's message for a primitive without a forward-mode (jvp) rule.
 _NO_FORWARD_RULE = "[Primitive::jvp] Not implemented"
@@ -59,7 +59,7 @@ class _MLXReplayer:
     def _saved_by_label(self, label: str) -> Any:
         return self.saved(self._ops_by_label[label])
 
-    def replay(self, op: Any, env: Mapping[str, Any]) -> Any:
+    def run_op(self, op: Any, env: Mapping[str, Any]) -> Any:
         """Replay the call that produced ``op``; a record-less op forwards its parent."""
 
         entry = self._outputs.get(_raw(op))

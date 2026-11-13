@@ -27,7 +27,7 @@ from ...backends.tf.validation import (
 )
 from . import ReplayRefusal, single_parent_value
 
-__all__: list[str] = []
+__all__: tuple[str, ...] = ()
 
 _STRIPPED = (
     "This TensorFlow trace holds no runtime op records (a loaded trace keeps none), so its "
@@ -57,7 +57,7 @@ class _TFReplayer:
     def _saved_by_label(self, label: str) -> Any:
         return self.saved(self._ops_by_label[label])
 
-    def replay(self, op: Any, env: Mapping[str, Any]) -> Any:
+    def run_op(self, op: Any, env: Mapping[str, Any]) -> Any:
         """Replay one raw op; annotations forward their parent, shape queries read saved."""
 
         op_type = str(getattr(op, "func_name", ""))
