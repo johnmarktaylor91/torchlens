@@ -25,6 +25,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from ..._utils._record_group_table import record_member
 from .._replay_adapters import jax as jax_adapter
 from ..jax.jaxpr import _jax_zero_tap, replay_equation
 
@@ -141,18 +142,64 @@ def _occurrences(plan: Any, values: Mapping[str, Any], taps: _TapCounter) -> tup
     return tuple(occurrences)
 
 
-def _node_for(trace: Any, op: Any, values: dict[str, Any], taps: _TapCounter) -> ProgramNode | str:
+def _element_of(parent_value: Any, value: Any) -> int | None:
+    """Which output of a multi-result parent ``value`` is (``None``: a single result)."""
+
+    if not isinstance(parent_value, tuple | list):
+        return None
+    return next((k for k, item in enumerate(parent_value) if item is value), None)
+
+
+def _leaf_node(
+    op: Any, label: str, values: dict[str, Any], taps: _TapCounter, aliases: Mapping[str, str]
+) -> ProgramNode | str | None:
+    """A source (no parents) or an output marker (passes its one parent through).
+
+    Both are TorchLens graph entries, not JAX equations: a source's value is
+    given, and an output marker is the identity on the value the program returns.
+    Returns ``None`` for any other non-equation op.
+    """
+
+    parents = tuple(str(p) for p in record_member(op, "parents", None) or ())
+    if not parents:
+        if op.out is None:
+            return f"source op {label!r} has no saved value to differentiate"
+        values[label] = op.out
+        return ProgramNode(op, label, "source", None, (), taps.out_taps(label, op.out))
+    if not record_member(op, "is_output", False) or len(parents) != 1 or parents[0] not in aliases:
+        return None
+    parent = aliases[parents[0]]
+    element = _element_of(values[parent], op.out)
+    occurrence = Occurrence(parent, 0, element, taps.edge(_select(values[parent], element)))
+    values[label] = op.out
+    return ProgramNode(op, label, "passthrough", None, (occurrence,), taps.out_taps(label, op.out))
+
+
+def _node_for(
+    trace: Any, op: Any, values: dict[str, Any], taps: _TapCounter, aliases: Mapping[str, str]
+) -> ProgramNode | str:
     """The program node of one op, or why it cannot be rebuilt."""
 
     plan = jax_adapter._plan_or_reason(trace, op)
     label = jax_adapter._parent_label(op)
     if isinstance(plan, str):
-        return f"op {label!r} cannot be rebuilt for backward: {plan}"
+        leaf = _leaf_node(op, label, values, taps, aliases)
+        return f"op {label!r} cannot be rebuilt for backward: {plan}" if leaf is None else leaf
     values[label] = op.out
-    occurrences = _occurrences(plan, values, taps) if plan.kind != "source" else ()
+    occurrences = _occurrences(plan, values, taps)
     return ProgramNode(
-        op, label, plan.kind, plan.capture, occurrences, taps.out_taps(label, op.out)
+        op, label, "equation", plan.capture, occurrences, taps.out_taps(label, op.out)
     )
+
+
+def _aliases(op: Any, label: str) -> dict[str, str]:
+    """Both spellings a child may use for ``op`` (the bare one only for a single pass)."""
+
+    names = {label: label}
+    layer_label = getattr(op, "layer_label", None)
+    if layer_label and int(getattr(op, "num_passes", 1) or 1) == 1:
+        names[str(layer_label)] = label
+    return names
 
 
 def _output_treedef(trace: Any, output_ops: Sequence[Any]) -> Any:
@@ -182,12 +229,14 @@ def build_program(trace: Any) -> Program | str:
 
     taps = _TapCounter()
     values: dict[str, Any] = {}
+    aliases: dict[str, str] = {}
     nodes = []
     for op in trace._layer_list:
-        node = _node_for(trace, op, values, taps)
+        node = _node_for(trace, op, values, taps, aliases)
         if isinstance(node, str):
             return node
         nodes.append(node)
+        aliases.update(_aliases(op, node.label))
     output_ops = tuple(trace.output_ops)
     treedef = _output_treedef(trace, output_ops)
     if isinstance(treedef, str):

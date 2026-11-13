@@ -477,23 +477,51 @@ def _graph(program: Program) -> ReplayGraph:
     return ReplayGraph(nodes=nodes, value=values.__getitem__)
 
 
-def validation_inputs(trace: Any, recorded: Any) -> tuple[ReplayGraph, dict[str, Any]]:
-    """The graph and calls ``validation._backward_neutral.check_backward_records`` takes.
+@dataclass(frozen=True)
+class _MarkerAdapter:
+    """The JAX replay adapter, plus the derivative of TorchLens's output markers.
+
+    An output marker is not a JAX equation, so the JAX adapter does not replay
+    it; its derivative is the identity by definition (it returns its parent's
+    value). Every other op goes to the JAX adapter unchanged.
+    """
+
+    adapter: Any
+    markers: frozenset[str]
+
+    def can_replay(self, trace: Any, op: Any) -> str | None:
+        if jax_adapter._parent_label(op) in self.markers:
+            return None
+        return self.adapter.can_replay(trace, op)
+
+    def vjp(self, trace: Any, op: Any, parent_values: Any, cotangents: Any) -> tuple[Any, ...]:
+        if jax_adapter._parent_label(op) in self.markers:
+            return (cotangents[0],)
+        return tuple(self.adapter.vjp(trace, op, parent_values, cotangents))
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.adapter, name)
+
+
+def validation_inputs(trace: Any, recorded: Any) -> tuple[ReplayGraph, dict[str, Any], Any]:
+    """The graph, calls and adapter ``validation._backward_neutral.check_backward_records`` takes.
 
     ``recorded`` is ``recorded_backward_from_trace(trace, pass_number)``. An
     output op is TorchLens's marker for a returned value: its gradient is the
     loss's cotangent, which it passes to its producer unchanged. Its recorded
-    ``Op.grad`` is entered as that identity call, so the producer's gradient is
+    ``Op.grad`` is entered as that identity call, and the adapter returned
+    checks it with the identity derivative, so the producer's gradient is
     checked as the sum of the loss's cotangent and its other consumers'
-    contributions. Returns the graph and the calls to check.
+    contributions.
     """
 
     program = build_program(trace)
     if isinstance(program, str):
-        return ReplayGraph(nodes=(), value={}.__getitem__), {}
+        return ReplayGraph(nodes=(), value={}.__getitem__), {}, jax_adapter
     calls = dict(recorded.calls)
-    for label in program.output_labels:
+    markers = frozenset(n.label for n in program.nodes if n.kind == "passthrough")
+    for label in markers:
         grad = recorded.grads.get(label)
-        if grad is not None and program.node(label).kind == "passthrough":
+        if grad is not None:
             calls[label] = ((grad,), (grad,))
-    return _graph(program), calls
+    return _graph(program), calls, _MarkerAdapter(jax_adapter, markers)
