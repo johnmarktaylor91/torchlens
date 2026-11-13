@@ -18,8 +18,6 @@ from typing import Any
 
 from ..registry import BackendUnsupportedError
 
-_CODE = "backward_capture_unsupported"
-
 
 def _grad_site_refusal(message: str, *, code: str) -> BackendUnsupportedError:
     """Return the typed refusal of a ``tl.grad`` clause this capture cannot honor."""
@@ -58,21 +56,21 @@ def gradient_predicates(selector: Any, action: Any, grad_options: Any, api: Any)
             f"the site {selector!r} mixes {sorted(universes)} sites; the JAX capture edits "
             "either equation outputs or their gradients in one clause. Split it into two "
             "captures, or use tl.grad(...) sites only.",
-            code=_CODE,
+            code="backward_capture_unsupported",
         )
     if grad_options is None:
         raise _grad_site_refusal(
             f"the site {selector!r} edits a gradient, and JAX computes gradients only as "
             "derived gradients. Pass capture=tl.options.CaptureOptions("
             "grad_options=GradOptions(...)).",
-            code=_CODE,
+            code="backward_capture_unsupported",
         )
     targets = api.grad_site_targets(selector, api.target_operands)
     if any(pass_index not in (None, 1) for _inner, pass_index in targets):
         raise _grad_site_refusal(
             "derived gradients run one backward pass; tl.in_backward_pass(n) with n > 1 "
             "has no pass to edit.",
-            code=_CODE,
+            code="backward_capture_unsupported",
         )
     return tuple(api.when(inner, action) for inner, _pass in targets)
 
@@ -106,7 +104,7 @@ def gradient_identity(apply: Callable[[Any], Any], site_label: str) -> Callable[
             raise _grad_site_refusal(
                 f"the gradient edit at {site_label!r} returned shape {shape} and dtype "
                 f"{dtype}; it must keep the gradient's {cotangent.shape} and {cotangent.dtype}.",
-                code=_CODE,
+                code="backward_capture_unsupported",
             )
         return (edited,)
 
