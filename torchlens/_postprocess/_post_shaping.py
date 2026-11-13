@@ -82,6 +82,8 @@ def _shape_op(op: Any, plan: Any, codec: Any, set_field: Callable[[Any, str, Any
     if plan.output_device != "same":
         raw = _to_device(raw, plan.output_device, codec)
     if plan.detach_saved_activations and callable(getattr(raw, "detach", None)):
+        # detach-ok: a non-PyTorch backend's saved payload (Paddle, tinygrad); torch
+        # payloads detach through copy_tensor_payload on the torch save path.
         raw = raw.detach()
     set_field(op, "out", raw)
     if plan.activation_transform is None:

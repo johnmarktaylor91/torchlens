@@ -54,8 +54,10 @@ def test_neutral_finalizer_bare_label_is_last_pass_and_on_every_pass() -> None:
     """The shared finalizer's bare-label binding is last-pass-wins."""
 
     trace = _stub_trace()
-    first = SimpleNamespace()
-    second = SimpleNamespace()
+    # The finalize loop applies each op's final labels (apply_final_label) before
+    # _finalize_single_op attaches lookup keys, so the fakes carry them already.
+    first = SimpleNamespace(label="cell:1", layer_label="cell")
+    second = SimpleNamespace(label="cell:2", layer_label="cell")
     _finalize_single_op(trace, first, "cell_raw_0", 0, _assignment(1))
     _finalize_single_op(trace, second, "cell_raw_1", 1, _assignment(2))
 

@@ -89,7 +89,7 @@ def test_paddle_adapter_table_admits_no_new_family_name() -> None:
 def test_tf_curated_chain_admits_no_new_family_name() -> None:
     """The TF curated helper if-chain stays disjoint from the stochastic family."""
 
-    source = (_REPO / "torchlens" / "backends" / "tf" / "interventions.py").read_text(
+    source = (_REPO / "torchlens" / "backends" / "tf" / "_intervention_hooks.py").read_text(
         encoding="utf-8"
     )
     compared = set(re.findall(r"spec\.name\s*==\s*['\"]([a-z_]+)['\"]", source))
