@@ -34,9 +34,11 @@ pytestmark = [
 ]
 
 #: Float32 agreement bound between two independent implementations of the same
-#: weights (different kernels, summation orders and LayerNorm/GELU code).
-_ATOL = 1e-4
-_RTOL = 1e-4
+#: weights (different kernels, summation orders and LayerNorm/GELU code). The
+#: measured largest gap is 3.8e-6 (BERT) and 1.8e-6 (ViT) on two x86 workers; a
+#: wrong or missing weight moves outputs by orders of magnitude more.
+_ATOL = 5e-5
+_RTOL = 0.0
 
 
 def _reference_model(pin: checkpoints.FlaxCheckpoint, cls: Any) -> Any:
