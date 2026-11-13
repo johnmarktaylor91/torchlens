@@ -146,7 +146,7 @@ class RngDraw:
             ordinal=int(data["ordinal"]),
             state=tuple(data.get("state", ())),
             args=tuple(data.get("args", ())),
-            kwargs=tuple(tuple(item) for item in data.get("kwargs", ())),  # type: ignore[misc]
+            kwargs=tuple(tuple(item) for item in data.get("kwargs", ())),
             recorded_parents=data.get("recorded_parents"),
             reason=data.get("reason"),
         )

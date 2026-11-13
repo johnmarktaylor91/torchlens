@@ -126,10 +126,9 @@ def test_exception_inside_scope_removes_hooks_and_marks_log_unfinished() -> None
     from tensorflow.python.ops import gen_stateful_random_ops
 
     before = gen_stateful_random_ops.stateful_standard_normal_v2
-    with pytest.raises(RuntimeError):
-        with rng.rng_scope(None) as log:
-            tf.random.normal([2], seed=4)
-            raise RuntimeError("forward failed")
+    with pytest.raises(RuntimeError), rng.rng_scope(None) as log:
+        tf.random.normal([2], seed=4)
+        raise RuntimeError("forward failed")
     assert gen_stateful_random_ops.stateful_standard_normal_v2 is before
     assert not log.finished
     count = len(log.draws)

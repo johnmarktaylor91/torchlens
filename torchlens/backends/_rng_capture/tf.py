@@ -35,6 +35,7 @@ from typing import Any
 import numpy as np
 
 from ... import _state
+from ..tf._tf_compat import get_op_callbacks_module
 from . import (
     RngDraw,
     RngLog,
@@ -137,7 +138,7 @@ def _numpy_inputs(inputs: Sequence[Any]) -> tuple[Any, ...] | None:
     """Small non-resource inputs as NumPy (``None`` if any is unreadable)."""
 
     tf = _tf()
-    values = []
+    values: list[Any] = []
     for item in inputs:
         if getattr(item, "dtype", None) == tf.resource:
             values.append(None)
@@ -256,8 +257,6 @@ def rng_scope(session: object) -> Iterator[RngLog]:
     RngLog
         The draw log. ``finished`` is set only when the block exits normally.
     """
-
-    from ..tf._tf_compat import get_op_callbacks_module
 
     callbacks = get_op_callbacks_module()
     log = RngLog("tf")

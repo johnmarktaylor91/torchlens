@@ -93,10 +93,9 @@ def test_exception_inside_scope_restores_functions_and_marks_log_unfinished() ->
     """A raising forward leaves no wrapper behind and an unfinished log."""
 
     before = (paddle.randn, paddle.nn.functional.dropout)
-    with pytest.raises(RuntimeError):
-        with rng.rng_scope(None) as log:
-            paddle.randn([2])
-            raise RuntimeError("forward failed")
+    with pytest.raises(RuntimeError), rng.rng_scope(None) as log:
+        paddle.randn([2])
+        raise RuntimeError("forward failed")
     assert (paddle.randn, paddle.nn.functional.dropout) == before
     assert not log.finished and len(log.draws) == 1
 

@@ -102,10 +102,9 @@ def test_exception_inside_scope_restores_functions_and_marks_log_unfinished() ->
     """A raising forward leaves no wrapper behind and an unfinished log."""
 
     originals = {name: getattr(mx.random, name) for name, _ in rng.KEY_POSITIONS}
-    with pytest.raises(RuntimeError):
-        with rng.rng_scope(None) as log:
-            mx.random.normal((2,))
-            raise RuntimeError("forward failed")
+    with pytest.raises(RuntimeError), rng.rng_scope(None) as log:
+        mx.random.normal((2,))
+        raise RuntimeError("forward failed")
     assert {name: getattr(mx.random, name) for name in originals} == originals
     assert not log.finished and len(log.draws) == 1
 

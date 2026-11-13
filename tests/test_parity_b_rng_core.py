@@ -82,10 +82,10 @@ def test_patched_attributes_restores_on_exception_and_spares_later_wrappers() ->
 
     owner = types.SimpleNamespace(f=lambda: "orig", g=lambda: "orig-g")
     original_f, original_g = owner.f, owner.g
-    with pytest.raises(RuntimeError):
-        with patched_attributes([(owner, "f"), (owner, "missing")], lambda n, o: lambda: "wrapped"):
-            assert owner.f() == "wrapped"
-            raise RuntimeError("boom")
+    patched = patched_attributes([(owner, "f"), (owner, "missing")], lambda n, o: lambda: "wrapped")
+    with pytest.raises(RuntimeError), patched:
+        assert owner.f() == "wrapped"
+        raise RuntimeError("boom")
     assert owner.f is original_f
     foreign = lambda: "foreign"  # noqa: E731
     with patched_attributes([(owner, "g")], lambda n, o: lambda: "wrapped"):
@@ -114,9 +114,8 @@ def test_log_indexes_draws_by_output_identity_and_nesting() -> None:
 
     log = RngLog("x")
     out = np.ones(1)
-    with log.outermost() as first:
-        with log.outermost() as second:
-            assert first and not second
+    with log.outermost() as first, log.outermost() as second:
+        assert first and not second
     log.add(RngDraw("x", "global_state", "f", 99), out)
     assert log.draw_for(out) is log.draws[0] and log.draws[0].ordinal == 0
     assert log.draw_for(np.ones(1)) is None and log.output_of(0) is out

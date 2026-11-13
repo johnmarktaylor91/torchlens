@@ -101,10 +101,9 @@ def test_exception_inside_scope_restores_methods_and_marks_log_unfinished() -> N
         for n in (*rng.TENSOR_RANDOM_NAMES, "_next_counter")
         if n in Tensor.__dict__
     }
-    with pytest.raises(RuntimeError):
-        with rng.rng_scope(None) as log:
-            Tensor.rand(2)
-            raise RuntimeError("forward failed")
+    with pytest.raises(RuntimeError), rng.rng_scope(None) as log:
+        Tensor.rand(2)
+        raise RuntimeError("forward failed")
     assert {n: Tensor.__dict__[n] for n in before} == before
     assert not log.finished
 
