@@ -57,9 +57,15 @@ PaddlePaddle 3.3.1 and tinygrad 0.13.0, the versions each backend's test job pin
 On the five non-PyTorch backends `save=` chooses which payloads a finished trace keeps; it does not
 lower peak memory, because these backends capture the full forward first and then drop the
 public payloads of unselected ops (hidden copies stay for replay validation). Torch's `save=` is
-single-pass selective capture and does lower memory. Value-dependent `save=` predicates,
-`tl.followed_by` and `tl.preceded_by`, lookback windows and save shaping refuse with a typed
-error on every non-PyTorch backend.
+single-pass selective capture and does lower memory. Through `tl.trace`, every non-PyTorch
+backend also takes value-dependent `save=` predicates (a plain callable or `tl.where`),
+`tl.preceded_by`, `candidate & tl.followed_by(...)` with `lookback`, and save shaping
+(`activation_transform` with or without `save_raw_activations`, `output_device`,
+`detach_saved_activations`, `layer_visualizers`); op reprs show value statistics. `save_args`
+still refuses, because these backends record no call arguments. Direct backend-object entries
+keep the older refusals, and the TF and MLX direct entries take only static `save=`. On tinygrad,
+selectors match tinygrad's lowered ops (a matmul lowers to reshape, expand, mul and sum), so a
+structural selector can keep a different set of ops than on PyTorch.
 
 ## Backend protocol
 
@@ -166,7 +172,7 @@ expose that point decides what they support:
   `stop_after=` refuse with typed errors, because a lazy forward has no values before its one
   realization.
 
-Value-dependent `save=` predicates are rejected on every non-PyTorch backend. Editing a finished
+Editing a finished
 trace (`trace.fork().do(...)`) and patching in activations from another run refuse on every
 non-PyTorch backend with an error that names the framework.
 
@@ -251,8 +257,8 @@ What it does:
 ablated = tl.trace(model, x, backend="tf", intervene=tl.when(tl.func("relu"), tl.zero_ablate()))
 ```
 
-- Not available: true backward capture, sparse recording (`tl.record()`), streaming and
-  value-dependent `save=` predicates; each refuses with a typed error.
+- Not available: true backward capture, sparse recording (`tl.record()`) and streaming; each
+  refuses with a typed error.
 
 Leaf gradients are derived gradients, not backward capture:
 
@@ -325,8 +331,7 @@ What it does:
   `MLXValueUnavailableError` because MLX arrays carry no gradient flag.
 - Each op records the user source lines that ran it, as on PyTorch (`op.source.frames`,
   `save_source_context`, `source_context_lines`).
-- Refused: `tl.model_output(...)`, `tl.followed_by(...)`, `tl.preceded_by(...)`, value-dependent
-  `save=` predicates, `intervene=` as a raw decision callable (not `tl.when`), gradient-site
+- Refused: `tl.model_output(...)`, `intervene=` as a raw decision callable (not `tl.when`), gradient-site
   interventions, streaming, `save_grads=`, `backward_ready=True` and `tl.record(backend="mlx")`.
   MLX builds its backward pass inside C++, so TorchLens cannot list the backward operations
   (a framework limit); gradient values for every recorded operation are available.
@@ -372,8 +377,7 @@ What it does:
 
 - `paddle.nn.Layer` roots get the object module hierarchy when TorchLens can inspect the layer
   tree; raw callables use `function_root`.
-- Static-label `save=` applies after full capture. Refused: value-dependent `save=` predicates,
-  streaming, `save_grads=`, `backward_ready=True` and `tl.record(backend="paddle")`.
+- `save=` applies after full capture. Refused: streaming, `save_grads=`, `backward_ready=True` and `tl.record(backend="paddle")`.
 - Live `intervene=` and `stop_after=`: the wrapper holds each concrete output before the caller
   sees it, so predicates run with real values and may be callables (the eager `RecordContext`
   carries `tensor_requires_grad`, `is_scalar_bool` and `bool_value`), and replacements flow into
@@ -468,11 +472,9 @@ What it does:
 - Each op records the user source lines that ran it, as on PyTorch (`op.source.frames`,
   `save_source_context`, `source_context_lines`).
 - Refused: transformed root callables (`jax.jit`, `jax.vmap`, `jax.grad`) and capture from inside
-  them, unsupported nested-jaxpr primitives, callback effects, value-dependent `save=` predicates,
-  `followed_by` and `preceded_by`, `intervene=`, `stop_after=`, streaming, `save_grads=` and
-  `tl.record(backend="jax")`. Static-label `save=` (`tl.func`, `tl.label`, `tl.label_contains`,
-  module selectors) applies after finalization. For value-dependent predicates, intervention,
-  sparse recording and true backward graphs, use the PyTorch backend.
+  them, unsupported nested-jaxpr primitives, callback effects, `intervene=`, `stop_after=`,
+  streaming, `save_grads=` and `tl.record(backend="jax")`. `save=` applies after finalization.
+  For intervention, sparse recording and true backward graphs, use the PyTorch backend.
 - `.tlspec` saves use `payload_policy="array_payloads"` and load back as `jax.Array`; typed PRNG
   keys round-trip as typed keys. Fully addressable single-host sharded arrays are saved as
   assembled host values with versioned `jax_sharding_*` fields and a `jax_named_sharding` block
@@ -560,10 +562,9 @@ assert trace.modules["fc"].params
 ```
 
 - Refused: mid-capture `Tensor.realize()`, `Tensor.assign()`, `Tensor.replace()`, setitem input
-  mutation, TinyJit execution, value-dependent `save=` predicates, `followed_by` and `preceded_by`,
-  value-dependent `intervene=` conditions, `stop_after=`, streaming, `save_grads=`, `backward_ready=True` and
-  `tl.record(backend="tinygrad")`. Static-label `save=` (`tl.func`, `tl.label`,
-  `tl.label_contains`, module selectors) applies after finalization. Return a pure lazy tinygrad
+  mutation, TinyJit execution, value-dependent `intervene=` conditions, `stop_after=`, streaming,
+  `save_grads=`, `backward_ready=True` and `tl.record(backend="tinygrad")`. `save=` applies after
+  finalization. Return a pure lazy tinygrad
   expression from a raw callable, or use the PyTorch backend for the refused features.
 - `.tlspec` saves use `payload_policy="array_payloads"` and load back as tinygrad `Tensor`;
   `trace.payload_load_status` records what was materialized. Runtime-only `tinygrad_uop_captures`
