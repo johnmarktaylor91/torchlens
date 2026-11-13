@@ -655,7 +655,7 @@ def test_tinygrad_post_capture_save_policies_run(kwargs: dict[str, Any]) -> None
 
 
 def test_tinygrad_static_label_save_filters_public_payloads(tmp_path: Path) -> None:
-    """tinygrad static-label save should filter public payloads after full capture."""
+    """tinygrad static-label save keeps only the selected payloads, decided at capture."""
 
     trace = _trace(save=tl.func("where"))
     saved_ops = list(trace.saved_ops)
@@ -670,7 +670,13 @@ def test_tinygrad_static_label_save_filters_public_payloads(tmp_path: Path) -> N
     assert int(trace.cost.saved_activation_memory) == sum(
         int(op.cost.activation_memory or 0) for op in saved_ops
     )
-    assert trace.validate_forward_pass([_tiny_block(Tensor([1.0, -2.0, 3.0]))]) is True
+    # As on torch: the kept ``where`` ops' parents were not saved, so replay
+    # cannot check them and the trace is unverified, never passed or failed.
+    status = trace.validate_forward_pass([_tiny_block(Tensor([1.0, -2.0, 3.0]))])
+    assert status.state == "unverified"
+    assert status.num_failed_ops == 0
+    assert set(status.unverified_reason_counts) == {"parent_payload_missing"}
+    assert status.exempted_reason_counts["not_saved_by_user"] == len(unsaved_ops)
 
     path = tmp_path / "tinygrad_selective_save.tlspec"
     trace.save(path, level="portable")
