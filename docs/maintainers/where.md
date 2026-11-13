@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1800 modules, 713910 lines, 0 modules without a docstring.
+85 packages, 1807 modules, 715690 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -57,7 +57,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 24 | 7526 |
 | `torchlens.backends._protocols` | Per-backend ''BackendProtocol'' objects, kept import-light. | 8 | 928 |
 | `torchlens.backends.jax` | JAX backend exports. | 24 | 10805 |
-| `torchlens.backends.mlx` | MLX backend for TorchLens. | 18 | 7242 |
+| `torchlens.backends.mlx` | MLX backend for TorchLens. | 22 | 8180 |
 | `torchlens.backends.paddle` | Paddle backend. | 16 | 6915 |
 | `torchlens.backends.tf` | TensorFlow backend exports. | 19 | 9370 |
 | `torchlens.backends.tinygrad` | tinygrad backend. | 16 | 5624 |
@@ -86,7 +86,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.preprocessing` | Preprocessing provenance + verification (NeuroAI audience). | 9 | 2811 |
 | `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 33 | 14297 |
 | `torchlens.receptive_field._builtin_rules` | Built-in receptive-field rules and idempotent pack registration. | 10 | 2006 |
-| `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 28 | 7731 |
+| `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 31 | 8573 |
 | `torchlens.repgeom` | Representation-geometry helpers (RDMs, MDS, Procrustes, CKA inputs) that need only NumPy, Torch and PIL. | 9 | 4057 |
 | `torchlens.report` | Reports that describe a completed trace: summary, cost, profile, FLOPs and health. | 39 | 14667 |
 | `torchlens.report._notebook` | Extras-gated notebook namespace with no public objects yet. | 11 | 2236 |
@@ -1415,20 +1415,24 @@ JAX backend exports. (24 modules, 10805 lines)
 
 ### `torchlens.backends.mlx`
 
-MLX backend for TorchLens. (18 modules, 7242 lines)
+MLX backend for TorchLens. (22 modules, 8180 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | MLX backend for TorchLens. | 31 |
 | `_capture_disclosures` | Capture-time honesty disclosures for the MLX backend. | 92 |
+| `_capture_hooks` | Optional capture hooks owned by other modules (private). | 114 |
 | `_capture_records` | Capture records and payload helpers for MLX replay validation. | 235 |
 | `_grad_oracle` | MLX derived-gradient oracle helpers. | 438 |
 | `_param_tree` | Flattened MLX parameter-tree walkers for the backend's parameter logs. | 71 |
+| `_record` | The MLX ''tl.record'' producer: lean per-op events, values only when selected. | 348 |
 | `_replay_args` | Saved-payload lookup and replay-argument reconstruction for MLX validation. | 216 |
 | `_replay_frames` | Module-call frames for the MLX AD replay observers. | 53 |
+| `_replay_status` | Replay-status helpers for the MLX validator (private). | 172 |
+| `_retention` | Capture-time retention for MLX ''save='' and structure-only captures (private). | 354 |
 | `_source_frames` | User source lines for MLX operations (''Op.code_context''). | 164 |
 | `_tap_observers` | MLX intermediate-gradient tap observers and the array helpers they share. | 552 |
-| `backend` | MLX implementation of the capture backend Protocol. | 2467 |
+| `backend` | MLX implementation of the capture backend Protocol. | 2417 |
 | `capabilities` | Registry-backed capability exports for the MLX backend. | 38 |
 | `external_arrays` | Arrays a forward can reach from outside itself: the closure-constant census. | 147 |
 | `interventions` | Live interventions and stop sites for the MLX backend. | 676 |
@@ -2181,11 +2185,14 @@ Built-in receptive-field rules and idempotent pack registration. (10 modules, 20
 
 ### `torchlens.recording`
 
-Lightweight predicate-recording namespace for TorchLens. (28 modules, 7731 lines)
+Lightweight predicate-recording namespace for TorchLens. (31 modules, 8573 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Lightweight predicate-recording namespace for TorchLens. | 119 |
+| `_backend_events` | The lean event interface a non-torch backend's ''tl.record'' producer emits. | 377 |
+| `_backend_options` | Option resolution for ''tl.record'' on a backend that binds a record producer. | 151 |
+| `_backend_recorder` | The recorder ''tl.record'' runs for a backend that binds a record producer. | 285 |
 | `_capture_door` | The capture door shared by ''tl.record'' and ''Recorder''. | 94 |
 | `_cleanup` | Cleanup helpers for partial fastlog bundles. | 71 |
 | `_cook_settle` | Settle a Trace cooked from a Recording at the cook seam (settlement path 9). | 54 |
@@ -2199,7 +2206,7 @@ Lightweight predicate-recording namespace for TorchLens. (28 modules, 7731 lines
 | `_indexes` | Index file writers for fastlog directory bundles. | 81 |
 | `_lean` | The lean recording contract: what ''lean=True'' skips, refuses and reports. | 77 |
 | `_options` | Grouped options for fastlog predicate recording. | 445 |
-| `_record_one_shot` | One-shot public fastlog recording API. | 318 |
+| `_record_one_shot` | One-shot public fastlog recording API. | 347 |
 | `_recorder` | Public Recorder context manager for fastlog sessions. | 744 |
 | `_recorder_config` | Resolved stop, capture and identity configuration for one predicate recording pass. | 52 |
 | `_recorder_streaming` | Rank-local streaming-option helper for the fastlog ''Recorder''. | 50 |
