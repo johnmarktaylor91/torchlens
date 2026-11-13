@@ -12,9 +12,8 @@ import threading
 import time
 import types
 import warnings
-import weakref
 from collections.abc import Callable, Iterable, Iterator
-from contextlib import contextmanager, nullcontext, suppress
+from contextlib import contextmanager, nullcontext
 from functools import wraps
 from typing import TYPE_CHECKING, Any, cast
 
@@ -66,19 +65,17 @@ from ..._utils._torch_compat import (
     get_torch_function_mode_stack_length,
     mark_torch_capability_missing,
 )
-from ..._utils._torch_symbols import tensor_read
 from ..._utils.display import identity
 from ..._utils.hashing import make_random_barcode
 from ..._utils.introspection import get_vars_of_type_from_obj
 from ..._utils.rng import log_current_autocast_state, log_op_rng_states
 from ..._utils.tensor_utils import (
-    _DEFER_ENABLED as _COW_ENABLED,
     _DEFER_GATE as _COW_GATE,
     arm_deferred_payload_window,
     disarm_deferred_payload_window,
     print_override,
 )
-from . import _call_plan, _storage_exports, _tracing_pass
+from . import _call_plan, _storage_exports, _tracing_pass, _wrapper_session
 from ._completeness_audited import LAZY_MODULE_MATERIALIZE_WRAPPER
 from ._completeness_boundaries import completeness_scope_for_wrapper
 from ._completeness_cross_thread import (
@@ -102,7 +99,7 @@ from ._function_boundary import (
 )
 from ._fused_norm_writes import _FUSED_MUTATOR_NAMES, fused_call_writes
 from ._logged_arguments import logged_args, logged_receiver_output
-from ._op_markers import _pop_op_markers, _push_op_markers
+from ._op_markers import _pop_op_markers, _push_op_markers, resolve_active_session_fn
 from ._ops_autograd import register_call_input_container_snapshots
 from ._ops_capture_records import (
     _is_inplace_augmented_assignment_dunder,
@@ -142,6 +139,7 @@ from ._transform_wrappers import (  # noqa: F401  (re-exported by their pre-spli
 )
 from ._warm_originals import originals_exposed
 from ._weightsfree_ctx import active_factory_device as _active_factory_device
+from ._wrapper_session import cow_window_state as _cow_window
 from ._wrappers_refusals import (
     _constructs_strict_subclass,
     _pauses_for_subclass_conversion,
@@ -527,72 +525,6 @@ def _untyped_storage_key(t: torch.Tensor) -> tuple[int, int, str] | None:
         return None
 
 
-# Per-trace cache for the clone-on-write eligibility decision. Keyed weakly:
-# a Trace attribute would trip the portable-state completeness scrub
-# (_PORTABLE_STATE_SPEC), and the decision is wrapper-internal state anyway.
-_COW_STATE_PTRS_CACHE: "weakref.WeakKeyDictionary[Any, Any]" = weakref.WeakKeyDictionary()
-_COW_UNSET = object()
-# The last trace asked and its cached state, one tuple swapped whole so a reader never pairs
-# one trace with another's state; weak, so no trace is kept alive. The per-call read of the
-# cache above without the ``suppress`` frames and the weak-dictionary lookup.
-_COW_LAST_TRACE: list[Any] = [(None, _COW_UNSET)]
-
-
-def _cow_payload_state_ptrs(trace: Any) -> Any:
-    """Return the clone-on-write payload window state for one capture trace.
-
-    Computed once per trace and cached weakly: ``None`` when deferred payload
-    clones must stay disabled for this capture, else the frozenset of model
-    param/buffer storage pointers that must never be deferred (their bytes can
-    move through C++ side effects no wrapped-call signature announces, e.g.
-    train-mode ``batch_norm`` running-stat updates).
-
-    Eligibility is deliberately narrow — the plain default capture only. Every
-    mode where saved payloads interact with other machinery (runnable
-    witnesses, backward capture, gradient saving, user activation transforms
-    that may mutate the payload in place, predicate recording, streaming
-    writers, non-copy save modes) keeps the historical eager clone.
-    ``inference_only`` (implied by ``no_grad``) only adds ``no_grad``: eligible.
-    """
-    last = _COW_LAST_TRACE[0]
-    cached: Any = last[1] if last[0] is not None and last[0]() is trace else _COW_UNSET
-    if cached is _COW_UNSET:
-        with suppress(TypeError):
-            cached = _COW_STATE_PTRS_CACHE.get(trace, _COW_UNSET)
-            _COW_LAST_TRACE[0] = (weakref.ref(trace), cached)
-    if cached is not _COW_UNSET:
-        return None if _compiled_write_guard.compiled_writes_seen() else cached
-    ptrs: Any = None
-    if (
-        _COW_ENABLED
-        and not getattr(trace, "is_replayable", False)
-        and not trace._options_backward_ready
-        and trace._options_save_grads in (None, False)
-        and trace._options_activation_transform is None
-        and trace._options_mode != "predicate"
-        and trace._options_save_mode == "copy"
-        and getattr(trace, "_out_writer", None) is None
-        and not _compiled_write_guard.compiled_writes_possible()
-    ):
-        model_ref = getattr(trace, "_source_model_ref", None)
-        model = model_ref() if callable(model_ref) else None
-        if model is not None and hasattr(model, "parameters"):
-            try:
-                with _state.pause_logging(), internal_scalar_read():
-                    collected: set[int] = set()
-                    for p in model.parameters():
-                        collected.add(tensor_read(p, "untyped_storage")(p).data_ptr())
-                    for b in model.buffers():
-                        collected.add(tensor_read(b, "untyped_storage")(b).data_ptr())
-                ptrs = frozenset(collected)
-            except Exception:
-                ptrs = None
-    with suppress(TypeError):
-        _COW_STATE_PTRS_CACHE[trace] = ptrs
-        _COW_LAST_TRACE[0] = (weakref.ref(trace), ptrs)
-    return ptrs
-
-
 def _func_mutates_receiver(func_name: str) -> bool:
     """Return whether a wrapped function mutates its first tensor argument.
 
@@ -643,6 +575,41 @@ def _positional_inplace_index(func: Any) -> int | None:
                 return index
             return None
     return None
+
+
+def _call_writes_tensor_args(
+    flag: Any,
+    inplace_param_index: int | None,
+    func_name: str,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+) -> bool:
+    """Return whether a wrapped call can WRITE through a tensor argument.
+
+    Such a call must first copy out pending deferred payload aliases sharing those
+    storages (clone-on-write); the wrapper runs this BEFORE the mutation, so saved
+    bytes stay capture-time exact. Triggers cover every wrapped mutation surface:
+    in-place methods and augmented-assignment dunders (``mutates_receiver``),
+    ``__setitem__``/``zero_``/``__delitem__``, mutating property setters, ``out=``
+    destinations, and ``inplace=True`` conveniences (``F.relu`` / ``F.dropout``)
+    whose actual underscore mutation may run below this wrapper, including
+    POSITIONALLY-passed ``inplace`` (torch's ``Hardswish.forward`` runs
+    ``F.hardswish(input, self.inplace)``, and ``torch._C._nn.hardswish_`` below it
+    is not a wrapped surface, so this wrapper is the ONLY interception point;
+    missing it left stale pending aliases that tripped the belt at the next
+    mutating call, the mobilenet_v3_small failure). NOT ``has_inplace_signature``:
+    that flag is true for EVERY dunder (``"__add__".endswith("_")``) and is only
+    ever meaningful gated behind a same-object return. Storage-rebinding ``.data=``
+    writes no bytes but rides along via its property-setter signature; a spurious
+    materialization is merely a wasted clone, never a correctness risk. The
+    logging-off path runs the same test, so pending aliases stay zero-copy for the
+    process lifetime. Callers test the signature's own ``writes_args`` first.
+    """
+    return bool(
+        "out" in kwargs
+        or ((kwargs or flag) and _call_requests_inplace(inplace_param_index, args, kwargs))
+        or (flag and fused_call_writes(func_name, args, kwargs))
+    )
 
 
 def _call_requests_inplace(
@@ -1128,9 +1095,7 @@ def torch_func_decorator(
             # those storages. Disarmed cost is one flag check (Dynamo-guardable: _DeferGate).
             if _COW_GATE.armed and (
                 writes_args
-                or "out" in kwargs
-                or ((kwargs or flag) and _call_requests_inplace(inplace_param_index, args, kwargs))
-                or (flag and fused_call_writes(func_name, args, kwargs))
+                or _call_writes_tensor_args(flag, inplace_param_index, func_name, args, kwargs)
             ):
                 _COW_GATE.materialize(_collect_tensor_args(args, kwargs))
             if needs_device_injection:
@@ -1166,6 +1131,10 @@ def torch_func_decorator(
             return _call_unlogged_off_owner(func, func_name, wrapped_func, args, kwargs)
 
         trace: Any = active_trace
+        # Facts fixed for the whole capture session, read at its first logged call.
+        facts = _wrapper_session.FACTS
+        if facts.fingerprint is not fingerprint or facts.trace_id != id(trace):
+            facts = _wrapper_session.session_facts(trace, fingerprint, resolve_active_session_fn)
         if exports_storage and not inside_function_apply():
             _storage_exports.note_storage_export(trace, args)
         if has_inplace_signature and not args:
@@ -1286,30 +1255,13 @@ def torch_func_decorator(
             args
         )
 
-        # ---- Deferred-clone interception (clone-on-write) ----
-        # Any wrapped call that can WRITE through a tensor argument must first copy out pending
-        # deferred payload aliases sharing those storages — this runs BEFORE the mutation, so saved
-        # bytes stay capture-time exact. Triggers cover every wrapped mutation surface: in-place
-        # methods and augmented-assignment dunders (``mutates_receiver``),
-        # ``__setitem__``/``zero_``/``__delitem__``, mutating property setters, ``out=`` destinations,
-        # and ``inplace=True`` conveniences (``F.relu`` / ``F.dropout``) whose actual underscore
-        # mutation may run below this wrapper — including POSITIONALLY-passed ``inplace`` (torch's
-        # ``Hardswish.forward`` runs ``F.hardswish(input, self.inplace)``, and
-        # ``torch._C._nn.hardswish_`` below it is not a wrapped surface, so this wrapper is the ONLY
-        # interception point; missing it left stale pending aliases that tripped the belt at the next
-        # mutating call — the mobilenet_v3_small failure). NOT ``has_inplace_signature`` — that flag
-        # is true for EVERY dunder (``"__add__".endswith("_")``) and is only ever meaningful gated
-        # behind a same-object return. Storage-rebinding ``.data=`` writes no bytes but rides along
-        # via its property-setter signature — a spurious materialization is merely a wasted clone,
-        # never a correctness risk.
+        # ---- Deferred-clone interception (clone-on-write; ``_call_writes_tensor_args``) ----
         if (
             (not fast or writes_args or flag)
             and _COW_GATE.armed
             and (
                 writes_args
-                or "out" in kwargs
-                or ((kwargs or flag) and _call_requests_inplace(inplace_param_index, args, kwargs))
-                or (flag and fused_call_writes(func_name, args, kwargs))
+                or _call_writes_tensor_args(flag, inplace_param_index, func_name, args, kwargs)
             )
         ):
             _COW_GATE.materialize(arg_tensorlike)
@@ -1323,9 +1275,10 @@ def torch_func_decorator(
         rng_states = log_op_rng_states(args, kwargs) if trace._options_save_rng else {}
         autocast_state = fast[2] if fast else log_current_autocast_state(trace)
         func_call_id = _state.next_func_call_id()
-        register_call_input_container_snapshots(
-            trace, args, kwargs, func_call_id=func_call_id, event_index=func_call_id
-        )
+        if facts.container_structure:
+            register_call_input_container_snapshots(
+                trace, args, kwargs, func_call_id=func_call_id, event_index=func_call_id
+            )
         call_input_snapshots = None
         if not fast:
             from ...intervention._runtime import snapshot_call_inputs_for_inplace_intervention_site
@@ -1353,10 +1306,12 @@ def torch_func_decorator(
         # The markers open exactly where the op clock opens, so a range never encloses
         # TorchLens's own pre-call bookkeeping (RNG/autocast snapshots,
         # container registration).
-        op_marker_tokens = _push_op_markers(trace, func_name, func_call_id)
+        op_marker_tokens = _wrapper_session.NO_MARKERS
+        if facts.markers_nvtx or facts.session_reader() is not None:
+            op_marker_tokens = _push_op_markers(trace, func_name, func_call_id)
         func_exec_start = time.time()
         device_memory_before = None
-        track_device_memory = getattr(trace, "track_device_memory", False)
+        track_device_memory = facts.track_device_memory
         if track_device_memory:  # Observe item 15; deferred: cycle _observe.
             from ..._observe._device_memory import read_before as _dm_read_before
 
@@ -1442,7 +1397,10 @@ def torch_func_decorator(
         is_bottom_level_func = trace._wrapper_runtime_ws.current_func_barcode == func_call_barcode
         if fast and is_bottom_level_func:
             call = (func, func_name, args, kwargs, arg_copies, kwarg_copies, out_orig, exec_ctx)
-            window = (_cow_payload_state_ptrs(trace), fast[0])
+            cow_state = (
+                None if facts.cow_closed else _cow_window(facts, trace, internal_scalar_read)
+            )
+            window = (cow_state, fast[0])
             fast_out = commit_admitted(trace, call, func_call_id, window, buffer_snapshots)
             if fast_out is not DECLINED:
                 return fast_out
@@ -1563,7 +1521,7 @@ def torch_func_decorator(
             # window is scoped strictly to the payload-saving call so buffer
             # snapshots, arg copies, and every other capture-time copy keep
             # their historical eager semantics.
-            cow_state_ptrs = _cow_payload_state_ptrs(trace)
+            cow_state_ptrs = _cow_window(facts, trace, internal_scalar_read)
             if cow_state_ptrs is not None:
                 arm_deferred_payload_window(cow_state_ptrs)
             try:

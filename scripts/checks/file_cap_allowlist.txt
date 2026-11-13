@@ -943,13 +943,13 @@ torchlens/backends/torch/tensor_tracking.py	1428
 torchlens/backends/torch/tensor_tracking.py::_add_tensor_backward_hook	82
 torchlens/backends/torch/tensor_tracking.py::_build_grad_payloads	61
 torchlens/backends/torch/tensor_tracking.py::_log_tensor_grad	68
-torchlens/backends/torch/wrappers.py	2722
+torchlens/backends/torch/wrappers.py	2680
 torchlens/backends/torch/wrappers.py::_decorate_torch_func_pairs	81
 torchlens/backends/torch/wrappers.py::_unwrap_torch_locked	117
 torchlens/backends/torch/wrappers.py::_wrap_torch_locked	82
 torchlens/backends/torch/wrappers.py::decorate_all_once	67
-torchlens/backends/torch/wrappers.py::torch_func_decorator	783
-torchlens/backends/torch/wrappers.py::torch_func_decorator.wrapped_func	625
+torchlens/backends/torch/wrappers.py::torch_func_decorator	774
+torchlens/backends/torch/wrappers.py::torch_func_decorator.wrapped_func	616
 torchlens/bridge/_sae_export.py::write_delphi	92
 torchlens/bridge/_sae_export.py::write_sae_dashboard	111
 torchlens/bridge/_sae_latents.py::logged_splice_trace	84

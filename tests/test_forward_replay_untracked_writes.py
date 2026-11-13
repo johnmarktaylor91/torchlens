@@ -36,7 +36,7 @@ import torch.nn.functional as F
 
 import torchlens as tl
 import torchlens.backends.torch._ops_argument_fields as _argument_fields
-import torchlens.backends.torch.wrappers as _wrappers
+import torchlens.backends.torch._wrapper_session as _wrapper_session
 from torchlens._utils import tensor_utils as _tu
 from torchlens._utils.arg_handling import copy_arg_tree
 from torchlens._utils.tensor_utils import tensor_nanequal
@@ -47,14 +47,14 @@ from torchlens.validation._core import _op_for_validation_label
 def _payload_clone_mode(defer: bool) -> Iterator[None]:
     """Force deferred (clone-on-write) or eager payload clones inside the block."""
 
-    prev_tu, prev_w = _tu._DEFER_ENABLED, _wrappers._COW_ENABLED
+    prev_tu, prev_w = _tu._DEFER_ENABLED, _wrapper_session._COW_ENABLED
     _tu._DEFER_ENABLED = defer
-    _wrappers._COW_ENABLED = defer
+    _wrapper_session._COW_ENABLED = defer
     try:
         yield
     finally:
         _tu._DEFER_ENABLED = prev_tu
-        _wrappers._COW_ENABLED = prev_w
+        _wrapper_session._COW_ENABLED = prev_w
 
 
 class _RunningOffsetBags(nn.Module):

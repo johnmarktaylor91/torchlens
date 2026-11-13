@@ -779,7 +779,7 @@ _WEAK_SUBJECT_TABLES = frozenset(
         # Pin-release epochs keyed weakly by their owning trace (one int per
         # refreshed trace, read by the one-backward edge-index token); dies with it.
         ("torchlens/backends/torch/_graph_pins.py", "_PIN_EPOCHS"),
-        ("torchlens/backends/torch/wrappers.py", "_COW_STATE_PTRS_CACHE"),
+        ("torchlens/backends/torch/_wrapper_session.py", "_COW_STATE_PTRS_CACHE"),
         ("torchlens/_capture/structure_only.py", "_DISCHARGE_REGISTRY"),
         ("torchlens/_data_classes/_compaction.py", "_COMPACTED_TRACES"),
         ("torchlens/_data_classes/_nonfinite.py", "_MEMOS"),
@@ -922,7 +922,16 @@ _PROCESS_CACHES = frozenset(
         ("torchlens/_postprocess/_row_ingest.py", "_LAYOUT_TABLES"),
         # The last trace asked for its payload-window state and that state (one tuple,
         # the trace held by weakref): a one-entry front for _COW_STATE_PTRS_CACHE.
-        ("torchlens/backends/torch/wrappers.py", "_COW_LAST_TRACE"),
+        ("torchlens/backends/torch/_wrapper_session.py", "_COW_LAST_TRACE"),
+        # The wrapper's facts for the session that logged the latest call (one slot):
+        # reused only while the call's capture fingerprint is the very same object and
+        # the trace id matches; a new capture mints a new fingerprint, so it never goes
+        # stale. Holds no trace.
+        ("torchlens/backends/torch/_wrapper_session.py", "FACTS"),
+        # The latest registered autocast snapshot per content token: handed out again
+        # only while the capturing trace's token table holds that very object, so an
+        # entry never crosses traces or goes stale. Small dicts, few tokens.
+        ("torchlens/_utils/rng/autocast.py", "_KEPT_SNAPSHOTS"),
         # Code objects of the unwrapped Function.apply frame (one per apply slot
         # shape), registered at install so the census can tell a dispatch made by the
         # C++ apply epilogue from one inside the user's forward; process-stable.
@@ -1253,7 +1262,7 @@ _WEAKLY_HELD = frozenset(
         ("torchlens/backends/torch/tensor_tracking.py", "_IMPLICIT_BACKWARD_TASK_IDS"),
         ("torchlens/backends/torch/tensor_tracking.py", "_OWNED_STATE_GRAD_HOOK_HANDLES"),
         ("torchlens/backends/torch/_graph_pins.py", "_PIN_EPOCHS"),
-        ("torchlens/backends/torch/wrappers.py", "_COW_STATE_PTRS_CACHE"),
+        ("torchlens/backends/torch/_wrapper_session.py", "_COW_STATE_PTRS_CACHE"),
         ("torchlens/_capture/structure_only.py", "_DISCHARGE_REGISTRY"),
         ("torchlens/_data_classes/_compaction.py", "_COMPACTED_TRACES"),
         ("torchlens/_data_classes/_nonfinite.py", "_MEMOS"),
@@ -1458,6 +1467,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/backends/torch/_held_refs.py", "__all__"),
         ("torchlens/backends/torch/_held_refs_capture.py", "__all__"),
         ("torchlens/backends/torch/_op_markers.py", "__all__"),
+        ("torchlens/backends/torch/_wrapper_session.py", "__all__"),
         ("torchlens/backends/torch/_pinned_graph.py", "__all__"),
         ("torchlens/backends/torch/_prepared_tree.py", "__all__"),
         ("torchlens/_utils/_model_walk.py", "__all__"),

@@ -196,9 +196,9 @@ def test_foreign_write_reaches_the_boundary_payload_with_eager_clones(
     which leaves the version counter alone; the boundary op must not reuse that copy.
     """
 
-    from torchlens.backends.torch import wrappers
+    from torchlens.backends.torch import _wrapper_session
 
-    monkeypatch.setattr(wrappers, "_COW_ENABLED", False)
+    monkeypatch.setattr(_wrapper_session, "_COW_ENABLED", False)
     model = _ForeignFunctionModel(_WriteThroughDoubleFunction)
     x = torch.randn(3, 4)
     with pytest.warns(TorchLensWarning, match="foreign-kernel boundary op"):

@@ -25,6 +25,7 @@ import torch.nn as nn
 from _forward_stash import stashed
 
 import torchlens as tl
+import torchlens.backends.torch._wrapper_session as _wrapper_session
 import torchlens.backends.torch.wrappers as _wrappers
 from torchlens._utils import tensor_utils as _tu
 from torchlens.errors import TraceCaptureError
@@ -40,16 +41,16 @@ def _payload_clone_mode(defer: bool, grad_defer: bool = False):
     ``grad_defer`` additionally opts into deferral of GRAPH-CONNECTED payloads
     (the default grad-enabled capture regime), which ships off by default.
     """
-    prev_tu, prev_w = _tu._DEFER_ENABLED, _wrappers._COW_ENABLED
+    prev_tu, prev_w = _tu._DEFER_ENABLED, _wrapper_session._COW_ENABLED
     prev_grad = _tu._DEFER_GRAD_ENABLED
     _tu._DEFER_ENABLED = defer
-    _wrappers._COW_ENABLED = defer
+    _wrapper_session._COW_ENABLED = defer
     _tu._DEFER_GRAD_ENABLED = defer and grad_defer
     try:
         yield
     finally:
         _tu._DEFER_ENABLED = prev_tu
-        _wrappers._COW_ENABLED = prev_w
+        _wrapper_session._COW_ENABLED = prev_w
         _tu._DEFER_GRAD_ENABLED = prev_grad
 
 
