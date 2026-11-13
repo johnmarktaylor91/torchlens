@@ -144,11 +144,17 @@ def ineligible_reason(
         return f"options outside the capture signature: {unknown}"
     if _is_set(options.get("lookback")):
         return "lookback keeps payloads of unselected predecessors"
+    reader = _every_value_reader(options)
+    return None if reader is None else f"{reader} reads every equation value"
+
+
+def _every_value_reader(options: Mapping[str, Any]) -> str | None:
+    """Return the first set option (flat or in ``capture=``) that reads every value."""
+
     grouped = options.get("capture")
     for name in _NEEDS_EVERY_VALUE:
-        for value in (options.get(name), getattr(grouped, name, None)):
-            if _is_set(value):
-                return f"{name} reads every equation value"
+        if _is_set(options.get(name)) or _is_set(getattr(grouped, name, None)):
+            return name
     return None
 
 
