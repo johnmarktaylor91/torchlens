@@ -162,9 +162,9 @@ def _observe(ledger: VariableReadLedger, tf: Any, op_type: Any, inputs: Any, gra
     """Record graph-mode ops, function calls and every non-read handle consumer."""
 
     op_text = _op_type_text(op_type)
-    if graph is not None or op_text in _CALL_OPS or op_text.startswith("__inference_"):
-        if ledger.opaque is None:
-            ledger.opaque = op_text
+    opaque_op = graph is not None or op_text in _CALL_OPS or op_text.startswith("__inference_")
+    if opaque_op and ledger.opaque is None:
+        ledger.opaque = op_text
     if op_text == _READ_OP and graph is None:
         return
     for tensor in inputs or ():

@@ -494,9 +494,8 @@ def recipe(trace: Any, op: Any) -> OpRecipe | None:
         "init_op": capture.label_raw in init_labels,
         "input_sources": tuple(sources),
     }
-    if capture.op_type == "ReadVariableOp":
-        if (read := persisted_read(trace, capture)) is not None:
-            attrs["variable_read"] = read
+    if capture.op_type == "ReadVariableOp" and (read := persisted_read(trace, capture)) is not None:
+        attrs["variable_read"] = read
     built = OpRecipe(
         backend=BACKEND,
         op_identity=identity,

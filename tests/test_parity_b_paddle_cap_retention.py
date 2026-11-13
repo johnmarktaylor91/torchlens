@@ -10,10 +10,10 @@ import textwrap
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pytest
 
 paddle = pytest.importorskip("paddle")
-np = pytest.importorskip("numpy")
 
 import torchlens as tl  # noqa: E402
 from torchlens.backends.paddle import PaddleBackend  # noqa: E402
