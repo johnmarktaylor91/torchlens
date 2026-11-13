@@ -29,6 +29,12 @@ from ..._data_classes.derived_grad import (
     set_intermediate_derived_grads,
 )
 from ...backends.registry import BackendUnsupportedError
+from ._edited_grads import (
+    EditedProgram,
+    edited_closed_jaxpr,
+    edited_grads_refusal,
+    edited_program_of,
+)
 from ._host_state import _reject_closed_over_host_state
 
 
@@ -79,39 +85,62 @@ def _function_root_inputs(params: Any, dynamic: tuple[Any, ...]) -> Any:
     return (params, *dynamic)
 
 
+def _leaf_reader(static_argnums: tuple[int, ...], module_root: bool) -> Callable[..., Any]:
+    """Return ``read(params, positional)``: the jaxpr's dynamic input leaves of one call."""
+
+    import jax
+
+    # A function, not the bool: the host-state check rejects closed-over scalars.
+    jaxpr_inputs = _module_root_inputs if module_root else _function_root_inputs
+
+    def read(params: Any, positional: Sequence[Any]) -> list[Any]:
+        """Drop static arguments and flatten the jaxpr inputs."""
+
+        dynamic = tuple(
+            value for index, value in enumerate(positional) if index + 1 not in static_argnums
+        )
+        return jax.tree.leaves(jaxpr_inputs(params, dynamic))
+
+    return read
+
+
 def _jaxpr_function(
     closed_jaxpr: Any,
     param_positions: dict[int, str],
-    static_argnums: tuple[int, ...],
+    read_leaves: Callable[..., Any],
     output_treedef: Any,
-    module_root: bool,
+    edited: Any = None,
 ) -> Callable[..., Any]:
     """Return ``fn(params, *args, other_consts)`` evaluating the captured jaxpr.
 
     For a function root ``params`` is the jaxpr's first dynamic argument; for a
-    module root it fills the constants matched to module parameters.
+    module root it fills the constants matched to module parameters. ``edited``
+    is the edited program of an edited capture (see ``edited_closed_jaxpr``): it
+    is evaluated instead, with its own constants as the tail of ``other_consts``.
     """
 
     import jax
     from jax import core as jax_core
 
-    # A function, not the bool: the host-state check rejects closed-over scalars.
-    jaxpr_inputs = _module_root_inputs if module_root else _function_root_inputs
+    # Slices, not an int: the host-state check rejects closed-over scalars.
+    num_others = len(closed_jaxpr.consts) - len(param_positions)
+    base_slice, edit_slice = slice(0, num_others), slice(num_others, None)
+    del num_others
 
     def converted(*call_args: Any) -> Any:
         """Evaluate the captured jaxpr with explicit constant arguments."""
 
         params, *positional, other_consts = call_args
-        others = iter(other_consts)
+        others = iter(other_consts[base_slice])
         consts = [
             params[param_positions[index]] if index in param_positions else next(others)
             for index in range(len(closed_jaxpr.consts))
         ]
-        dynamic = tuple(
-            value for index, value in enumerate(positional) if index + 1 not in static_argnums
-        )
-        leaves = jax.tree.leaves(jaxpr_inputs(params, dynamic))
-        flat = jax_core.eval_jaxpr(closed_jaxpr.jaxpr, consts, *leaves)
+        leaves = read_leaves(params, positional)
+        if edited is None:
+            flat = jax_core.eval_jaxpr(closed_jaxpr.jaxpr, consts, *leaves)
+        else:
+            flat = jax_core.eval_jaxpr(edited.jaxpr, other_consts[edit_slice], *consts, *leaves)
         return jax.tree.unflatten(output_treedef, flat)
 
     return converted
@@ -119,17 +148,20 @@ def _jaxpr_function(
 
 def converted_gradient_view(
     capture: DerivedGradCapture,
+    edits: EditedProgram | None = None,
 ) -> tuple[Callable[..., Any], list[Any], Any, tuple[int, ...]] | None:
     """Return the explicit-leaf gradient view, or ``None`` for the plain raw path.
 
     The view returns the pytree structure of ``capture.captured_output``. The result is
-    ``(fn, [params, *inputs, other_consts], grad_options, fn_static_argnums)``.
+    ``(fn, [params, *inputs, other_consts], grad_options, fn_static_argnums)``. An
+    edited capture always takes the view, evaluated with its edits re-applied, so
+    the gradient belongs to the edited program and never reruns the unedited model.
     """
 
     model, _, args, static_argnums, closed_jaxpr, module_tree, captured_output = capture[:7]
     grad_options = capture.grad_options
     consts = tuple(getattr(closed_jaxpr, "consts", ()))
-    if module_tree is None and not consts:
+    if module_tree is None and not consts and edits is None:
         return None
     param_positions = _param_const_positions(closed_jaxpr, module_tree)
     if module_tree is not None:
@@ -150,9 +182,11 @@ def converted_gradient_view(
     import jax
 
     treedef = jax.tree.structure(captured_output)
-    fn = _jaxpr_function(
-        closed_jaxpr, param_positions, shifted_static, treedef, module_tree is not None
-    )
+    edited = None if edits is None else edited_closed_jaxpr(closed_jaxpr, edits)
+    if edited is not None:
+        others = (*others, *edited.consts)
+    read_leaves = _leaf_reader(shifted_static, module_tree is not None)
+    fn = _jaxpr_function(closed_jaxpr, param_positions, read_leaves, treedef, edited)
     view_options = replace(grad_options, params=params, intermediate_grads=False)
     return fn, [params, *positional, others], view_options, shifted_static
 
@@ -169,13 +203,24 @@ def attach_jax_derived_grads(
     ``backend`` owns the raw-path gradient methods; ``derive`` is
     ``jaxpr.derive_closed_jaxpr`` (passed in to keep this module out of the
     backend import cycle). A module root or a function root with closure
-    constants takes the explicit-leaf view; every other root takes the raw path
-    unchanged.
+    constants takes the explicit-leaf view, and so does any capture whose
+    ``intervene=`` edits fired (evaluated with the edits); every other root takes
+    the raw path unchanged.
     """
 
+    if getattr(trace, "is_stopped", False) is True:
+        raise edited_grads_refusal(
+            "a capture halted by stop_after= has no gradient program for its halted "
+            "boundary yet; differentiating the whole jaxpr would rerun past the stop. "
+            "Drop stop_after= or grad_options=.",
+            code="intervention_with_derived_grads_unsupported",
+        )
     model, traced, args, static_argnums = capture[:4]
     grad_options, control_flow = capture.grad_options, capture.control_flow
-    view = converted_gradient_view(capture)
+    edits = edited_program_of(backend, trace)
+    if edits is not None:
+        edits.check_positions()
+    view = converted_gradient_view(capture, edits)
     if view is None and traced is not model and inspect.isfunction(model):
         # The raw path inspects ``traced``; also inspect the keyword-bound user callable.
         _reject_closed_over_host_state(model)

@@ -98,7 +98,7 @@ from . import _module_return_probe as return_probe
 from ._capture_scopes import forward_scopes, retain_backward_state
 from ._closure_consts import _readable_closure_consts
 from ._converted_grads import DerivedGradCapture, attach_jax_derived_grads
-from ._edits import append_session_event, open_equation_session, replay_with_edits
+from ._edits import append_session_event, open_equation_session, pop_edit_kwargs, replay_with_edits
 from ._host_state import _reject_closed_over_host_state
 from ._input_kwargs import bind_input_kwargs
 from ._module_frames import jax_event_module_frames
@@ -576,7 +576,7 @@ class JAXBackend:
 
         save_predicate = pop_static_label_save_predicate({"save": save}, backend_name="JAX")
         facet_recipes = pop_facet_recipes(kwargs)
-        intervene = kwargs.pop("intervene", None)
+        intervene = pop_edit_kwargs(kwargs)
         self._reject_extra_kwargs(kwargs)
         _reject_transformed_callable(model)
         # N5: ``trace()`` passes the grouped ``capture=CaptureOptions(...)`` only,

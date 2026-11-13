@@ -282,7 +282,7 @@
    "status": "asymmetry",
    "asymmetry": "A06",
    "confidence": "high",
-   "note": "torch full; MLX and eager TF static-label only; Paddle a helper subset; jax and tinygrad refuse; graph-only TF refuses."
+   "note": "torch full; JAX edits equation outputs (any predicate, six helpers or a callable, derived gradients of the edited program, tl.grad sites with grad_options); MLX, eager TF and tinygrad static selectors; Paddle a helper subset; graph-only TF refuses."
   },
   {
    "a": "backend",
@@ -2556,7 +2556,7 @@
     "backend",
     "intervene"
    ],
-   "summary": "intervene= works fully on torch, as static-label rules on MLX and eager TF, as a helper subset (zero_ablate, scale, add, replace_with) on Paddle, and is refused by jax, tinygrad and graph-only TF.",
+   "summary": "intervene= works fully on torch, on JAX equation outputs (any predicate, the six helpers zero_ablate, scale, add, clamp, mean_ablate, replace_with or a callable; tl.module sites and stop_after= refuse), as static-selector rules on MLX, eager TF and tinygrad, as a helper subset (zero_ablate, scale, add, replace_with) on Paddle, and is refused by graph-only TF.",
    "evidence": "docs/backends.md",
    "recommendation": "document",
    "ruling": "document"

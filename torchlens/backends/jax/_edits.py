@@ -22,6 +22,7 @@ import time
 from collections import Counter
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, fields, replace
+from types import SimpleNamespace
 from typing import Any
 
 from ..._ir.events import InterventionAppliedEvent
@@ -29,13 +30,13 @@ from ..._ir.intervention import FireResult
 from ..._ir.refs import ReservedLabel
 from ..._ir.selector_eval import selector_contains_kind
 from ..._selection.selectors import BaseSelector
-from ...intervention._predicates import as_intervention_decision
-from ...intervention._types import Edit, FireRecord, InterventionDecision, TargetSpec
-from ...intervention._zero_fire import settle_capture_zero_fire
-from ...intervention.hooks import make_hook_context, normalize_hook, split_site_branches
+from ...intervention._types import Edit, InterventionDecision
 from ...recording._exceptions import PredicateError
+from .._options import pop_stop_directive
 from ..registry import BackendUnsupportedError
 from ._edit_helpers import checked_replacement, resolve_helper_applier
+from ._edited_grads import EditedProgram
+from ._grad_site_edits import gradient_identity, gradient_predicates
 from ._module_frames import jax_event_module_frames
 from ._source_lines import EquationFrames
 from .jaxpr import JaxEquationCapture
@@ -43,6 +44,29 @@ from .jaxpr import JaxEquationCapture
 _OPTION = "trace_option_unsupported"
 _ALIAS_RETRY_KINDS = ("label", "contains", "regex")
 _REGION_LAYER_TYPES = {"region": "jax_region", "region_output": "jax_region_out"}
+
+
+def _intervention_api() -> SimpleNamespace:
+    """Return the intervention-layer (L4) names the edit runtime calls.
+
+    This L2 module's one door to the intervention layer: a single deferred
+    import keeps eager upward imports out of the backend.
+    """
+
+    from ...intervention import _grad_site_neutral, _predicates, _spec, _types, _zero_fire, hooks
+
+    return SimpleNamespace(
+        as_intervention_decision=_predicates.as_intervention_decision,
+        make_hook_context=hooks.make_hook_context,
+        normalize_hook=hooks.normalize_hook,
+        FireRecord=_types.FireRecord,
+        TargetSpec=_types.TargetSpec,
+        settle_capture_zero_fire=_zero_fire.settle_capture_zero_fire,
+        split_site_branches=hooks.split_site_branches,
+        target_operands=hooks._target_operands,
+        grad_site_targets=_grad_site_neutral.grad_site_targets,
+        when=_spec.when,
+    )
 
 
 def _jax_edit_refusal(message: str, *, code: str, option: str = "intervene") -> Exception:
@@ -86,21 +110,16 @@ def _validate_intervene(intervene: Any, grad_options: Any) -> None:
             f"tl.when(condition, action); got {type(intervene).__name__}.",
             code=_OPTION,
         )
-    if grad_options is not None:
+    if grad_options is not None and grad_options.intermediate_grads:
         raise _jax_edit_refusal(
-            "JAX backend trace(intervene=...) cannot be combined with grad_options: "
-            "derived gradients differentiate the unedited jaxpr.",
+            "JAX backend trace(intervene=...) supports parameter and input derived "
+            "gradients of the edited program; GradOptions(intermediate_grads=True) "
+            "replays the jaxpr per boundary and is not edit-aware yet.",
             code="intervention_with_derived_grads_unsupported",
         )
     selector = getattr(intervene, "selector", None)
     if not isinstance(selector, BaseSelector):
         return
-    if any(universe != "activation" for universe, _ in split_site_branches(selector)):
-        raise _jax_edit_refusal(
-            f"JAX backend supports forward interventions only; the site {selector!r} "
-            "addresses a gradient, which needs backward capture. Use the PyTorch backend.",
-            code="backward_capture_unsupported",
-        )
     if selector_contains_kind(selector, "module"):
         raise _jax_edit_refusal(
             "JAX backend trace(intervene=...) edits equation outputs; tl.module(...) "
@@ -126,10 +145,33 @@ class JaxEditRuntime:
         _validate_intervene(intervene, grad_options)
         self.intervene = intervene
         self.fires: list[_Fire] = []
+        selector = getattr(intervene, "selector", None)
+        self.gradient_sites: tuple[Any, ...] = ()
+        self.gradient_matches = 0
+        if isinstance(selector, BaseSelector):
+            decision = getattr(intervene, "decision", None)
+            self.gradient_sites = gradient_predicates(
+                selector, getattr(decision, "hook", None), grad_options, _intervention_api()
+            )
+            if self.gradient_sites:
+                if decision is None:
+                    raise _jax_edit_refusal(
+                        "JAX backend tl.grad(...) sites need a one-clause tl.when(site, edit).",
+                        code=_OPTION,
+                    )
+                self.gradient_apply = _resolve_applier(decision).apply
+
+    def matches_gradient_site(self, ctx: Any) -> bool:
+        """Return whether one equation's output is a ``tl.grad`` site of the clause."""
+
+        short = replace(ctx, label=f"{ctx.layer_type}_{ctx.type_index}")
+        return any(site(ctx) is not None or site(short) is not None for site in self.gradient_sites)
 
     def decide(self, ctx: Any) -> InterventionDecision | None:
         """Return the normalized decision for one site, retrying the short label alias."""
 
+        if self.gradient_sites:
+            return None
         decision = self._evaluate(ctx)
         selector = getattr(self.intervene, "selector", None)
         if decision is not None or not isinstance(selector, BaseSelector):
@@ -143,7 +185,7 @@ class JaxEditRuntime:
 
         result = self.intervene(ctx)
         try:
-            decision = as_intervention_decision(result)
+            decision = _intervention_api().as_intervention_decision(result)
         except TypeError as exc:
             raise PredicateError(
                 "intervene predicate must return InterventionDecision, Edit, callable, "
@@ -192,6 +234,7 @@ def _resolve_applier(decision: InterventionDecision) -> JaxEditApplier:
             "supported actions are hook helpers and callable hooks.",
             code=_OPTION,
         )
+    api = _intervention_api()
     hook = decision.hook
     if isinstance(hook, Edit):
         return JaxEditApplier(f"helper:{hook.name}", resolve_helper_applier(hook))
@@ -201,13 +244,13 @@ def _resolve_applier(decision: InterventionDecision) -> JaxEditApplier:
             f"callable hook; got {type(hook).__name__}.",
             code=_OPTION,
         )
-    normalized = normalize_hook(hook)
+    normalized = api.normalize_hook(hook)
     identity = f"callable:{getattr(hook, '__qualname__', type(hook).__name__)}"
 
     def _apply(out: Any) -> Any:
         """Invoke the user hook with a post-forward hook context."""
 
-        return normalized(out, ctx=make_hook_context(name=identity))
+        return normalized(out, ctx=api.make_hook_context(name=identity))
 
     return JaxEditApplier(identity, _apply)
 
@@ -219,7 +262,7 @@ def _fire_result(
 
     helper = decision.hook if isinstance(decision.hook, Edit) else None
     replaced = replacement is not original
-    record = FireRecord(
+    record = _intervention_api().FireRecord(
         target_label=ctx.label_raw,
         call_label=ctx.label_raw,
         func_call_id=ctx.func_call_id,
@@ -265,6 +308,8 @@ class JaxEquationSession:
         self._type_counts: Counter[str] = Counter()
         self._seen = 0
         self.fires_by_index: dict[int, _Fire] = {}
+        #: Fired edits by equation identity, kept only for derived gradients.
+        self.program: EditedProgram | None = None
         self.fires_by_label: dict[str, FireResult] = {}
         self.context_by_label: dict[str, tuple[Any, ...]] = {}
 
@@ -300,13 +345,35 @@ class JaxEquationSession:
             self.context_by_label[reserved.label_raw] = self.frames.locations(eqn)
         if self.runtime is None:
             return outputs
+        if self.program is not None:
+            self.program.note_bound(eqn)
         ctx = self._context(reserved, outputs, stacks)
+        if self.runtime.gradient_sites:
+            self._arm_gradient_site(eqn, reserved.label_raw, ctx, outputs)
+            return outputs
         outputs, fire = self.runtime.fire(ctx, outputs)
         if fire is not None:
             self.fires_by_label[reserved.label_raw] = fire.result
             if fire.result.replaced:
                 self.fires_by_index[len(captures)] = fire
+                if self.program is not None:
+                    self.program.add(eqn, reserved.label_raw, fire.applier.apply)
         return outputs
+
+    def _arm_gradient_site(self, eqn: Any, label: str, ctx: Any, outputs: tuple[Any, ...]) -> None:
+        """Wrap one matched equation output in the gradient-editing identity."""
+
+        runtime = self.runtime
+        if runtime is None or self.program is None or not runtime.matches_gradient_site(ctx):
+            return
+        if len(outputs) != 1:
+            raise _jax_edit_refusal(
+                f"JAX backend trace(intervene=tl.grad(...)) matched {label!r}, a "
+                f"{len(outputs)}-output equation; only single-output equations are editable.",
+                code=_OPTION,
+            )
+        runtime.gradient_matches += 1
+        self.program.add(eqn, label, gradient_identity(runtime.gradient_apply, label))
 
     def _context(self, reserved: ReservedLabel, outputs: tuple[Any, ...], stacks: Any) -> Any:
         """Build the predicate context with module frames and concrete value facts."""
@@ -328,7 +395,7 @@ class JaxEquationSession:
 
         if self.runtime is None:
             return result, output
-        if not self.runtime.fires:
+        if not self.runtime.fires and not self.runtime.gradient_matches:
             _warn_zero_matches(self.runtime.intervene)
         for fire in self.runtime.fires:
             _record_fired_spec(self.trace, fire.result.site_label, fire.decision)
@@ -371,7 +438,7 @@ def _record_fired_spec(trace: Any, target_label: str, decision: InterventionDeci
     """Persist a fired decision on the trace-owned intervention spec (torch parity)."""
 
     spec = trace._ensure_intervention_spec()
-    target = TargetSpec("label", target_label)
+    target = _intervention_api().TargetSpec("label", target_label)
     frozen = target.freeze()
     if all(existing.freeze() != frozen for existing in spec.targets):
         spec.targets.append(target)
@@ -388,11 +455,43 @@ def _warn_zero_matches(intervene: Any) -> None:
 
     selector = getattr(intervene, "selector", None)
     if isinstance(selector, BaseSelector):
-        settle_capture_zero_fire(
+        _intervention_api().settle_capture_zero_fire(
             f"Capture-time intervention selector {selector!r} matched zero sites; "
             "no intervention fired.",
             selector=repr(selector),
         )
+
+
+def pop_edit_kwargs(kwargs: dict[str, Any]) -> Any:
+    """Pop ``intervene`` and the stop directive from the backend kwargs.
+
+    Parameters
+    ----------
+    kwargs
+        Extra public trace kwargs reaching the JAX backend; mutated in place.
+
+    Returns
+    -------
+    Any
+        The ``intervene`` predicate, or ``None``.
+
+    Raises
+    ------
+    BackendUnsupportedError
+        ``interventions_unsupported`` for ``stop_after=``: the JAX capture path
+        interprets the whole jaxpr and has no partial-capture finalization yet.
+    """
+
+    intervene = kwargs.pop("intervene", None)
+    if pop_stop_directive(kwargs) is not None:
+        raise BackendUnsupportedError(
+            "JAX backend trace(stop_after=...) is not supported: the capture interprets "
+            "the whole jaxpr and has no partial-capture finalization. Capture the full "
+            "forward (trace(intervene=...) edits are supported), or use the PyTorch backend.",
+            code="interventions_unsupported",
+            option="stop_after",
+        )
+    return intervene
 
 
 def open_equation_session(
@@ -414,6 +513,8 @@ def open_equation_session(
         if backend.is_tensor(value)
     )
     session = JaxEquationSession(backend, trace, runtime, frames, num_inputs + len(consts))
+    if runtime is not None and grad_options is not None:
+        session.program = EditedProgram()
     backend._equation_session = session
     return session
 
