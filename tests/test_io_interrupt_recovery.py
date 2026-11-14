@@ -84,11 +84,12 @@ def test_tlspec_stranded_backup_is_restored_by_cleanup(
     real_replace = tlspec_mod.os.replace
 
     def killing_replace(src, dst):  # type: ignore[no-untyped-def]
-        # The record inside the target and the aside-rename to the backup go through;
-        # the publish rename of the staging dir is where the kill lands.
-        if Path(src).name.startswith(f"{target.name}.tmp."):
-            raise KeyboardInterrupt
-        return real_replace(src, dst)
+        # The record written inside the target and the aside-rename of the target to the
+        # backup go through; every later rename (the publish, and the in-process restore a
+        # real SIGKILL never runs) is where the kill lands.
+        if Path(dst).name == "NEWER_SAVE_UNFINISHED.json" or Path(src) == target:
+            return real_replace(src, dst)
+        raise KeyboardInterrupt
 
     monkeypatch.setattr(tlspec_mod.os, "replace", killing_replace)
     # Disable the in-process handler's cleanup/restore too: a real SIGKILL
