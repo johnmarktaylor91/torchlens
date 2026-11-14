@@ -3795,7 +3795,7 @@ docs-md	docs/maintainers/where.md	362
 docs-md	docs/maintainers/where.md	363
 docs-md	docs/maintainers/where.md	365
 docs-md	docs/maintainers/where.md	366
-docs-md	docs/maintainers/where.md	3676
+docs-md	docs/maintainers/where.md	3666
 docs-md	docs/maintainers/where.md	368
 docs-md	docs/maintainers/where.md	3680
 docs-md	docs/maintainers/where.md	369
@@ -3806,16 +3806,16 @@ docs-md	docs/maintainers/where.md	3710
 docs-md	docs/maintainers/where.md	372
 docs-md	docs/maintainers/where.md	373
 docs-md	docs/maintainers/where.md	374
-docs-md	docs/maintainers/where.md	37505
 docs-md	docs/maintainers/where.md	376
 docs-md	docs/maintainers/where.md	377
+docs-md	docs/maintainers/where.md	37738
 docs-md	docs/maintainers/where.md	378
 docs-md	docs/maintainers/where.md	379
 docs-md	docs/maintainers/where.md	38
 docs-md	docs/maintainers/where.md	380
 docs-md	docs/maintainers/where.md	3805
 docs-md	docs/maintainers/where.md	381
-docs-md	docs/maintainers/where.md	38178
+docs-md	docs/maintainers/where.md	38179
 docs-md	docs/maintainers/where.md	382
 docs-md	docs/maintainers/where.md	383
 docs-md	docs/maintainers/where.md	384
@@ -4082,7 +4082,7 @@ docs-md	docs/maintainers/where.md	702
 docs-md	docs/maintainers/where.md	703
 docs-md	docs/maintainers/where.md	704
 docs-md	docs/maintainers/where.md	705
-docs-md	docs/maintainers/where.md	706247
+docs-md	docs/maintainers/where.md	706481
 docs-md	docs/maintainers/where.md	7066
 docs-md	docs/maintainers/where.md	707
 docs-md	docs/maintainers/where.md	71
@@ -9263,6 +9263,7 @@ test-docstrings	tests/test_io_streaming.py	10
 test-docstrings	tests/test_io_streaming.py	128
 test-docstrings	tests/test_io_streaming.py	19
 test-docstrings	tests/test_io_streaming.py	62
+test-docstrings	tests/test_io_superseded_record.py	256
 test-docstrings	tests/test_jax_backend_capture.py	19008
 test-docstrings	tests/test_jax_backend_capture.py	3.0.1
 test-docstrings	tests/test_jax_backend_hardening.py	32
