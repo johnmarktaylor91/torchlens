@@ -53,7 +53,7 @@ def _input() -> Any:
 def _ops(trace: Any) -> list[Any]:
     """Return the computed (non-input, non-output) ops of ``trace``."""
 
-    return [op for op in trace._layer_list if op.layer_type not in ("input", "output")]
+    return [op for op in trace._layer_list if op.type not in ("input", "output")]
 
 
 def _validates(trace: Any) -> None:
@@ -178,7 +178,7 @@ _PEAK_SCRIPT = textwrap.dedent(
     config = sys.argv[1]
     small = paddle.ones([64], dtype="float32")
     warm = tl.trace(chain, small, backend="paddle")  # warm-up; names the last op's final label
-    last = [op for op in warm._layer_list if op.layer_type not in ("input", "output")][-1].label
+    last = [op for op in warm._layer_list if op.type not in ("input", "output")][-1].label
     tl.trace(chain, small, backend="paddle", save=tl.func("exp"))
     del warm
     x = paddle.ones([1 << 20], dtype="float32")  # 4 MiB per activation

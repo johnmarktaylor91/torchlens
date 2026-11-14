@@ -66,7 +66,7 @@ def test_streamed_payloads_leave_ram_by_default(tmp_path: Path) -> None:
 
     assert streamed._layer_list
     assert all(op.has_saved_activation for op in streamed._layer_list)
-    assert all(op.__dict__.get("out") is None for op in streamed._layer_list)
+    assert all(op._slot("out") is None for op in streamed._layer_list)
     assert all(op.out_ref is not None for op in streamed._layer_list)
     assert streamed._out_writer is None
     assert STREAM_KEY not in streamed.__dict__
@@ -156,7 +156,7 @@ def test_existing_bundle_path_is_refused(tmp_path: Path) -> None:
     path.mkdir()
     with pytest.raises(Exception) as info:
         tl.trace(_chain, _input(), backend="paddle", storage=tl.to_disk(path))
-    assert getattr(info.value, "code", None) == "bundle_path_exists"
+    assert info.value.fields.get("code") == "bundle_path_exists"
 
 
 def test_storage_with_save_selector_is_refused(tmp_path: Path) -> None:
@@ -171,7 +171,7 @@ def test_storage_with_save_selector_is_refused(tmp_path: Path) -> None:
             storage=tl.to_disk(path),
             save=tl.func("tanh"),
         )
-    assert info.value.code == "trace_option_unsupported"
+    assert info.value.fields.get("code") == "trace_option_unsupported"
     assert not path.exists()
 
 
@@ -181,7 +181,7 @@ def test_plain_capture_is_unchanged_and_saves(tmp_path: Path) -> None:
     trace = tl.trace(_chain, _input(), backend="paddle")
 
     assert all(op.out is not None for op in trace._layer_list)
-    assert trace._source_bundle_path is None
+    assert getattr(trace, "_source_bundle_path", None) is None
     assert STREAM_KEY not in trace.__dict__
     assert _stream_capture.MODE_KEY not in trace.__dict__
     path = tmp_path / "saved"
