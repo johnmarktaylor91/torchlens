@@ -83,7 +83,7 @@ def _build_shared_fields_dict(
         fields_dict["output_device"] = self._options_output_device
         if not defer:
             fields_dict.update(SHARED_CALL_DEFAULTS)
-        _set_arg_template_fields(self, fields_dict, call)
+        _set_arg_template_fields(self, fields_dict, call, defer)
         # Whether this op saves gradients; the per-gradient placeholders come from the op
         # defaults (the freeze never reads them).
         fields_dict["save_grads"] = self._options_save_grads not in (None, False)

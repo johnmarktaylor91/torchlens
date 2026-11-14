@@ -32,6 +32,7 @@ from ..._ir._row_journal import _new_object, _RowOpRecord
 from ..._utils.display import _record_phase_timing
 from ._ops_freeze_refs import _param_refs_from_fields
 from ._ops_row_journal import _fill_items, _PendingRow, _row_journal_for
+from ._thin_defer import resolve_deferred
 from ._thin_settle import fill_settle_fields
 
 if TYPE_CHECKING:
@@ -137,6 +138,7 @@ class _ThinRow(_PendingRow):
     def _fill(self) -> None:
         """Fill the settle families and the commit's strings, then become a plain pending row."""
 
+        resolve_deferred(self.fields)
         fill_settle_fields(self.fields, self.describe)
         self.device = str(self.device)
         self.handle_id = str(self.handle_id)

@@ -49,6 +49,7 @@ from ._ops_arg_slots import (
     new_slot_context,
     templates_requested,
 )
+from ._thin_defer import defer_arg_template
 from .buffer_writes import (
     _RECEIVER_REBIND_NAMES,
     resolve_or_late_index_buffer_address,
@@ -349,12 +350,15 @@ def _set_arg_template_fields(
     self: "Trace",
     fields_dict: dict[str, Any],
     call: _SlotCall,
+    defer: bool = False,
 ) -> None:
     """Seed the replay argument templates and the portable function identity of one call.
 
     Observes here every fact the stored values carry (labels, layouts, literals, copies
     and the function key, read at the call), then resolves them with
-    ``resolve_arg_template_fields``, a pure function of those facts and the layout plan.
+    ``resolve_arg_template_fields``, a pure function of those facts and the layout plan:
+    now, or (``defer``, the thin path, for a call that records a template) when the row
+    fills.
     """
     # The portable function identity is what lets a LOADED bundle resolve its
     # callables for validation; a default capture records templates only for
@@ -383,7 +387,10 @@ def _set_arg_template_fields(
             else None
         )
         observed = (None, False, False, key)
-    resolve_arg_template_fields(fields_dict, observed, parts)
+    if defer and observed[0] is not None:
+        defer_arg_template(fields_dict, observed, parts)
+    else:
+        resolve_arg_template_fields(fields_dict, observed, parts)
 
 
 def _repin_rebound_receiver(self: "Trace", args: tuple[Any, ...], tensor: torch.Tensor) -> bool:

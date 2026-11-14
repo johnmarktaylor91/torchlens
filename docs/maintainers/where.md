@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1853 modules, 730046 lines, 0 modules without a docstring.
+85 packages, 1854 modules, 730099 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -61,7 +61,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6537 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8522 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 10 | 4482 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 170 | 66702 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 171 | 66755 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8876 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2741 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 28 | 9426 |
@@ -1545,7 +1545,7 @@ tinygrad backend preview. (10 modules, 4482 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (170 modules, 66702 lines)
+Torch backend implementation package for TorchLens capture. (171 modules, 66755 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1624,7 +1624,7 @@ Torch backend implementation package for TorchLens capture. (170 modules, 66702 
 | `_opaque_call_advisory` | Name the opaque call behind a completeness-witness gap. | 366 |
 | `_ops_activations` | Output tensor metadata and activation persistence. | 778 |
 | `_ops_arg_slots` | One per-op snapshot of the tensor argument slots the shared-fields derivations read. | 331 |
-| `_ops_argument_fields` | Argument family of the shared op fields: argument scan, slot snapshot and templates. | 430 |
+| `_ops_argument_fields` | Argument family of the shared op fields: argument scan, slot snapshot and templates. | 437 |
 | `_ops_arguments` | Argument templates, edge uses, and tensor provenance. | 799 |
 | `_ops_autograd` | Autograd saved-tensor statistics and container snapshots. | 764 |
 | `_ops_call_site_fields` | Call-site family of the shared op fields: the code context and the call-site chain. | 404 |
@@ -1677,8 +1677,9 @@ Torch backend implementation package for TorchLens capture. (170 modules, 66702 
 | `_storage_exports` | Copy out pending payload aliases before a tensor's storage is handed to the host zero-copy. | 291 |
 | `_storage_overlap` | Storage-overlap geometry for mutation-label propagation (pure, no capture state). | 191 |
 | `_tensor_grad_hook` | Register TorchLens's tensor gradient hooks with torch. | 262 |
+| `_thin_defer` | Deferred resolution for thin rows: observe at the call, resolve when the row fills. | 44 |
 | `_thin_emit` | The thin emit: one plain admitted call, its observations, its tensor effects, one append. | 185 |
-| `_thin_record` | The thin record: one plain admitted call's commit as a deferred journal row. | 221 |
+| `_thin_record` | The thin record: one plain admitted call's commit as a deferred journal row. | 223 |
 | `_thin_settle` | The thin record path's settle side: the per-call defaults table and the plain-session facts. | 115 |
 | `_tl` | Compatibility path for the tensor-label metadata helpers (now ''torchlens._utils._tensor_label''). | 77 |
 | `_tl_collective` | Compatibility re-export; the helper lives in ''torchlens._utils._tl_collective''. | 6 |
