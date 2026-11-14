@@ -336,9 +336,13 @@ def _given_grad_options(call: Mapping[str, Any]) -> Any:
 
 
 def _site_labels(trace: Any, selector: Any) -> list[str]:
-    """Raw labels of the finished ops a forward selector matches, in trace order."""
+    """Labels of the finished ops a forward selector matches, in trace order.
 
-    return [str(op._label_raw) for op in trace._layer_list if bool(selector(op))]
+    These are the final labels the tinygrad replay adapter names its recipe slots
+    with, so the armed sites match the replay graph the gradient walk runs over.
+    """
+
+    return [str(op.label) for op in trace._layer_list if bool(selector(op))]
 
 
 def _capture_with_grad_site(

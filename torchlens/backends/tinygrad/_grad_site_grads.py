@@ -200,7 +200,7 @@ def attach_grad_site_derived_grads(
         site (``tl.grad(s)``, unions, a pass qualifier) and ``plan.edit.apply``
         the resolved ``tensor -> tensor`` edit.
     resolve_labels
-        ``resolve_labels(trace, forward_selector)``: raw labels it names.
+        ``resolve_labels(trace, forward_selector)``: the replay-slot labels it names.
 
     Returns
     -------
