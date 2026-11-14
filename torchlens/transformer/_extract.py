@@ -26,6 +26,7 @@ import torch
 
 from .._semantic.recipes._helpers import relays_wrapped_core
 from .._utils._record_group_table import record_member
+from ..errors import MissingFacetError
 from ..errors._base import TorchLensError
 from ._errors import refuse
 from ._generation_attention import generation_attention_view
@@ -69,7 +70,15 @@ def _pattern_tensor(trace: Any, address: str, batch_index: int) -> tuple[torch.T
     """Read one module's pattern facet; return ``([head, dst, src], provenance)``."""
 
     module = trace.modules[address]
-    facet = module.facets["pattern"]
+    try:
+        facet = module.facets["pattern"]
+    except MissingFacetError as exc:
+        refuse(
+            code="tv_payload_missing",
+            message=f"The pattern facet at {address!r} is unavailable: {exc.reason.detail}.",
+            remedy=str(exc.reason.remedy or "recapture with the attention ops saved"),
+            address=address,
+        )
     spec = getattr(facet, "spec", None)
     value = facet.value
     if not isinstance(value, torch.Tensor):
@@ -178,7 +187,10 @@ def _mask_from_eager(trace: Any, module: Any, batch_index: int) -> MaskInfo | No
 
     if not _has_facet(module, "scores"):
         return None
-    spec = getattr(module.facets["scores"], "spec", None)
+    try:
+        spec = getattr(module.facets["scores"], "spec", None)
+    except MissingFacetError:  # a reconstruction that failed validation has no operand
+        return None
     home_label = getattr(spec, "home_label", None)
     if home_label is None:
         return None

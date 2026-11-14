@@ -24,6 +24,7 @@ from typing import Any
 
 import torch
 
+from .._semantic.facets import MissingFacetError
 from .._semantic.recipes._helpers import relays_wrapped_core
 from .._semantic.tolerances import within_reconstruction_tolerance
 from .._utils._record_group_table import record_member
@@ -97,7 +98,16 @@ def _select_layers(modules: list[Any], selector: Any) -> list[Any]:
 def _result_tensor(module: Any) -> torch.Tensor:
     """Read the validated per-head result facet ``[b, pos, head, d_model]``."""
 
-    facet = module.facets["result"]
+    try:
+        facet = module.facets["result"]
+    except MissingFacetError as exc:
+        refuse(
+            code="mi_payload_missing",
+            message=f"The per-head result view at {record_member(module, 'address', '?')} "
+            f"is unavailable: {exc.reason.detail}.",
+            remedy=str(exc.reason.remedy or "recapture with the attention interior saved"),
+            analysis="attention_head_contributions",
+        )
     value = facet.value if hasattr(facet, "value") else facet
     if not isinstance(value, torch.Tensor):
         refuse(

@@ -15,7 +15,6 @@ from torchlens._semantic import facets as facets_mod
 from torchlens._semantic.recipes import activate_entrypoint_recipes
 from torchlens._utils._torch_compat import HAS_SDPA_GQA
 from torchlens.errors import MissingFacetError, TraceCaptureError
-from torchlens.facets import MissingFacet
 from torchlens.intervention.errors import SiteResolutionError
 
 pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
@@ -141,7 +140,7 @@ def test_reconstructed_sdpa_facets_validate_against_actual_post_rope_inputs() ->
 
 
 def test_reconstructed_sdpa_validation_is_non_vacuous_after_corruption() -> None:
-    """Corrupting saved Q makes validation fail with a MissingFacet value."""
+    """Corrupting saved Q makes validation refuse the facet at access."""
 
     model = _AttentionWrapper(LlamaSdpaAttention())
     log = tl.trace(
@@ -154,9 +153,9 @@ def test_reconstructed_sdpa_validation_is_non_vacuous_after_corruption() -> None
     op.call.saved_args[0] = op.call.saved_args[0] + 10.0
     log.modules["attn"].facets.invalidate()
 
-    value = log.modules["attn"].facets.pattern.value
-    assert isinstance(value, MissingFacet)
-    assert "validation failed" in value.reason
+    with pytest.raises(MissingFacetError, match="validation failed") as refusal:
+        log.modules["attn"].facets.pattern
+    assert refusal.value.reason.status == "needs_capture"
 
 
 @pytest.mark.skipif(not HAS_SDPA_GQA, reason="SDPA enable_gqa postdates the torch 2.1 floor (2.5+)")

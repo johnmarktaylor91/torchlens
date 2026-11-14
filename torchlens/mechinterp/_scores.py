@@ -32,6 +32,7 @@ from typing import Any
 import torch
 
 from .._errors import PayloadUnavailableError
+from .._semantic.facets import MissingFacetError
 from .._utils._record_group_table import record_member
 from ._errors import refuse
 from ._heads import _attention_modules, _select_layers
@@ -199,6 +200,22 @@ def _score_layer(
     return tuple(layer_scores)
 
 
+def _module_pattern(module: Any) -> Any:
+    """Return a module's pattern facet value; refuse one that failed validation."""
+
+    try:
+        facet = module.facets["pattern"]
+    except MissingFacetError as exc:
+        refuse(
+            code="mi_payload_missing",
+            message=f"The pattern at {record_member(module, 'address', '?')} is "
+            f"unavailable: {exc.reason.detail}.",
+            remedy=str(exc.reason.remedy or "recapture with the attention interior saved"),
+            analysis="head_scores",
+        )
+    return facet.value if hasattr(facet, "value") else facet
+
+
 def head_scores(
     trace: Any,
     *,
@@ -281,8 +298,7 @@ def head_scores(
         if pattern_source is not None:
             pattern = pattern_source(module)
         else:
-            facet = module.facets["pattern"]
-            pattern = facet.value if hasattr(facet, "value") else facet
+            pattern = _module_pattern(module)
         if not isinstance(pattern, torch.Tensor):
             refuse(
                 code="mi_payload_missing",

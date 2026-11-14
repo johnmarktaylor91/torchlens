@@ -61,6 +61,16 @@ Structurally absent facets are omitted and raise plain `KeyError` on item
 access. Declared facets that need additional payload capture are omitted and
 raise `MissingFacetError` with a recapture hint naming what to save.
 
+A reconstructed facet (see [Reconstruction](#reconstruction)) is checked when it
+is read and when `declared()` runs. Until then `keys()` and `has()` list it; a
+reconstruction that fails its check raises `MissingFacetError` on that read,
+leaves `keys()`, and `declared()` reports it `needs_capture`.
+
+A Module or ModuleCall does not keep its Trace alive. Reading facets through one
+after its Trace has been garbage-collected raises `RecordBindingError` with code
+`trace_reference_collected`; keep the Trace in a variable while reading. A facet
+value already read stays readable.
+
 ## Specs
 
 Recipes now return `FacetSpec` objects rather than computed tensors. A spec
@@ -368,6 +378,16 @@ z                 compared directly to the fused SDPA op output
 pattern, scores   recompute z = pattern @ V, then compare to SDPA output
 result            sum per-head W_O contributions and compare to output projection
 ```
+
+The reconstruction computes the way the fused kernel does. For bf16 and fp16
+payloads the scores and softmax run in fp32, the unnormalized probabilities are
+rounded to the payload dtype before the product with V, and z is accumulated in
+fp32, normalized and rounded once; `scores` and `pattern` are served in the
+payload dtype. A check that still fails raises `MissingFacetError` at access,
+and `declared()` reports the facet `needs_capture` with a hint to capture eager
+attention, which records the pattern as a real op. On CPU the fused kernel's
+vectorized exponential differs from `torch.exp` by a few fp32 units in the last
+place, so long half-precision rows can still fail the check.
 
 GQA/MQA uses PyTorch SDPA's `enable_gqa` repeat-interleave convention. Causal
 masks and boolean/additive tensor masks are supported. Nonzero SDPA dropout is

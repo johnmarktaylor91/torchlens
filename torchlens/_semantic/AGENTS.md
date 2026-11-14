@@ -13,6 +13,9 @@
   `FacetMenuItem`, `FacetRegistrySnapshot`, `FacetCapabilityFlags`.
 - Absence is typed, never silent: `MissingFacet`, `MissingFacetError`,
   `MissingGradient`, `AbsenceReason`.
+- `_facet_access.py` holds the access-time parts that need no facet types: the
+  collected-Trace refusal (`RecordBindingError`, `trace_reference_collected`),
+  the eager-attention remedy and the structurally-absent message text.
 - TransformerLens-style names: `enable_transformer_lens_aliases()` /
   `transformer_lens_aliases_enabled()` toggle `_TRANSFORMERLENS_ALIAS_TO_NATIVE`.
 - Registry state is module-global (`_REGISTRY`, `_REGISTRY_VERSION`); `using()`
@@ -51,7 +54,14 @@
   `sdpa_reconstruction_spec()`, `find_sdpa_op()`.
 - Reconstruction is checked, not trusted: `_reconstruct_checked()` recomputes and
   `_allclose_sdpa()` compares against the captured output; failure yields
-  `MissingFacet`, never a wrong tensor.
+  `MissingFacet`, never a wrong tensor. `FacetView.__getitem__` and `declared()`
+  turn that sentinel into `MissingFacetError` at access and a `needs_capture`
+  menu entry (`FacetView._refuse`); the served Facet pins the validated value
+  and is not cached on the view.
+- `_kernel_pattern_and_output()` follows the fused kernel's arithmetic: fp32
+  scores and softmax, unnormalized probabilities rounded to the payload dtype
+  before P@V, fp32 accumulation, one rounding of z. Change it only against the
+  kernel source, never by touching the tolerance.
 - The SDPA call's arguments come from `_sdpa_call_args.sdpa_call_arguments()`:
   `saved_args`/`saved_kwargs` when the capture saved them (`reconstruction_ready`),
   else the default capture's replay template (`args_template`: scalars as

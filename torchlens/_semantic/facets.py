@@ -24,6 +24,7 @@ from .._ir.container import OutputPathComponent
 from .._selection.selection import _SelectionOperand
 from .._utils._callable_safety import FACET_RECIPE_MARKER_ATTR
 from .._utils._record_group_table import record_member
+from . import _facet_access
 from ._facet_tensor_ops import _copy_scatter_value, _ensure_scatter_capable, _heads_geometry
 from ._families import family_entries, family_spec
 from ._structural_names import (
@@ -865,18 +866,6 @@ class MissingFacetError(KeyError):
         return f"Facet {name!r} is unavailable: {detail}. Re-run with {hint}."
 
 
-def _owning_module_class_name(record: Any) -> str:
-    """Return the module class name behind a ModuleCall-like record, else its type name."""
-
-    try:
-        owner = getattr(record, "module", None)
-    except (KeyError, RuntimeError, TypeError, ValueError):
-        # A refusal message must not raise a second error.
-        owner = None
-    owner_class = getattr(owner, "class_name", None) if not isinstance(owner, str) else None
-    return str(owner_class) if owner_class else type(record).__name__
-
-
 class MissingGrad:
     """Sentinel for a known facet gradient that is not currently saved.
 
@@ -1178,9 +1167,25 @@ class FacetView(Mapping[FacetKey, Any]):
     def declared(self) -> dict[FacetKey, FacetMenuItem]:
         """Return the provisional full declared facet menu with availability status."""
 
+        _facet_access.refuse_collected_trace(self._record)
         if not self._computed:
             self._compute()
+        for name, value in builtins.list(self._cache.items()):
+            if isinstance(value, FacetSpec) and value.capability_flags.reconstructed:
+                with contextlib.suppress(MissingFacetError):
+                    self[name]  # validates; a refusal moves the facet to needs_capture
         return dict(self._menu_cache)
+
+    def _refuse(self, name: FacetKey, refusal: str) -> AbsenceReason:
+        """Move a reconstructed facet that failed validation to the view's absences."""
+
+        remedy, detail = _facet_access.EAGER_ATTENTION_REMEDY, refusal.rstrip(".")
+        self._cache.pop(name, None)
+        previous = self._menu_cache.get(name)
+        recipe = previous.recipe if previous is not None else None
+        self._menu_cache[name] = FacetMenuItem("needs_capture", recipe, remedy, detail)
+        self._missing[name] = AbsenceReason(status="needs_capture", remedy=remedy, detail=detail)
+        return self._missing[name]
 
     def head(self, head_index: int) -> AttentionHeadView:
         """Return a scoped view for one attention head."""
@@ -1195,6 +1200,7 @@ class FacetView(Mapping[FacetKey, Any]):
         if name not in self._cache:
             self._compute()
         if name not in self._cache:
+            _facet_access.refuse_collected_trace(self._record)
             reason = self._missing.get(name)
             if reason is not None and reason.status != "structurally_absent":
                 raise MissingFacetError(name, reason)
@@ -1202,29 +1208,19 @@ class FacetView(Mapping[FacetKey, Any]):
                 # A recipe declared the facet structurally absent here: plain
                 # KeyError, the Mapping contract for a key that cannot exist.
                 raise KeyError(name)
-            raise MissingFacetError(name, self._absent_reason(name))
+            remedy, detail = _facet_access.absent_text(self._record, self._cache, name)
+            raise MissingFacetError(name, AbsenceReason("structurally_absent", remedy, detail))
         value = self._cache[name]
+        if isinstance(value, FacetSpec) and value.capability_flags.reconstructed:
+            raw = value._home_value("out")  # computes and validates the reconstruction
+            if isinstance(raw, MissingFacet):
+                _facet_access.refuse_collected_trace(self._record)
+                raise MissingFacetError(name, self._refuse(name, raw.reason))
+            return Facet(replace(value, home=lambda: raw))  # not cached: never pins the tensor
         if isinstance(value, FacetSpec):
             value = Facet(value)
             self._cache[name] = value
         return value
-
-    def _absent_reason(self, name: FacetKey) -> AbsenceReason:
-        """Describe a facet no registered recipe produces here, naming what exists."""
-
-        record = self._record
-        owner = record_member(record, "address", None) or getattr(record, "label", None) or "record"
-        class_name = getattr(record, "class_name", None) or _owning_module_class_name(record)
-        available = sorted(str(key) for key in self._cache)
-        detail = (
-            f"no registered recipe for {owner!r} ({class_name}) produces it; available facets: "
-            f"{available if available else 'none'}"
-        )
-        hint = (
-            f"register a recipe with @torchlens.facets.register(class_name={class_name!r}) "
-            f"on a function returning {{{str(name)!r}: ...}}"
-        )
-        return AbsenceReason(status="structurally_absent", remedy=hint, detail=detail)
 
     def __getattr__(self, name: str) -> Any:
         """Return a facet value by attribute name."""
