@@ -169,8 +169,8 @@ class BackwardPass:
         ops = self.aten_ops
         if trace is None or ops is None:
             return None
-        census = backward_provider("attribute_census")(trace, self, ops)
-        return backward_provider("executed_flops_record")(census)
+        census = _attribution_provider("attribute_census")(trace, self, ops)
+        return _attribution_provider("executed_flops_record")(census)
 
     def __tl_state_restore__(self, mapping: dict[str, Any]) -> None:
         """Install a state mapping through the cell descriptors (hook)."""
@@ -272,11 +272,11 @@ class BackwardPass:
         trace = self._source_trace
         ops = self.aten_ops
         if trace is not None and ops is not None:
-            return backward_provider("attribute_census")(trace, self, ops)
+            return _attribution_provider("attribute_census")(trace, self, ops)
         record = self._executed_flops_record
         if record is None:
             return None
-        return backward_provider("attribution_from_record")(trace, self.pass_number, record)
+        return _attribution_provider("attribution_from_record")(trace, self.pass_number, record)
 
     @property
     def ordinal_index(self) -> int:
@@ -349,6 +349,22 @@ def _install_backward_pass_facade() -> None:
 
 
 _install_backward_pass_facade()
+
+
+def _attribution_provider(name: str) -> Any:
+    """Return a report-side attribution provider, importing its module on first use.
+
+    The providers register when ``report._backward_attribution`` is imported; the
+    import is deferred (the report package imports the capture stack) and lives
+    here, in the reader, so the backend tier never imports the report tier.
+    """
+
+    provider = optional_backward_provider(name)
+    if provider is None:
+        from ..report import _backward_attribution  # noqa: F401  deferred: registers providers
+
+        provider = backward_provider(name)
+    return provider
 
 
 class BackwardPassAccessor(Accessor[BackwardPass]):
