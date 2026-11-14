@@ -100,7 +100,7 @@ def _seed(trace: Any, adapter: Any, values: dict[str, Any], loss_fn: Any) -> dic
             code=_REFUSAL,
         )
     recipe = adapter.recipe(trace, outputs[0])
-    label = str(outputs[0]._label_raw) if recipe is None else recipe.output_slots[0]
+    label = str(outputs[0].label) if recipe is None else recipe.output_slots[0]
     from tinygrad import Tensor
 
     leaf = Tensor(values[label].numpy())
@@ -133,7 +133,7 @@ def _input_records(
 
     argnums = _normalize_tinygrad_input_grad_argnums(grad_options.input_grad_argnums, len(args))
     label_by_path = {
-        "inputs." + ".".join(op.container_path): str(op._label_raw)
+        "inputs." + ".".join(op.container_path): str(op.label)
         for op in trace._layer_list
         if op.is_input
     }
@@ -170,10 +170,10 @@ def _intermediate_records(
             op_label=op.label,
             layer_label=op.layer_label,
             provenance=dict(provenance),
-            **_record_fields(backend, result.grads[str(op._label_raw)]),
+            **_record_fields(backend, result.grads[str(op.label)]),
         )
         for op in graph_ops
-        if op.has_saved_activation and result.grads.get(str(op._label_raw)) is not None
+        if op.has_saved_activation and result.grads.get(str(op.label)) is not None
     }
 
 
