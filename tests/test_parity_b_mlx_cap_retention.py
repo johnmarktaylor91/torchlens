@@ -195,6 +195,21 @@ def test_random_forward_gives_identical_values() -> None:
     )
 
 
+def _bfloat16_linear_runs() -> bool:
+    """Whether this MLX build evaluates a bfloat16 linear layer (Linux CPU builds do not)."""
+
+    layer = nn.Linear(2, 2)
+    layer.set_dtype(mx.bfloat16)
+    try:
+        mx.eval(layer(mx.ones((1, 2), dtype=mx.bfloat16)))
+    except RuntimeError:
+        return False
+    return True
+
+
+@pytest.mark.skipif(
+    not _bfloat16_linear_runs(), reason="this MLX build has no bfloat16 matmul kernel"
+)
 def test_bfloat16_witnesses_spill() -> None:
     """Half-precision witnesses spill to disk too."""
 
