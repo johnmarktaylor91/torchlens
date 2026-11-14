@@ -447,7 +447,11 @@ def _declares_backward_capture(trace: Trace) -> bool:
     declare it, so the inert arms still run on it (fail closed).
     """
 
-    backend = trace._provenance_backend
+    try:
+        backend = trace._provenance_backend
+    except AttributeError:
+        # A stand-in with no backend field declares nothing, so the inert arms run.
+        return False
     if not isinstance(backend, str) or backend == "":
         return False
     try:
