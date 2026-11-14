@@ -204,7 +204,7 @@ def do_signal_plan(trace: Trace, plan: _SignalPlan, request: _SignalDoRequest) -
         ``set_only``.
     """
 
-    backend = getattr(trace, "_provenance_backend", None) or TORCH_BACKEND_NAME
+    backend = trace._provenance_backend or TORCH_BACKEND_NAME
     if backend != TORCH_BACKEND_NAME:
         return cast("Trace", do_signal_plan_off_torch(trace, plan, request, backend))
     preflight_txn = _preflight_signal_do(trace, plan, request)

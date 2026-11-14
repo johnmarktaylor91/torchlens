@@ -79,7 +79,7 @@ def armed_hooks_by_call(trace: Any) -> dict[int, tuple[tuple[tuple[Any, ...], An
         ``(output path, armed edit, raw label)`` per call ordinal, in arming order.
     """
 
-    ops = {getattr(op, "_label_raw", None): op for op in getattr(trace, "_layer_list", ())}
+    ops = {getattr(op, "_label_raw", None): op for op in trace._layer_list}
     hooks: dict[int, tuple[tuple[tuple[Any, ...], Any, str], ...]] = {}
     for edit in grad_site_neutral().armed_grad_sites(trace):
         op = ops.get(edit.label)
@@ -105,11 +105,11 @@ def _is_boundary_output(op: Any) -> bool:
 def _seed_label(trace: Any, halt_call_id: int | None) -> str:
     """Raw label of the op whose output the loss is computed from."""
 
-    ops = tuple(getattr(trace, "_layer_list", ()))
+    ops = tuple(trace._layer_list)
     if halt_call_id is not None:
         found = [op for op in ops if record_member(op, "func_call_id", None) == halt_call_id]
     else:
-        by_label = getattr(trace, "_layer_dict_all_keys", {})
+        by_label = trace._layer_dict_all_keys
         labels = dict.fromkeys(getattr(trace, "output_layers", ()) or ())
         found = [by_label[label] for label in labels if label in by_label]
     if len(found) != 1:
@@ -129,7 +129,7 @@ def _engine_ops(trace: Any) -> tuple[Any, ...]:
 
     return tuple(
         op
-        for op in getattr(trace, "_layer_list", ())
+        for op in trace._layer_list
         if not record_member(op, "is_input", False) and not _is_boundary_output(op)
     )
 

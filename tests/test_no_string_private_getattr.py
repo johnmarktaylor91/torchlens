@@ -185,9 +185,20 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # `_jax_capture_index_to_raw_op_label` map with the {} default, the idiom
     # already ledgered at backend.py for that exact field.
     "backends/jax": 6,
-    "backends/mlx": 19,
-    "backends/paddle": 18,
-    "backends/tf": 8,
+    # backends/mlx 19 -> 20 (wave B batch 2 merge): the edit replay reads the
+    # `_mlx_op_captures` sidecar with the () default; a loaded trace has none,
+    # the idiom already ledgered at _replay_status.py for that exact field.
+    "backends/mlx": 20,
+    # backends/paddle 18 -> 22 (wave B batch 2 merge): the gradient-site pass and
+    # edit replay read the `_paddle_intervention_runtime` seam (x3; absent unless
+    # the capture ran an intervention, the idiom ledgered at backend.py) and the
+    # interventions read the `_paddle_edit_replay_tap` (absent outside one
+    # replayed forward, so None is the "not replaying" reading).
+    "backends/paddle": 22,
+    # backends/tf 8 -> 9 (wave B batch 2 merge): the replay exemptions read the
+    # absence of `_tf_static_region_labels` as "captured eagerly" (the field is
+    # set only by a static-region capture).
+    "backends/tf": 9,
     "backends/tinygrad": 4,
     # 0 -> 1 (2026-11-12 parity-train merge): the shared replay-input reader in
     # _validation_shared.py reads the scrub-declared runtime-only
