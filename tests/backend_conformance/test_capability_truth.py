@@ -394,9 +394,10 @@ def test_backward_accessor_guard_without_derived_surface_has_no_redirect(
     """A backend declaring no derived-gradient surface must not get the redirect.
 
     Every registered preview now declares ``intermediate_derived_grads=True``,
-    so the no-surface branch is exercised through a flag-flipped spec: the
-    guard must keep refusing typed without pointing at an accessor that does
-    not exist.
+    so the no-surface branch is exercised through a flag-flipped spec (TF's,
+    with backward capture and the derived surface both undeclared): the guard
+    must keep refusing typed without pointing at an accessor that does not
+    exist.
     """
 
     from torchlens._data_classes import _backend_capability_guards as guards
@@ -404,7 +405,9 @@ def test_backward_accessor_guard_without_derived_surface_has_no_redirect(
     original = tl.backends.spec("tf")
     flipped = dataclasses.replace(
         original,
-        capabilities=dataclasses.replace(original.capabilities, intermediate_derived_grads=False),
+        capabilities=dataclasses.replace(
+            original.capabilities, backward_capture=False, intermediate_derived_grads=False
+        ),
     )
     monkeypatch.setattr(guards, "get_backend_spec", lambda _name: flipped)
     with pytest.raises(ValueError, match="declares no derived-gradient surface"):
