@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from ..._capture.salient_args import extract_salient_args
 from ..._data_classes.internal_types import FuncExecutionContext
 from ..._ir.events import (
     OutputVersionEvent,
@@ -19,7 +20,6 @@ from ._call_layout import planned_slot_call, split_call_arguments
 from ._completeness_origins import internal_scalar_read
 from ._ops_function_family import NAME_FAMILY, name_family
 from ._storage_exports import note_alias_rebound_snapshot, note_foreign_written_snapshot
-from ._thin_defer import set_function_config
 from ._thin_settle import SHARED_CALL_DEFAULTS, settle_non_tensor_args
 from .aliasing import (
     get_parent_contents_for_contract_position,
@@ -122,7 +122,10 @@ def _build_shared_fields_dict(
         fields_dict["unattributed_tensor_args"] = unattributed
         fields_dict["dropped_edge_tensor_args"] = dropped
         # Function config: lightweight hyperparameter extraction, always on.
-        set_function_config(fields_dict, (layer_type, func_name, args, kwargs), defer)
+        param_shapes: list[tuple[int, ...]] | None = fields_dict.get("param_shapes")
+        fields_dict["func_config"] = extract_salient_args(
+            layer_type, func_name, args, kwargs, param_shapes
+        )
 
         return fields_dict, parent_records, arg_tensors, parent_param_ops
     finally:

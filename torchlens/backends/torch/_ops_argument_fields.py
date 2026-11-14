@@ -357,7 +357,8 @@ def _set_arg_template_fields(
     Observes here every fact the stored values carry (labels, layouts, literals, copies
     and the function key, read at the call), then resolves them with
     ``resolve_arg_template_fields``, a pure function of those facts and the layout plan:
-    now, or (``defer``, the thin path) when the row fills.
+    now, or (``defer``, the thin path, for a call that records a template) when the row
+    fills.
     """
     # The portable function identity is what lets a LOADED bundle resolve its
     # callables for validation; a default capture records templates only for
@@ -386,7 +387,7 @@ def _set_arg_template_fields(
             else None
         )
         observed = (None, False, False, key)
-    if defer:
+    if defer and observed[0] is not None:
         defer_arg_template(fields_dict, observed, parts)
     else:
         resolve_arg_template_fields(fields_dict, observed, parts)

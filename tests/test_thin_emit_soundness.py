@@ -10,8 +10,8 @@ model state both forwards leave, and the fast-lane admission count. The deferred
 cases change what a call read before any row fills (inputs mutated in place, the
 containers it was given changed, inputs deleted, bases of its views mutated), with
 the default capture and with saved arguments, since a thin row resolves its argument
-template and its function config at the fill (``_thin_defer``). The direct tests pin
-the folded admission check, the deferred resolution and the layering contract.
+template at the fill (``_thin_defer``). The direct tests pin the folded admission
+check, the deferred resolution and the layering contract.
 """
 
 from __future__ import annotations
@@ -41,7 +41,6 @@ from tests.test_plain_emit_soundness import (
     _Raises,
     _x,
 )
-from torchlens._capture.salient_args import extract_salient_args
 from torchlens._ir import _row_journal
 from torchlens._postprocess._step_views import MIN_COLUMN_OPS
 from torchlens.backends.torch import (
@@ -455,54 +454,24 @@ def test_views_of_mutated_bases(thin: dict[str, int], save_args: bool) -> None:
     assert hits > 0
 
 
-def test_thin_rows_resolve_the_deferred_families_at_fill(
+def test_thin_rows_resolve_the_deferred_template_at_fill(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A thin row holds its template and argument-reading config unresolved until it fills."""
+    """A thin row holds its recorded template facts unresolved until it fills, then drops them."""
 
-    seen: list[tuple[bool, bool, bool]] = []
+    seen: list[tuple[bool, bool]] = []
     real_fill = _thin_record._ThinRow._fill
 
     def spy(row: Any) -> None:
         fields = row.fields
-        seen.append(
-            (_thin_defer.DEFERRED in fields, "args_template" in fields, "func_config" in fields)
-        )
+        seen.append((_thin_defer.DEFERRED in fields, "args_template" in fields))
         real_fill(row)
         assert _thin_defer.DEFERRED not in fields
-        assert {"args_template", "kwargs_template", "func_id", "func_config"} <= fields.keys()
+        assert {"args_template", "kwargs_template", "func_id"} <= fields.keys()
 
     monkeypatch.setattr(_thin_record._ThinRow, "_fill", spy)
     tl.trace(nn.Sequential(nn.Linear(3, 3), nn.Softmax(dim=1), nn.ReLU()), torch.randn(2, 3))
-    assert seen and all(deferred and not template for deferred, template, _ in seen)
-    assert any(not config for _, _, config in seen), "no argument-reading config was deferred"
-    assert any(config for _, _, config in seen), "a config with no extractor was deferred"
-
-
-def test_set_function_config_matches_the_eager_extraction() -> None:
-    """Deferred, the config equals the eager one; a refused record resolves at the call."""
-
-    x = torch.randn(2, 3)
-    pad = [1, 2]
-    call = ("pad", "pad", (x, pad), {})
-    eager: dict[str, Any] = {}
-    _thin_defer.set_function_config(eager, call, False)
-    deferred: dict[str, Any] = {}
-    _thin_defer.set_function_config(deferred, call, True)
-    assert "func_config" not in deferred
-    pad.append(9)
-    x.resize_(4, 4)
-    _thin_defer.resolve_deferred(deferred)
-    assert deferred == eager and _thin_defer.DEFERRED not in deferred
-
-    class Holder(set):  # a container the recorder does not rebuild, holding a tensor
-        pass
-
-    refused: dict[str, Any] = {}
-    odd = ("softmax", "softmax", (torch.randn(2),), {"dim": 0, "holder": Holder({torch.ones(1)})})
-    _thin_defer.set_function_config(refused, odd, True)
-    assert _thin_defer.DEFERRED not in refused
-    assert refused["func_config"] == extract_salient_args(*odd) == {"dim": 0}
+    assert seen and all(deferred and not template for deferred, template in seen)
 
 
 def _at_ingest(monkeypatch: pytest.MonkeyPatch, hook: Callable[[], None]) -> None:
@@ -608,9 +577,7 @@ def test_thin_modules_import_nothing_from_the_capture_cycle() -> None:
     """The ``_thin_*`` modules import only modules outside the capture import cycle."""
 
     allowed = {
-        "..._capture._recorded_tensor",
         "..._capture.plan",
-        "..._capture.salient_args",
         "..._ir._row_journal",
         "..._utils.display",
         "..._utils._internal_read",
