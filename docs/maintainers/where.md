@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-90 packages, 1893 modules, 741592 lines, 0 modules without a docstring.
+90 packages, 1893 modules, 741647 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 56 | 26853 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1504 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 9 | 4798 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 125 | 43152 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 125 | 43160 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives, artifact v2 and model identity. | 4 | 1263 |
 | `torchlens._distributed` | Honest detection of distributed (DTensor / device-mesh / TP / PP) model state. | 5 | 3101 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 602 |
@@ -54,7 +54,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.attribution` | Input-attribution methods for TorchLens. | 31 | 15152 |
 | `torchlens.attribution._graph` | Attribution graphs: direct linear effects between transcoder features, errors, tokens and logits. | 7 | 2550 |
 | `torchlens.attribution._onebackward` | One-backward attribution reads: one backward pass seeded at gradient edges resolved from existing op fields, returned as a :class:'ReadTa... | 11 | 3881 |
-| `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 27 | 8449 |
+| `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 27 | 8450 |
 | `torchlens.backends._backward_native` | Native backward capture, one private module per backend. | 8 | 3837 |
 | `torchlens.backends._protocols` | Per-backend ''BackendProtocol'' objects, kept import-light. | 8 | 928 |
 | `torchlens.backends._replay_adapters` | Private per-backend replay adapters (see :mod:'._contract'). | 10 | 4984 |
@@ -62,8 +62,8 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.jax` | JAX backend exports. | 34 | 12573 |
 | `torchlens.backends.mlx` | MLX backend for TorchLens. | 24 | 8927 |
 | `torchlens.backends.paddle` | Paddle backend. | 24 | 9037 |
-| `torchlens.backends.tf` | TensorFlow backend exports. | 28 | 11025 |
-| `torchlens.backends.tinygrad` | tinygrad backend. | 21 | 6785 |
+| `torchlens.backends.tf` | TensorFlow backend exports. | 28 | 11031 |
+| `torchlens.backends.tinygrad` | tinygrad backend. | 21 | 6824 |
 | `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 140 | 59511 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8876 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2741 |
@@ -80,7 +80,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.experimental` | Experimental TorchLens APIs with unstable naming and behavior. | 2 | 372 |
 | `torchlens.export` | Static export helpers for TorchLens logs. | 15 | 5549 |
 | `torchlens.export._model_explorer` | Google Model Explorer export: a writer for Model Explorer's file-ingest schema with module-hierarchy namespaces, op-type labels, ported e... | 16 | 3039 |
-| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 91 | 39493 |
+| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 91 | 39494 |
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1923 |
 | `torchlens.intervention._topology` | Topology comparison and supergraph construction for intervention bundles. | 2 | 798 |
 | `torchlens.io` | Public I/O and administrative helpers for TorchLens. | 1 | 432 |
@@ -319,7 +319,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (9 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (125 modules, 43152 lines)
+Core data structures for representing a logged forward pass. (125 modules, 43160 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -395,7 +395,7 @@ Core data structures for representing a logged forward pass. (125 modules, 43152
 | `_trace_accessors` | Trace accessor helpers. | 759 |
 | `_trace_annotations` | Trace annotation family: user notes and tags on a finished trace. | 405 |
 | `_trace_aten` | Public ATen-operation accessors for ''Trace'' (''CaptureOptions(aten_ops=True)''). | 73 |
-| `_trace_components` | Declared Trace field-to-component ownership map. | 630 |
+| `_trace_components` | Declared Trace field-to-component ownership map. | 638 |
 | `_trace_docs` | Bind the full ''Trace'' method docstrings kept in the ''_trace_docs_*'' tables. | 49 |
 | `_trace_docs_intervention` | Full docstrings of the ''Trace'' intervention verbs, hooks and forks methods. | 189 |
 | `_trace_docs_output` | Full docstrings of the ''Trace'' drawing, summaries, export, stacking and narration methods. | 622 |
@@ -1347,7 +1347,7 @@ One-backward attribution reads: one backward pass seeded at gradient edges resol
 
 ### `torchlens.backends`
 
-Backend Protocol and public registry exports for TorchLens adapters. (27 modules, 8449 lines)
+Backend Protocol and public registry exports for TorchLens adapters. (27 modules, 8450 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1355,7 +1355,7 @@ Backend Protocol and public registry exports for TorchLens adapters. (27 modules
 | `_backend_names` | The canonical default-backend name, split out of :mod:'torchlens.backends.registry'. | 20 |
 | `_backend_protocol` | The one backend protocol every TorchLens backend fills, torch included. | 507 |
 | `_backward_neutral` | Backward records built from backend-neutral backward events. | 552 |
-| `_capability_bindings` | Lazy capability-implementation resolvers for the default backend specs. | 257 |
+| `_capability_bindings` | Lazy capability-implementation resolvers for the default backend specs. | 259 |
 | `_constants` | The shared constants rule every preview backend's finalize step applies. | 589 |
 | `_default_specs` | Default public backend specs registered by TorchLens. | 1122 |
 | `_default_specs_tf` | TensorFlow / Keras runtime probes used by the default backend specs. | 102 |
@@ -1370,7 +1370,7 @@ Backend Protocol and public registry exports for TorchLens adapters. (27 modules
 | `_intervention_evidence` | Which traces carry the intervention evidence a Trace's pristine reading uses. | 92 |
 | `_invariants` | Run the metadata-invariant tripwire from a backend's validate path. | 23 |
 | `_module_returns` | Recorded module returns: how a preview backend hands module-call outputs to the finalizer. | 234 |
-| `_options` | Shared backend trace-option defaulting and rejection helpers. | 751 |
+| `_options` | Shared backend trace-option defaulting and rejection helpers. | 750 |
 | `_protocol` | Backend Protocol for unified TorchLens capture. | 354 |
 | `_reverse_engine` | Reverse gradient engine over a captured graph, through a backend's replay adapter. | 227 |
 | `_root_frames` | The root call's frame in preview op module stacks. | 76 |
@@ -1543,7 +1543,7 @@ Paddle backend. (24 modules, 9037 lines)
 
 ### `torchlens.backends.tf`
 
-TensorFlow backend exports. (28 modules, 11025 lines)
+TensorFlow backend exports. (28 modules, 11031 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1552,7 +1552,7 @@ TensorFlow backend exports. (28 modules, 11025 lines)
 | `_capture_hooks` | Optional capture hooks the TensorFlow eager path calls around its forward. | 98 |
 | `_edited_replay` | TensorFlow derived-gradient replay of the program the capture actually ran. | 121 |
 | `_grad_site_door` | ''Trace.do'' with a ''tl.grad'' site on a TensorFlow trace. | 84 |
-| `_grad_sites` | TensorFlow ''tl.grad'' edit sites: arming and the gradient-replay tape edit. | 180 |
+| `_grad_sites` | TensorFlow ''tl.grad'' edit sites: arming and the gradient-replay tape edit. | 185 |
 | `_halt` | TensorFlow ''trace(stop_after=...)'': halt the eager forward at a frontier op. | 220 |
 | `_helper_hooks` | TensorFlow applications of the built-in edit helpers. | 218 |
 | `_intervention_hooks` | Leaf helpers for the TensorFlow intervention layer (no imports from the capture core). | 132 |
@@ -1560,7 +1560,7 @@ TensorFlow backend exports. (28 modules, 11025 lines)
 | `_raw_op_replay` | Raw-op replay kernels for TensorFlow validation. | 457 |
 | `_record` | The TensorFlow ''tl.record'' producer: lean per-op events, values only when selected. | 267 |
 | `_replay_exemptions` | Per-op decisions the TensorFlow validator takes before replaying an op. | 174 |
-| `_retention` | Capture-time retention for the TensorFlow eager path. | 134 |
+| `_retention` | Capture-time retention for the TensorFlow eager path. | 135 |
 | `_source_context` | Source lines for TensorFlow eager ops: the user frames that ran each op. | 115 |
 | `_tensor_leaves` | Tensor-leaf helpers shared by the TensorFlow intervention engine (file cap split). | 62 |
 | `_tensor_probe` | TensorFlow tensor probes for the eager op-callback capture (file cap split). | 277 |
@@ -1578,7 +1578,7 @@ TensorFlow backend exports. (28 modules, 11025 lines)
 
 ### `torchlens.backends.tinygrad`
 
-tinygrad backend. (21 modules, 6785 lines)
+tinygrad backend. (21 modules, 6824 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1588,9 +1588,9 @@ tinygrad backend. (21 modules, 6785 lines)
 | `_derived_grads` | Derived-gradient helpers for the tinygrad backend. | 280 |
 | `_edit_plan` | Resolution of ''trace(intervene=tl.when(...))'' to a tinygrad edit. | 151 |
 | `_edited_grads` | Derived gradients of an edited tinygrad capture. | 217 |
-| `_edits` | Edits applied during a tinygrad capture. | 401 |
+| `_edits` | Edits applied during a tinygrad capture. | 405 |
 | `_execution_guard` | Execution guard for tinygrad capture. | 78 |
-| `_grad_site_grads` | ''tl.grad'' edit sites on a tinygrad capture, applied in derived gradients. | 230 |
+| `_grad_site_grads` | ''tl.grad'' edit sites on a tinygrad capture, applied in derived gradients. | 232 |
 | `_helper_edits` | Built-in edit helpers applied to tinygrad Tensors. | 152 |
 | `_module_tree` | tinygrad object-module tree, call frames, and the module returns each call records. | 155 |
 | `_observer` | Tensor-API observation for the tinygrad capture. | 160 |
@@ -1599,7 +1599,7 @@ tinygrad backend. (21 modules, 6785 lines)
 | `_retention` | Retention decided at capture for a tinygrad ''save='' selector. | 253 |
 | `_rules` | tinygrad adoption of the shared backend rules: typed refusals, named verdicts, constants. | 323 |
 | `_source_lines` | User source lines for the ops of a tinygrad capture. | 191 |
-| `_uop_graph` | UOp-graph walks the tinygrad capture records ops from. | 283 |
+| `_uop_graph` | UOp-graph walks the tinygrad capture records ops from. | 316 |
 | `_value_edits` | Edit conditions that read predicate contexts, matched on a tinygrad capture. | 67 |
 | `backend` | UOp-snapshot tinygrad backend. | 2973 |
 | `capabilities` | Registry-backed capability exports for the tinygrad backend. | 38 |
@@ -2037,7 +2037,7 @@ Google Model Explorer export: a writer for Model Explorer's file-ingest schema w
 
 ### `torchlens.intervention`
 
-Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (91 modules, 39493 lines)
+Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (91 modules, 39494 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -2065,7 +2065,7 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `_facet_union` | Facet unions at the write doors: ''head_a \| head_b'' splits into its facet branches. | 170 |
 | `_facet_writes` | Facet writes: which records serve facet views, and the facet slice an edit is writing. | 253 |
 | `_grad_site_neutral` | ''tl.grad'' edit sites on any backend with a replay adapter. | 534 |
-| `_grad_site_plan` | Gradient-site plans for ''Trace.do'': split, preflight, arm and settle. | 702 |
+| `_grad_site_plan` | Gradient-site plans for ''Trace.do'': split, preflight, arm and settle. | 703 |
 | `_gradient_contract` | The gradient contract for edits: ''keep_grad(edit)'' and its connectivity check. | 243 |
 | `_helper_fingerprint` | Content fingerprints of the tensors a staged helper closes over. | 248 |
 | `_helper_internals` | Private internals shared by the builtin intervention helpers. | 790 |

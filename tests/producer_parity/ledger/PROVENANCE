@@ -6219,3 +6219,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 39bbac09201b928f78914a9c9f40c8dbb65f752d
 recorded: 2026-11-14T00:18:31Z
+---
+generator: scripts/regen_ledgers.py (producer static half)
+flag: none (deterministic ledger step)
+reason: pp-merge-b: wave B batch 2 merges
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 2df4758bbb0f1ce2c14bf488f7bebfabd9ac95e8
+recorded: 2026-11-14T01:23:41Z
