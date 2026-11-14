@@ -523,10 +523,12 @@ GradRule = tuple[Any, Any]
 """One gradient clause: ``(gradient site, edit)``."""
 
 
-def _backward_refusal(message: str) -> BackendUnsupportedError:
+def _backward_refusal(
+    message: str, *, code: str = PADDLE_REFUSAL_BACKWARD
+) -> BackendUnsupportedError:
     """Return the typed refusal for a gradient address Paddle cannot arm."""
 
-    return BackendUnsupportedError(message, code=PADDLE_REFUSAL_BACKWARD)
+    return BackendUnsupportedError(message, code=code)
 
 
 def _intervention_hooks() -> Any:
@@ -551,7 +553,8 @@ def _split_rule(rule: Any) -> tuple[list[Any], list[GradRule]]:
             raise _backward_refusal(
                 f"the paddle backend cannot arm {branch!r}: autograd-node selectors "
                 "(tl.grad_fn, tl.grad_input, ...) address recorded backward nodes, which "
-                "paddle does not record. tl.grad(site) addresses are supported."
+                "paddle does not record. tl.grad(site) addresses are supported.",
+                code=PADDLE_REFUSAL_BACKWARD,
             )
     return live, grads
 

@@ -72,7 +72,8 @@ def _mean_axes(helper: Any) -> tuple[int, ...] | None:
     if _first(helper, "source") is not None or "population_identity" in kwargs:
         raise _refusal(
             "paddle tl.mean_ablate(...) interventions support the self form "
-            "(source=None); tensor, op and population sources are torch-side semantics."
+            "(source=None); tensor, op and population sources are torch-side semantics.",
+            code=PADDLE_REFUSAL_OPTION,
         )
     dim = kwargs.get("dim")
     if dim is None:
@@ -81,7 +82,8 @@ def _mean_axes(helper: Any) -> tuple[int, ...] | None:
     if not isinstance(axes, tuple) or not all(isinstance(axis, int) for axis in axes):
         raise _refusal(
             f"paddle tl.mean_ablate(dim={dim!r}) is unsupported; pass None, an int or a "
-            "tuple of ints."
+            "tuple of ints.",
+            code=PADDLE_REFUSAL_OPTION,
         )
     return axes
 
@@ -166,7 +168,8 @@ def resolve_paddle_helper(helper: Any, paddle: Any) -> Callable[[Any], Any]:
     raise _refusal(
         f"the paddle backend has no adapter for intervention helper {helper.name!r}; "
         f"supported builtin helpers: {', '.join(PADDLE_SUPPORTED_HELPER_NAMES)}. Pass a "
-        "callable hook operating on paddle.Tensor values, or use the PyTorch backend."
+        "callable hook operating on paddle.Tensor values, or use the PyTorch backend.",
+        code=PADDLE_REFUSAL_OPTION,
     )
 
 

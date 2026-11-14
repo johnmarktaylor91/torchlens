@@ -57,10 +57,12 @@ def grad_site_call(label: str, call_index: int) -> Any:
     return grad_site_neutral().GradSiteCall(label, 0, call_index, 1)
 
 
-def _backward_refusal(message: str) -> BackendUnsupportedError:
+def _backward_refusal(
+    message: str, *, code: str = PADDLE_REFUSAL_BACKWARD
+) -> BackendUnsupportedError:
     """Return the typed refusal for a gradient address Paddle cannot arm."""
 
-    return BackendUnsupportedError(message, code=PADDLE_REFUSAL_BACKWARD)
+    return BackendUnsupportedError(message, code=code)
 
 
 def armed_hooks_by_call(trace: Any) -> dict[int, tuple[tuple[tuple[Any, ...], Any, str], ...]]:
@@ -86,7 +88,8 @@ def armed_hooks_by_call(trace: Any) -> dict[int, tuple[tuple[tuple[Any, ...], An
             raise _backward_refusal(
                 f"the paddle backend cannot apply the tl.grad edit at {edit.label!r}: the "
                 "site is not the output of a recorded wrapped call (an input leaf or a "
-                "constant), so the derived-gradient replay has no call to attach it to."
+                "constant), so the derived-gradient replay has no call to attach it to.",
+                code=PADDLE_REFUSAL_BACKWARD,
             )
         path = tuple(record_member(op, "container_path", ()) or ())
         hooks[int(call_id)] = (*hooks.get(int(call_id), ()), (path, edit, edit.label))
@@ -112,7 +115,8 @@ def _seed_label(trace: Any, halt_call_id: int | None) -> str:
     if len(found) != 1:
         raise _backward_refusal(
             "paddle tl.grad(...) edits with derived gradients need a single tensor model "
-            f"output (or halted frontier); this capture has {len(found)} output ops."
+            f"output (or halted frontier); this capture has {len(found)} output ops.",
+            code=PADDLE_REFUSAL_BACKWARD,
         )
     op = found[0]
     if _is_boundary_output(op):
@@ -160,7 +164,8 @@ def _check_input_leaves(
             raise _backward_refusal(
                 f"paddle tl.grad(...) edits: the edited gradient of {leaf.path!r} from "
                 "paddle.grad disagrees with the reverse-engine recomputation; refusing to "
-                "publish derived gradients."
+                "publish derived gradients.",
+                code=PADDLE_REFUSAL_BACKWARD,
             )
 
 
@@ -228,7 +233,8 @@ def _engine_pass(backend: Any, trace: Any, replay_output: Any, loss_fn: Any) -> 
     if not backend.is_tensor(replay_output):
         raise _backward_refusal(
             "paddle tl.grad(...) edits with derived gradients need a single tensor model "
-            "output (or halted frontier)."
+            "output (or halted frontier).",
+            code=PADDLE_REFUSAL_BACKWARD,
         )
     runtime = getattr(trace, "_paddle_intervention_runtime", None)
     seed_label = _seed_label(trace, None if runtime is None else runtime.halt_call_id)
@@ -249,7 +255,8 @@ def _saved_value(trace: Any, label: str) -> Any:
     if op.out is None:
         raise _backward_refusal(
             f"paddle tl.grad(...) edits with derived gradients need the activation of "
-            f"{op.label!r}, which this capture did not save; capture with save=True."
+            f"{op.label!r}, which this capture did not save; capture with save=True.",
+            code=PADDLE_REFUSAL_BACKWARD,
         )
     return op.out
 
