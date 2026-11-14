@@ -32,7 +32,7 @@ def _held_until_flip(backend: str) -> pytest.MarkDecorator:
     )
 
 
-def _tf_trace() -> tuple[Any, Any]:
+def _tf_trace(*, backward_ready: bool = True) -> tuple[Any, Any]:
     tf = pytest.importorskip("tensorflow")
 
     class Raw(tf.Module):
@@ -47,7 +47,7 @@ def _tf_trace() -> tuple[Any, Any]:
         Raw(),
         tf.constant(_X),
         backend="tf",
-        capture=tl.options.CaptureOptions(backward_ready=True),
+        capture=tl.options.CaptureOptions(backward_ready=backward_ready),
     )
     return trace, lambda out: tf.reduce_sum(out * out)
 
@@ -94,3 +94,15 @@ def test_backward_ready_trace_saves_and_loaded_backward_refuses(
     assert len(loaded.autograd.backward_passes) == len(trace.autograd.backward_passes)
     with pytest.raises(RunCapabilityUnavailableError):
         loaded.backward(loss)
+
+
+def test_plain_tf_trace_saves_without_grad_site_bookkeeping(tmp_path: Path) -> None:
+    """A plain TF capture arms its (empty) tl.grad sites; the bookkeeping never saves."""
+
+    trace, _ = _tf_trace(backward_ready=False)
+    assert "_tf_grad_sites_armed" in trace.__dict__
+    path = tmp_path / "plain.tlspec"
+    trace.save(str(path))
+    loaded = tl.load(str(path))
+    assert "_tf_grad_sites_armed" not in loaded.__dict__
+    assert len(loaded.layers) == len(trace.layers)

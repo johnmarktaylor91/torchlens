@@ -49,6 +49,11 @@ TRACE_PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
     "_paddle_backward_state": FieldPolicy.DROP,
     "_tinygrad_backward_state": FieldPolicy.DROP,
     "_jax_backward_captures": FieldPolicy.DROP,
+    # TensorFlow tl.grad bookkeeping: the capture's staged clauses (live hooks)
+    # and the sites already armed in the session's weak grad-site table. A loaded
+    # trace has no armed sites, so neither is portable.
+    "_tf_grad_site_clauses": FieldPolicy.DROP,
+    "_tf_grad_sites_armed": FieldPolicy.DROP,
     # JAX capture scratch the v11 groups lane moved behind provenance/options
     # views: written by the JAX backend, read back by it, never portable.
     "_provenance_jax_closed_jaxpr": FieldPolicy.DROP,
