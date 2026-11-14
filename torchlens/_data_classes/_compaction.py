@@ -187,65 +187,69 @@ def _compact_store_rows(
     rows = store.rows_building()
     if rows is None:
         return
-    helpers = (_POOLED_CLASSES, _pool_container_members, _pool_value)
+    pooled_classes = _POOLED_CLASSES
+    pool_get = pool.get
+    helpers = (pooled_classes, _pool_container_members, _pool_value)
+    inert = _inert_columns(rows, store.layout.names)  # D stays: see _inert_columns
     for fid, name in enumerate(store.layout.names):
-        if name in _UNPOOLED_SLOTS:
+        if name in _UNPOOLED_SLOTS or fid in inert:
             continue
         if name in _BY_OBJECT_FIELDS and _sweep_by_object(rows, fid, pool, tokens, helpers):
             continue
-        _sweep_column(rows, fid, pool, tokens, helpers)
+        for row_cells in rows:
+            value = row_cells[fid]
+            if value is None or value is _MISSING:
+                continue
+            cls = value.__class__
+            if cls is bool or cls is int or cls is LazyCell or cls is float:
+                continue  # plain numbers never pool; a default-omitted cell holds no value
+            if cls in pooled_classes and (cls is not Duration or not value):
+                key = (cls, value.hex()) if cls is Duration else (cls, value)
+                pooled = pool_get(key)
+                if pooled is None:
+                    pool[key] = value
+                elif pooled is not value:
+                    row_cells[fid] = pooled
+            elif cls is list or cls is set or cls is dict:
+                if cls is dict and tokens is not None and members_inert(tokens, value):
+                    continue
+                _pool_container_members(value, pool, 0)
+            elif cls is tuple or cls is frozenset:
+                pooled = _pool_value(value, pool)
+                if pooled is not value:
+                    row_cells[fid] = pooled
+            elif isinstance(value, dict):
+                _pool_container_members(value, pool, 0)
 
 
 #: Cell classes the per-cell ladder never pools or descends into: ``None``, the
 #: unset sentinel, a default-omitted cell and the plain numbers.
 _INERT_CELL_CLASSES = frozenset({type(None), type(_MISSING), LazyCell, bool, int, float})
 
+#: Fewest rows at which the inert-column scan pays for itself (the postprocess
+#: column threshold); shorter stores keep the plain per-cell ladder.
+_COLUMN_SKIP_MIN_ROWS = 32
 
-def _sweep_column(
-    rows: list[list[Any]],
-    fid: int,
-    pool: dict[Any, Any],
-    tokens: ContainerTokens | None,
-    helpers: tuple[Any, Any, Any],
-) -> None:
-    """Pool one column cell by cell (the per-cell ladder of ``Op._compact_metadata``).
 
-    A column whose cells are all of an inert class is skipped whole: the ladder
-    leaves each such cell as it is, so the skip changes no cell and no pool entry.
-    Any other column visits its cells in row order, as before.
+def _inert_columns(rows: list[list[Any]], names: Any) -> frozenset[int]:
+    """Return the ids of the plain-ladder fields whose every cell is of an inert class.
+
+    ``_compact_store_rows``'s per-cell ladder leaves each such cell as it is, so
+    skipping the column changes no cell and no pool entry; every other column is
+    visited as before. By-object fields keep their own sweep and are never
+    listed. A store under ``_COLUMN_SKIP_MIN_ROWS`` rows gets no skips: the scan
+    would cost the one-op trace more than it saves. The skip is one test on the
+    ladder's existing ``continue`` line, so the ladder's grade does not change.
     """
 
-    # Essential complexity (D): the class ladder moved here whole from
-    # _compact_store_rows, which drops to its column dispatch; it stays one hot
-    # loop because a call per cell would cost more than the skip saves.
-    column = [row_cells[fid] for row_cells in rows]
-    if _INERT_CELL_CLASSES.issuperset(map(type, column)):
-        return
-    pooled_classes, pool_container_members, pool_value = helpers
-    pool_get = pool.get
-    for row_cells, value in zip(rows, column, strict=True):
-        if value is None or value is _MISSING:
-            continue
-        cls = value.__class__
-        if cls is bool or cls is int or cls is LazyCell or cls is float:
-            continue  # plain numbers never pool; a default-omitted cell holds no value
-        if cls in pooled_classes and (cls is not Duration or not value):
-            key = (cls, value.hex()) if cls is Duration else (cls, value)
-            pooled = pool_get(key)
-            if pooled is None:
-                pool[key] = value
-            elif pooled is not value:
-                row_cells[fid] = pooled
-        elif cls is list or cls is set or cls is dict:
-            if cls is dict and tokens is not None and members_inert(tokens, value):
-                continue
-            pool_container_members(value, pool, 0)
-        elif cls is tuple or cls is frozenset:
-            pooled = pool_value(value, pool)
-            if pooled is not value:
-                row_cells[fid] = pooled
-        elif isinstance(value, dict):
-            pool_container_members(value, pool, 0)
+    if len(rows) < _COLUMN_SKIP_MIN_ROWS:
+        return frozenset()
+    inert = _INERT_CELL_CLASSES.issuperset
+    return frozenset(
+        fid
+        for fid, (name, column) in enumerate(zip(names, zip(*rows)))
+        if name not in _BY_OBJECT_FIELDS and inert(map(type, column))
+    )
 
 
 #: Op fields whose cells repeat a few value objects (part C1: row ingest interns
