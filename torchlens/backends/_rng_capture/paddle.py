@@ -20,6 +20,7 @@ from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from typing import Any
 
+from ... import _state
 from . import (
     REASON_UNENCODABLE,
     RngDraw,
@@ -167,7 +168,12 @@ def _record(log: RngLog, name: str, args: tuple[Any, ...], kwargs: dict[str, Any
     if encoded is None:
         return RngDraw("paddle", kind, name, len(log.draws), state, reason=REASON_UNENCODABLE)
     enc_args, enc_kwargs, arrays = encoded
-    small = all(int(a.numel()) * a.element_size() <= SMALL_PARENT_BYTES for a in arrays)
+    # Sizing and copying the parents are TorchLens bookkeeping, not model ops: under an
+    # active capture ``numel`` / ``clone`` would otherwise be logged, or denied as a
+    # tensor-to-Python-scalar escape. The TensorFlow scope copies its parents the same way.
+    with _state.pause_logging():
+        small = all(int(a.numel()) * a.element_size() <= SMALL_PARENT_BYTES for a in arrays)
+        parents = tuple(a.clone() for a in arrays) if small else None
     return RngDraw(
         "paddle",
         kind,
@@ -176,7 +182,7 @@ def _record(log: RngLog, name: str, args: tuple[Any, ...], kwargs: dict[str, Any
         state,
         enc_args,
         enc_kwargs,
-        recorded_parents=tuple(a.clone() for a in arrays) if small else None,
+        recorded_parents=parents,
     )
 
 
