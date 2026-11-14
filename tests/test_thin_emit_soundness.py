@@ -6,13 +6,18 @@ seeded forward twice, with the thin path on and with it forced off
 (``set_thin_emit_enabled(False)``: every call takes today's emit, the reference),
 and compares the field differential's whole surface (labels, call ids,
 version-counter verdicts, alias semantics, buffer records, reprs and tables), the
-model state both forwards leave, and the fast-lane admission count. The direct
-tests pin the folded admission check and the layering contract.
+model state both forwards leave, and the fast-lane admission count. The deferred
+cases change what a call read before any row fills (inputs mutated in place, the
+containers it was given changed, inputs deleted, bases of its views mutated), with
+the default capture and with saved arguments, since a thin row resolves its argument
+template and its function config at the fill (``_thin_defer``). The direct tests pin
+the folded admission check, the deferred resolution and the layering contract.
 """
 
 from __future__ import annotations
 
 import ast
+import gc
 import json
 import sys
 from collections.abc import Callable, Iterator
@@ -21,6 +26,7 @@ from typing import Any
 
 import pytest
 import torch
+import torch.nn.functional as F
 from torch import nn
 
 import torchlens as tl
@@ -35,9 +41,17 @@ from tests.test_plain_emit_soundness import (
     _Raises,
     _x,
 )
+from torchlens._capture.salient_args import extract_salient_args
 from torchlens._ir import _row_journal
 from torchlens._postprocess._step_views import MIN_COLUMN_OPS
-from torchlens.backends.torch import _call_plan, _ops_exhaustive, _thin_emit, _thin_settle
+from torchlens.backends.torch import (
+    _call_plan,
+    _ops_exhaustive,
+    _thin_defer,
+    _thin_emit,
+    _thin_record,
+    _thin_settle,
+)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "tools"))
@@ -345,6 +359,152 @@ def test_save_and_load(thin: dict[str, int], tmp_path: Path) -> None:
     assert diff(dumps[1], dumps[0]) == []
 
 
+# Deferred families: each case changes what a call read before any row fills.
+_SAVE_ARGS = pytest.mark.parametrize("save_args", [False, True], ids=["default", "save_args"])
+
+_EXTERNAL = torch.linspace(-1.0, 1.0, 3)
+"""A tensor made outside the capture: an unlabeled argument the template copies."""
+
+
+def _options(save_args: bool) -> dict[str, Any]:
+    return {"capture": tl.options.CaptureOptions(save_args=save_args, seed=SEED)}
+
+
+@_SAVE_ARGS
+def test_inputs_mutated_in_place_after_their_calls(thin: dict[str, int], save_args: bool) -> None:
+    """In-place writes on a call's inputs after it (and on the model input) leave its row as today's."""
+
+    def body(m: nn.Module, x: torch.Tensor) -> torch.Tensor:
+        a = x * 2
+        s = torch.softmax(a, dim=1)
+        p = F.pad(a, [1, 1])
+        c = torch.clamp(a, min=-1.0, max=1.0)
+        e = a * _EXTERNAL.clone()
+        a.mul_(3)
+        x.add_(1)
+        s.zero_()
+        return s.sum() + p.sum() + c.sum() + e.sum() + a.sum() + x.sum()
+
+    hits, _trace = _check(thin, _body(body), _x(), **_options(save_args))
+    assert hits > 0
+
+
+@_SAVE_ARGS
+def test_argument_containers_changed_after_their_calls(
+    thin: dict[str, int], save_args: bool
+) -> None:
+    """Lists and dicts the call was given, changed after it, leave its literals and config as today's."""
+
+    def body(m: nn.Module, x: torch.Tensor) -> torch.Tensor:
+        pad = [1, 2]
+        parts = [x * 2, x + 1]
+        dims = {"dim": 0}
+        p = F.pad(x, pad)
+        c = torch.cat(parts, **dims)
+        st = torch.stack(parts, dim=1)
+        r = torch.sum(c, dim=[0, 1])
+        pad[0] = 5
+        pad.append(7)
+        parts[0] = x
+        parts.clear()
+        dims["dim"] = 1
+        return p.sum() + c.sum() + st.sum() + r + F.pad(x, pad[:2]).sum()
+
+    hits, _trace = _check(thin, _body(body), _x(), **_options(save_args))
+    assert hits > 0
+
+
+@_SAVE_ARGS
+def test_inputs_deleted_before_settle(thin: dict[str, int], save_args: bool) -> None:
+    """Inputs deleted (and collected) before any row fills leave the rows as today's."""
+
+    def body(m: nn.Module, x: torch.Tensor) -> torch.Tensor:
+        a = x * 2
+        b = torch.softmax(a, dim=0)
+        c = F.layer_norm(a, (3,))
+        t = torch.tensor([1.0, 2.0, 3.0])
+        d = b * t
+        k = _EXTERNAL.clone()
+        e = torch.clamp(c, min=-0.5) + k
+        del a, t, k
+        gc.collect()
+        return (b + c + d + e).sum()
+
+    hits, _trace = _check(thin, _body(body), _x(), **_options(save_args))
+    assert hits > 0
+
+
+@_SAVE_ARGS
+def test_views_of_mutated_bases(thin: dict[str, int], save_args: bool) -> None:
+    """Views read by a call, whose bases (or the views) are mutated after it, leave its row as today's."""
+
+    def body(m: nn.Module, x: torch.Tensor) -> torch.Tensor:
+        a = x + 1
+        v = a[0]
+        w = torch.softmax(v, dim=0)
+        t = a.t()
+        s = torch.sum(t, dim=1)
+        q = F.pad(v, [1, 0])
+        a.mul_(2)
+        v.add_(1)
+        t.clamp_(max=2.0)
+        u = a.view(-1).clamp(min=0.0)
+        return w.sum() + s.sum() + q.sum() + u.sum() + v.sum()
+
+    hits, _trace = _check(thin, _body(body), _x(), **_options(save_args))
+    assert hits > 0
+
+
+def test_thin_rows_resolve_the_deferred_families_at_fill(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A thin row holds its template and argument-reading config unresolved until it fills."""
+
+    seen: list[tuple[bool, bool, bool]] = []
+    real_fill = _thin_record._ThinRow._fill
+
+    def spy(row: Any) -> None:
+        fields = row.fields
+        seen.append(
+            (_thin_defer.DEFERRED in fields, "args_template" in fields, "func_config" in fields)
+        )
+        real_fill(row)
+        assert _thin_defer.DEFERRED not in fields
+        assert {"args_template", "kwargs_template", "func_id", "func_config"} <= fields.keys()
+
+    monkeypatch.setattr(_thin_record._ThinRow, "_fill", spy)
+    tl.trace(nn.Sequential(nn.Linear(3, 3), nn.Softmax(dim=1), nn.ReLU()), torch.randn(2, 3))
+    assert seen and all(deferred and not template for deferred, template, _ in seen)
+    assert any(not config for _, _, config in seen), "no argument-reading config was deferred"
+    assert any(config for _, _, config in seen), "a config with no extractor was deferred"
+
+
+def test_set_function_config_matches_the_eager_extraction() -> None:
+    """Deferred, the config equals the eager one; a refused record resolves at the call."""
+
+    x = torch.randn(2, 3)
+    pad = [1, 2]
+    call = ("pad", "pad", (x, pad), {})
+    eager: dict[str, Any] = {}
+    _thin_defer.set_function_config(eager, call, False)
+    deferred: dict[str, Any] = {}
+    _thin_defer.set_function_config(deferred, call, True)
+    assert "func_config" not in deferred
+    pad.append(9)
+    x.resize_(4, 4)
+    _thin_defer.resolve_deferred(deferred)
+    assert deferred == eager and _thin_defer.DEFERRED not in deferred
+
+    class Holder(set):  # a container the recorder does not rebuild, holding a tensor
+        pass
+
+    refused: dict[str, Any] = {}
+    odd = ("softmax", "softmax", (torch.randn(2),), {"dim": 0, "holder": Holder({torch.ones(1)})})
+    _thin_defer.set_function_config(refused, odd, True)
+    assert _thin_defer.DEFERRED not in refused
+    assert refused["func_config"] == extract_salient_args(*odd) == {"dim": 0}
+
+
 def _at_ingest(monkeypatch: pytest.MonkeyPatch, hook: Callable[[], None]) -> None:
     """Run ``hook`` once per capture, before the hand-off to ingest builds anything."""
 
@@ -448,19 +608,23 @@ def test_thin_modules_import_nothing_from_the_capture_cycle() -> None:
     """The ``_thin_*`` modules import only modules outside the capture import cycle."""
 
     allowed = {
+        "..._capture._recorded_tensor",
         "..._capture.plan",
+        "..._capture.salient_args",
         "..._ir._row_journal",
         "..._utils.display",
         "..._utils._internal_read",
         "..._utils.env_flags",
+        "._arg_template_resolve",
         "._ops_freeze_refs",
         "._ops_row_journal",
+        "._thin_defer",
         "._thin_record",
         "._thin_settle",
         ".aliasing",
     }
     package = REPO_ROOT / "torchlens" / "backends" / "torch"
-    for name in ("_thin_emit.py", "_thin_record.py", "_thin_settle.py"):
+    for name in ("_thin_defer.py", "_thin_emit.py", "_thin_record.py", "_thin_settle.py"):
         tree = ast.parse((package / name).read_text())
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom) and node.level:
