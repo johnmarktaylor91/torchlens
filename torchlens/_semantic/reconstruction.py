@@ -326,13 +326,12 @@ def _reconstruct_checked(
     if isinstance(record, MissingFacet):
         return record
     scores = _attention_scores(record)
-    pattern = torch.softmax(scores.float(), dim=-1).to(record.q.dtype)
     expanded_v = _expanded_v(record)
-    z = torch.matmul(pattern, expanded_v)
+    pattern, z = _kernel_pattern_and_output(scores, expanded_v, record.q.dtype)
     # Cancellation-aware magnitude bound for the z check: the summation behind
     # each z element is sum_k pattern[..,k] * V[..,k,:] with pattern >= 0, so
     # the accumulated-|addend| bound is exactly pattern @ |V|.
-    z_magnitude = torch.matmul(pattern.float(), expanded_v.abs().float())
+    z_magnitude = torch.matmul(pattern, expanded_v.abs().to(pattern.dtype))
     target = saved_output(sdpa_op)
     if target is None or not _allclose_sdpa(
         z, target, magnitude=z_magnitude, reduction_length=int(expanded_v.shape[-2])
@@ -342,12 +341,55 @@ def _reconstruct_checked(
             f"SDPA op output {getattr(sdpa_op, 'label', '<unknown>')!r}."
         )
     if facet == "scores":
-        return scores
+        return scores.to(record.q.dtype)
     if facet == "pattern":
-        return pattern
+        return pattern.to(record.q.dtype)
     if facet == "z":
         return z
     return _result_or_missing(module, z, sdpa_op)
+
+
+def _compute_dtype(payload: torch.dtype) -> torch.dtype:
+    """Return the dtype fused SDPA kernels accumulate in for a payload dtype."""
+
+    return torch.float64 if payload == torch.float64 else torch.float32
+
+
+def _kernel_pattern_and_output(
+    scores: torch.Tensor, v: torch.Tensor, payload: torch.dtype
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Return the attention pattern and z computed in the fused kernels' arithmetic.
+
+    Fused SDPA kernels keep the scores and the softmax in float32. With a
+    float16/bfloat16 payload they round the unnormalized probabilities
+    ``exp(scores - row_max)`` to the payload dtype before the product with V,
+    accumulate that product in float32, divide by the float32 row sum of the
+    unrounded probabilities, and round z once to the payload dtype. Rounding
+    the scores, or the normalized pattern, to the payload dtype instead adds
+    rounding the kernel never performs and refused correct half-precision
+    reconstructions wherever the summation behind z cancels.
+
+    Parameters
+    ----------
+    scores:
+        Scaled, masked attention scores in the compute dtype.
+    v:
+        Value tensor expanded to the query heads.
+    payload:
+        Dtype of the captured Q/K/V and SDPA output.
+
+    Returns
+    -------
+    tuple[torch.Tensor, torch.Tensor]
+        The weights the kernel applies (compute dtype) and z in ``payload``.
+    """
+
+    unnormalized = torch.exp(scores - scores.amax(dim=-1, keepdim=True))
+    row_sum = unnormalized.sum(dim=-1, keepdim=True)
+    weights = unnormalized.to(payload).to(scores.dtype)
+    pattern = weights / row_sum
+    z = torch.matmul(weights, v.to(scores.dtype)) / row_sum
+    return pattern, z.to(payload)
 
 
 def _attention_scores(record: SDPAReconstruction) -> torch.Tensor:
@@ -361,18 +403,20 @@ def _attention_scores(record: SDPAReconstruction) -> torch.Tensor:
     Returns
     -------
     torch.Tensor
-        Attention score tensor.
+        Attention scores in the kernels' compute dtype (float32, or float64 for
+        a float64 payload), never rounded to a half-precision payload dtype.
     """
 
-    q = record.q.float()
-    k = _expanded_k(record).float()
+    compute = _compute_dtype(record.q.dtype)
+    q = record.q.to(compute)
+    k = _expanded_k(record).to(compute)
     scale = record.scale if record.scale is not None else 1.0 / math.sqrt(record.q.shape[-1])
     scores = torch.matmul(q, k.transpose(-2, -1)) * scale
     if record.attn_mask is not None:
         scores = _apply_attention_mask(scores, record.attn_mask)
     if record.is_causal:
         scores = _apply_causal_mask(scores)
-    return scores.to(record.q.dtype)
+    return scores
 
 
 def _expanded_k(record: SDPAReconstruction) -> torch.Tensor:
