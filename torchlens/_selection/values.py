@@ -122,18 +122,14 @@ def _lift_within(within: Any, producer: str) -> Any:
 
 
 def _resolve_population(within: Any, trace: Any) -> Selection:
-    """Resolve the population operand against the resolution trace."""
+    """Resolve the population operand against the resolution trace.
+
+    A population resolved on a fork ancestor carries over to the fork by site
+    identity; one from an unrelated trace refuses ``selection_trace_mismatch``.
+    """
 
     if within is None:
         return _default_population(trace)
-    if isinstance(within, Selection):
-        if within._trace is not trace:
-            raise SelectionError(
-                "the `within` population is bound to a different trace; "
-                "re-resolve it against this trace first.",
-                code="selection_trace_mismatch",
-            )
-        return within
     return within._resolve(trace)
 
 

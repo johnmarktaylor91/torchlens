@@ -34,7 +34,8 @@ if TYPE_CHECKING:
 
 __all__: list[str] = []
 
-from .._selection.do_plan import bind_to_target, build_selection_do_plan
+from .._selection._fork_binding import bind_to_target
+from .._selection.do_plan import build_selection_do_plan
 from .._selection.selection import Selection, Selector, _apply_invalid, _lift
 from .._selection.selectors import label as label_selector
 from ..backends.torch._trace_backward import _require_live_replay

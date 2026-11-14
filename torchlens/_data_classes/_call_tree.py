@@ -298,7 +298,7 @@ def _live_call_trace(
     trace = ref()
     if trace is None:
         raise RecordBindingError(
-            f"Trace has been garbage-collected; a {record} does not keep its Trace alive",
+            f"the Trace this {record} was read from has been garbage-collected: a {record} holds its Trace weakly, so a chained read on a temporary (tl.trace(...)[key].out, t.fork().do(...)[key].out) loses it as soon as the record is taken",
             code="trace_reference_collected",
             remedy="keep the Trace (t = tl.trace(...)) or fork (f = t.fork().do(...)) in a variable while reading its records",
         )

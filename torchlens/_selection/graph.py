@@ -268,16 +268,8 @@ def _lift_region_group(value: Any, producer: str, operand: str) -> tuple[Any, ..
 
 
 def _resolve_region(operand: Any, trace: Any) -> Selection:
-    """Resolve one lifted endpoint operand against the resolution trace."""
+    """Resolve one lifted endpoint operand (a fork ancestor's selection carries over)."""
 
-    if isinstance(operand, Selection):
-        if operand._trace is not trace:
-            raise SelectionError(
-                "a graph-producer endpoint is bound to a different trace; "
-                "re-resolve it against this trace first.",
-                code="selection_trace_mismatch",
-            )
-        return operand
     return operand._resolve(trace)
 
 

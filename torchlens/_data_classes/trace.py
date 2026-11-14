@@ -1252,7 +1252,7 @@ class Trace(TraceOutputMixin, _trace_rerun_state.TraceAppendMixin, TraceLike):
         its record. Typed doors convert: ``trace.ops[address]`` is the output Op.
 
         Args:
-            ix: index, slice, label, address, substring or selector.
+            ix: index, slice, label, address, substring, selector or Selection.
 
         Returns:
             Op, Selection, Module, ModuleCall, Param, Buffer or GradFn.

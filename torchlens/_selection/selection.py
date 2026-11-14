@@ -50,6 +50,7 @@ from .._utils._record_group_table import record_member
 from ..errors._base import TorchLensError
 from ._display import selection_card, selection_repr, site_card, site_repr
 from ._entry_order import _graph_entry_order
+from ._fork_binding import bind_to_target
 from ._site_record import _require_edge_provenance, bind_entries, edge_address_of, site_record
 from ._site_refusals import multipass_bare_label_message
 from .align import align_resolved_selection
@@ -248,6 +249,11 @@ class Selection:
         """
 
         return self._selector
+
+    def _resolve(self, trace: Trace) -> Selection:
+        """Return this selection on ``trace``: itself, or rebound onto a fork of its trace."""
+
+        return bind_to_target(self, trace)
 
     @property
     def labels(self) -> tuple[str, ...]:
@@ -1336,16 +1342,9 @@ def _resolve_random_term(node: _RandomTerm, trace: Any) -> Selection:
 
 
 def _resolve_operand_for_random(operand: Any, trace: Any) -> Selection:
-    """Resolve one random_like operand, honoring trace binding."""
+    """Resolve one random_like operand (a fork ancestor's selection carries over)."""
 
-    if isinstance(operand, Selection):
-        if operand._trace is not trace:
-            raise SelectionError(
-                "random_like operand is bound to a different trace.",
-                code="selection_trace_mismatch",
-            )
-        return operand
-    if not isinstance(operand, Selector):
+    if not isinstance(operand, (Selection, Selector)):
         raise RuntimeError("random_like operand must lift to a Selection")
     return operand._resolve(trace)
 

@@ -444,12 +444,12 @@ torchlens/_selection/compare.py::_resolve_pass_term	64
 torchlens/_selection/compare.py::_resolve_top_changed	67
 torchlens/_selection/do_plan.py::_build_selection_do_plan	87
 torchlens/_selection/resolver.py	992
-torchlens/_selection/selection.py	1609
+torchlens/_selection/selection.py	1608
 torchlens/_selection/selection.py::_resolve_facet_term	64
 torchlens/_selection/selectors.py	1643
 torchlens/_selection/selectors.py::SiteSelector.__init__	77
 torchlens/_selection/subspace.py::subspace	91
-torchlens/_selection/values.py	1171
+torchlens/_selection/values.py	1167
 torchlens/_selection/values.py::_resolve_table_element_grain	65
 torchlens/_selection/values.py::_table_rows_by_label	65
 torchlens/_semantic/_norm_reconstruction.py::reconstruct_norm	96

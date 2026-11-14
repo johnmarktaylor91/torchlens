@@ -1160,7 +1160,14 @@ expert contributions from routing indices alone.
   with a closed six-reason set, `do()` keeps refusing foreign resolved
   selections (`selection_trace_mismatch` -- alignment is the one explicit
   door), and `align_to` + `tl.patch_from(source)` is the cross-run patching
-  spelling the acceptance gallery pins.
+  spelling the acceptance gallery pins. FORK LINEAGE needs no bridge: a
+  selection resolved on a trace binds to any fork descended from it by site
+  identity (`torchlens/_selection/_fork_binding.py`) at every door that takes
+  one: `do()`, `trace[selection]` (`Selection._resolve`; a selection already
+  bound to that trace returns as is), and the selection operands of lazy
+  producers (value producers' `within=`, `random_like`'s `like`/`within`,
+  graph-producer endpoints). A trace outside the lineage still refuses
+  `selection_trace_mismatch`.
 - EDGE SUBSTITUTION (DOCUMENTED-UNSTABLE): `trace.graph.edges` is the
   dataflow edge family (EdgeUseRecords; replayable-gated, refusal
   `edge_provenance_unavailable`); canonical occurrence address

@@ -2417,7 +2417,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         obj = ref()
         if obj is None:
             raise RecordBindingError(
-                "Trace has been garbage-collected; an Op does not keep its Trace alive",
+                "the Trace this Op was read from has been garbage-collected: an Op holds its Trace weakly, so a chained read on a temporary (tl.trace(...)[key].out, t.fork().do(...)[key].out) loses it as soon as the record is taken",
                 code="trace_reference_collected",
                 remedy="keep the Trace (t = tl.trace(...)) or fork (f = t.fork().do(...)) in a variable while reading its records",
             )

@@ -200,9 +200,9 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
         AmbiguousOpLookupError: A substring matching several layers.
         ValueError: Invalid index.
     """
-    from .._selection.selection import Selector
+    from .._selection.selection import Selection, Selector
 
-    if isinstance(ix, Selector):
+    if isinstance(ix, Selector | Selection):
         return ix._resolve(self)
 
     if isinstance(ix, BaseSelector | TargetSpec | FrozenTargetSpec):

@@ -802,7 +802,7 @@ class Layer(_SelectionOperand):
         obj = ref()
         if obj is None:
             raise RecordBindingError(
-                "Trace has been garbage-collected; a Layer does not keep its Trace alive",
+                "the Trace this Layer was read from has been garbage-collected: a Layer holds its Trace weakly, so a chained read on a temporary (tl.trace(...)[key].out, t.fork().do(...)[key].out) loses it as soon as the record is taken",
                 code="trace_reference_collected",
                 remedy="keep the Trace (t = tl.trace(...)) or fork (f = t.fork().do(...)) in a variable while reading its records",
             )

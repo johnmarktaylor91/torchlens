@@ -6,42 +6,27 @@ and calls :func:`_build_selection_do_plan` here, which resolves the target
 record. The normative mask-application contract is stated beside
 ``build_selection_do_plan``.
 
-Fork lineage: a fork shares its parent's recorded sites (the same
-``(layer_label, pass_index)`` addresses, structural site keys and output index
-spaces), so :func:`bind_to_target` binds a selection resolved on a trace to any
-fork descended from it by SITE identity instead of refusing it on object
-identity. Every row is checked on the fork (its record exists, and for an
-activation site the structural site key and output shape agree), so a fork
-whose graph has since changed refuses typed. A selection resolved on a trace
-outside the fork's ancestry keeps the ``selection_trace_mismatch`` refusal;
-cross-run bridging stays the explicit ``Selection.align_to``. The parent's
-selection is never mutated: the fork receives a new frozen ``Selection``
-over copied rows, each row's ``provenance.source`` disclosing the ancestor it
-was carried over from (``[carried over to fork from '<name>']``).
+Fork lineage: a resolved target binds through
+:func:`torchlens._selection._fork_binding.bind_to_target` (``Selection._resolve``),
+so a selection resolved on a fork ancestor carries over by site identity.
 """
 
 from __future__ import annotations
 
-import dataclasses
 from typing import Any
 
 import torch
 
 from .._data_classes._trace_intervention_records import _edit_identity
-from .._utils._record_group_table import record_member
 from ..intervention._masked_edit import _derive_masked_edit
 from ..intervention._subspace_projection import subspace_projection_of
 from ..intervention._types import Edit
-from ._site_record import bind_entries
-from .errors import SelectionError
 from .resolver import _label_index_scope
 from .selection import (
     Selection,
-    Site,
     _apply_invalid,
     _find_act_ops,
     _lift,
-    _site_shape,
     _unresolvable,
 )
 
@@ -141,18 +126,8 @@ def _resolve_do_target(trace: Any, selection_like: Any) -> Selection:
     lifted = _lift(selection_like)
     if lifted is None:
         raise RuntimeError("build_selection_do_plan requires a selection-shaped input")
-    if isinstance(lifted, Selection):
-        # A selection resolved on a fork ancestor carries over by site identity.
-        resolved = bind_to_target(
-            lifted,
-            trace,
-            "the resolved selection is bound to a different trace; resolve "
-            "against this trace first, or bridge explicitly with "
-            "resolved.align_to(trace) (cross-run alignment on L1 site "
-            "keys, same-policy captures only).",
-        )
-    else:
-        resolved = lifted._resolve(trace)
+    # A selection resolved on a fork ancestor carries over by site identity.
+    resolved = lifted._resolve(trace)
     if resolved.kind == "PARAM":
         raise _apply_invalid(
             "not_maskable",
@@ -185,105 +160,3 @@ def build_selection_do_plan(
     # resolve through one label index per trace for the whole plan.
     with _label_index_scope():
         return _build_selection_do_plan(trace, selection_like, edit)
-
-
-def _fork_ancestors(trace: Any) -> list[Any]:
-    """Return ``trace``'s fork ancestors, nearest first (cycle-safe)."""
-
-    ancestors: list[Any] = []
-    seen = {id(trace)}
-    parent = getattr(trace, "parent_trace", None)
-    while parent is not None and id(parent) not in seen:
-        ancestors.append(parent)
-        seen.add(id(parent))
-        parent = getattr(parent, "parent_trace", None)
-    return ancestors
-
-
-def _site_drift(entry: Site, record: Any) -> str | None:
-    """Return why a fork's record is not the row's site, or ``None`` when it is."""
-
-    if entry.kind != "ACT":
-        return None
-    expected_key = entry.structural_site_key
-    if expected_key is not None and record_member(record, "site_key", None) != expected_key:
-        return f"its structural site key is {record_member(record, 'site_key', None)!r}, not {expected_key!r}"
-    shape = _site_shape(record)
-    if shape != entry.shape:
-        return f"its output index space is {shape!r}, not {entry.shape!r}"
-    return None
-
-
-def _fork_row(entry: Site, fork: Any, source: Any) -> Site:
-    """Copy one row onto ``fork``, refusing typed when the fork lacks the same site.
-
-    The copy's ``provenance.source`` names ``source``, the ancestor the row was
-    resolved on, so the rebound row discloses its origin.
-    """
-
-    source_label = str(getattr(source, "name", "") or "ancestor trace")
-    provenance = dataclasses.replace(
-        entry.provenance,
-        source=f"{entry.provenance.source} [carried over to fork from {source_label!r}]",
-    )
-    row = dataclasses.replace(entry, provenance=provenance)
-    bind_entries(fork, (row,))
-    try:
-        record = row.record
-    except SelectionError as error:
-        drift: str | None = (
-            f"the fork has no such site ({error.fields.get('reason', 'unresolvable')})"
-        )
-    else:
-        drift = _site_drift(entry, record)
-    if drift is not None:
-        raise SelectionError(
-            f"the resolved selection is bound to {getattr(source, 'name', None)!r}, an "
-            f"ancestor of this fork, but site {entry.key!r} does not carry over: {drift}. "
-            "Resolve the selection on the fork itself.",
-            code="selection_trace_mismatch",
-            remedy="resolve the selection on the fork itself",
-            site=repr(entry.key),
-        )
-    return row
-
-
-def bind_to_target(resolved: Selection, trace: Any, message: str) -> Selection:
-    """Return ``resolved`` bound to ``trace``, rebinding onto a fork by site identity.
-
-    Parameters
-    ----------
-    resolved:
-        A resolved selection given to ``do()``.
-    trace:
-        The trace the edit targets.
-    message:
-        The refusal text for a selection bound to a trace outside the target's
-        fork ancestry.
-
-    Returns
-    -------
-    Selection
-        ``resolved`` itself when it is bound to ``trace``; otherwise a new
-        selection over the same sites and masks, bound to ``trace``, whose
-        rows' provenance names the ancestor they were carried over from.
-
-    Raises
-    ------
-    SelectionError
-        ``selection_trace_mismatch`` when ``resolved`` is bound to a trace that
-        is not ``trace`` or one of its fork ancestors, or when a row's site does
-        not carry over to the fork unchanged.
-    """
-
-    source = resolved._trace
-    if source is trace:
-        return resolved
-    if not any(ancestor is source for ancestor in _fork_ancestors(trace)):
-        raise SelectionError(
-            message,
-            code="selection_trace_mismatch",
-            remedy="resolve the selection on this trace, or bridge with resolved.align_to(trace)",
-        )
-    rows = tuple(_fork_row(entry, trace, source) for entry in resolved)
-    return Selection(trace, resolved.kind, rows, selector=resolved.selector)

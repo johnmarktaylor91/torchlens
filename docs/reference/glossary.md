@@ -1528,6 +1528,13 @@ kind and converts a key that names exactly one such object.
   module address gives its `Module` whether called once or many times, and `address:N` its
   `ModuleCall`; a parameter address gives its `Param`, a buffer address its `Buffer`
   (`buffer_address:N` the version Op), and a grad_fn label its `GradFn`.
+- Selections at the plain entry point: a selector gives the `tl.Selection` of its matches, and an
+  already-resolved `Selection` gives itself on its own trace. On a fork descended from that trace
+  it gives a copy bound to the fork, matched by site; one from an unrelated trace raises
+  `selection_trace_mismatch` (bridge with `resolved.align_to(trace)`). `do()` and the selection
+  operands of lazy producers (the `within=` population of the value producers, `random_like`'s
+  `like` and `within`, `tl.neighborhood` and `tl.between` regions) bind a resolved selection the
+  same way, so `t.fork().do(tl.top_fraction(t[sel], 0.1), edit)` works.
 - Typed entry points: `trace.ops[address]` and `trace.ops["address:N"]` give the call's output Op,
   `trace.layers[address]` its Layer, `trace.modules[op_label]` (also a parameter or buffer
   address) the Module it belongs to, `trace.module_calls[op_label]` the call that ran it,
