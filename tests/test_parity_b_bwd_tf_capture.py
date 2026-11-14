@@ -89,7 +89,9 @@ def backward_ready(monkeypatch: pytest.MonkeyPatch) -> Callable[..., tl.Trace]:
     monkeypatch.setitem(registry._REGISTRY, "tf", replaced)
 
     def capture(model: Any, example: Any) -> tl.Trace:
-        return tl.trace(model, example, backend="tf", backward_ready=True)
+        return tl.trace(
+            model, example, backend="tf", capture=tl.options.CaptureOptions(backward_ready=True)
+        )
 
     return capture
 
