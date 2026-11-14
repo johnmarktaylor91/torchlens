@@ -154,7 +154,7 @@ def test_reconstructed_sdpa_validation_is_non_vacuous_after_corruption() -> None
     log.modules["attn"].facets.invalidate()
 
     with pytest.raises(MissingFacetError, match="validation failed") as refusal:
-        log.modules["attn"].facets.pattern
+        _ = log.modules["attn"].facets.pattern
     assert refusal.value.reason.status == "needs_capture"
 
 

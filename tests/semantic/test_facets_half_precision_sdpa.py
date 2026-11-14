@@ -102,17 +102,17 @@ def test_refused_reconstruction_is_needs_capture_and_raises_at_access(dtype: tor
     assert menu["pattern"].status == "needs_capture"
     assert "validation failed" in str(menu["pattern"].detail)
     with pytest.raises(MissingFacetError, match="validation failed") as by_attribute:
-        view.pattern
+        _ = view.pattern
     assert by_attribute.value.reason.status == "needs_capture"
     with pytest.raises(MissingFacetError, match="validation failed"):
-        view["z"]
+        _ = view["z"]
     assert view.get("scores") is None
     assert "pattern" not in view.keys()
 
     # Access before declared() refuses the same way and updates the menu.
     view.invalidate()
     with pytest.raises(MissingFacetError, match="validation failed"):
-        view["pattern"]
+        _ = view["pattern"]
     assert view.declared()["pattern"].status == "needs_capture"
 
 
@@ -124,12 +124,12 @@ def test_facet_read_after_trace_collection_raises_record_binding_error() -> None
     gc.collect()
 
     with pytest.raises(RecordBindingError) as by_attribute:
-        module.facets.pattern
+        _ = module.facets.pattern
     assert by_attribute.value.fields["code"] == "trace_reference_collected"
     with pytest.raises(RecordBindingError):
-        module.facets["pattern"]
+        _ = module.facets["pattern"]
     with pytest.raises(RecordBindingError):
-        module.facets.declared()
+        _ = module.facets.declared()
 
 
 def test_served_reconstruction_outlives_its_trace() -> None:
