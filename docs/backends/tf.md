@@ -43,7 +43,7 @@ print(status.state)
 |---|---|---|
 | backward_capture | unsupported | True backward graphs are deferred. |
 | has_validation_replay | supported | Live replay reports its verification coverage. |
-| fastlog | unsupported | `tl.record` runs the eager forward with lean per-op events; values only for selected ops; graph-only callables refuse. |
+| fastlog | supported | `tl.record` runs the eager forward with lean per-op events; values only for selected ops; graph-only callables refuse. |
 | can_intervene | supported | Eager replacements (static or value-dependent conditions) and `stop_after=` use the writable wrapper layer. |
 | rng_replay | unsupported | RNG replay is not declared. |
 | payload_materialization | supported | Dense numeric and boolean array payloads can be persisted. |

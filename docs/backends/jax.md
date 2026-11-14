@@ -38,7 +38,7 @@ print(status.state)
 |---|---|---|
 | backward_capture | unsupported | True backward graphs are deferred. |
 | has_validation_replay | supported | Replay distinguishes verified operations and partial regions. |
-| fastlog | unsupported | Sparse recording is not declared. |
+| fastlog | supported | Sparse recording with `tl.record` is supported. |
 | can_intervene | supported | `intervene=` edits equation outputs at capture and, with `grad_options=`, the gradient at `tl.grad(...)` sites; derived gradients follow the edited program; `stop_after=` halts at the first matching equation. See Edits. |
 | rng_replay | unsupported | RNG replay is not declared. |
 | payload_materialization | supported | Portable forward and derived array payloads are materialized. |
