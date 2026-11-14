@@ -40,19 +40,36 @@ def _unique_ops(trace: Any) -> list[Any]:
     return list(trace._layer_list)
 
 
-def _output_seeds(trace: Any) -> dict[str, Any]:
-    """Ones per model-output op (summed when one value is returned more than once).
+def _loss_weights(value: Any) -> Any:
+    """Fixed non-uniform loss weights shaped like ``value`` (0.5 to 1.5, row-major).
 
-    The tape's loss is the sum over the flattened model outputs, so its seed on
-    each output op is ones, times the number of times that op's value is returned.
+    A plain sum is a degenerate loss for any model ending in a normalization:
+    the sum of a layer-normalized row is constant, so every gradient below it is
+    zero and the comparison would only see rounding noise. The weights depend on
+    the shape alone, so a value returned twice gets the same weights each time.
+    """
+
+    size = int(tf.size(value))
+    weights = tf.linspace(0.5, 1.5, size) if size > 1 else tf.ones((size,))
+    return tf.cast(tf.reshape(weights, tf.shape(value)), value.dtype)
+
+
+def _output_seeds(trace: Any) -> dict[str, Any]:
+    """Loss weights per model-output op (summed when one value is returned more than once).
+
+    The tape's loss is the weighted sum over the flattened model outputs
+    (:func:`_loss_weights`), so its seed on each output op is those weights,
+    times the number of times that op's value is returned.
     """
 
     ops = ops_by_label(trace)
     seeds: dict[str, Any] = {}
     for name in trace.output_layers:
         op = ops[name]
-        ones = ADAPTER.zeros_like(op.out) + 1
-        seeds[op.label] = ones if op.label not in seeds else ADAPTER.add(seeds[op.label], ones)
+        weights = _loss_weights(op.out)
+        seeds[op.label] = (
+            weights if op.label not in seeds else ADAPTER.add(seeds[op.label], weights)
+        )
     return seeds
 
 
@@ -93,6 +110,7 @@ def test_session_replays_the_graph_and_pullback_matches_the_tape(name: str) -> N
     inputs = tf.convert_to_tensor(example)
     with tf.GradientTape() as tape:
         tape.watch(inputs)
-        loss = tf.add_n([tf.reduce_sum(item) for item in tf.nest.flatten(model(inputs))])
+        flat = tf.nest.flatten(model(inputs))
+        loss = tf.add_n([tf.reduce_sum(item * _loss_weights(item)) for item in flat])
     (input_op,) = [op for op in _unique_ops(trace) if bool(getattr(op, "is_input", False))]
     assert ADAPTER.close(tape.gradient(loss, inputs), grads[input_op.label]), name
