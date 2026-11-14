@@ -224,7 +224,13 @@ def test_checkable_mismatch_still_fails() -> None:
 
 @pytest.mark.parametrize("selection", ("all", "sum"))
 def test_sparse_validation_state_matches_torch(selection: str) -> None:
-    """The same selective save gives the same replay state on tinygrad and torch."""
+    """The same selective save gives torch's replay state, bar one documented torch gap.
+
+    When every kept op keeps its parents (``all``), tinygrad replays them all and
+    passes, while torch keeps no saved arguments under ``save=`` and reports
+    ``unverified`` (``missing_saved_args``): the torch-gap row in
+    ``docs/backends/tinygrad.md``. Matching torch there would weaken validation.
+    """
 
     import torch
 
@@ -241,7 +247,13 @@ def test_sparse_validation_state_matches_torch(selection: str) -> None:
         # A selector that matches nothing warns on both backends; the state still compares.
         warnings.simplefilter("ignore", UserWarning)
         torch_trace = tl.trace(torch_model, torch_x, save=selector)
-        torch_state = _state(torch_trace.validate_forward_pass([torch_model(torch_x)]))
+        torch_result = torch_trace.validate_forward_pass([torch_model(torch_x)])
+        torch_state = _state(torch_result)
         tinygrad_state = _state(_validate(_trace(save=selector)))
 
-    assert tinygrad_state == torch_state
+    if selection == "all":
+        assert torch_state == "unverified"
+        assert set(torch_result.unverified_reason_counts) == {"missing_saved_args"}
+        assert tinygrad_state == "passed"
+    else:
+        assert tinygrad_state == torch_state
