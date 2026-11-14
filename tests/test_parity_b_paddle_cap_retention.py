@@ -198,11 +198,12 @@ def _peak(config: str) -> int:
 
     done = subprocess.run(
         [sys.executable, "-c", _PEAK_SCRIPT, config],
-        check=True,
+        check=False,
         capture_output=True,
         text=True,
         timeout=300,
     )
+    assert done.returncode == 0, done.stderr[-3000:]
     return int(json.loads(done.stdout.strip().splitlines()[-1])["peak_bytes"])
 
 

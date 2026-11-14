@@ -67,7 +67,7 @@ def test_streamed_payloads_leave_ram_by_default(tmp_path: Path) -> None:
     assert streamed._layer_list
     assert all(op.has_saved_activation for op in streamed._layer_list)
     assert all(op._slot("out") is None for op in streamed._layer_list)
-    assert all(op.out_ref is not None for op in streamed._layer_list)
+    assert all(op._out_ref is not None for op in streamed._layer_list)
     assert streamed._out_writer is None
     assert STREAM_KEY not in streamed.__dict__
 
