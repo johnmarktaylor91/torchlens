@@ -204,7 +204,7 @@ conformance cell yet.
 | Gradient edits at `tl.grad(...)` sites, applied to derived gradients | supported | |
 | A `tl.grad(...)` site whose gradient passes through an op the replay adapter cannot replay (a live activation edit, a training-mode dropout, an untracked tensor) | refuses, naming the op | `run_capability_unavailable` |
 | Derived gradients, including intermediates and edited or halted captures (`intermediate_derived_grads`) | supported | |
-| True backward capture (`backward_capture`) | unsupported | `backward_capture_unsupported` |
+| True backward capture (`backward_capture`) on a `backward_ready=True` trace: one pass per `trace.backward(loss)`, one `GradFn` per dygraph grad node | supported | |
 | Fast logging (`fastlog`) | unsupported | `fastlog_unsupported` |
 | RNG replay (`rng_replay`) | unsupported | `rng_replay_unsupported` |
 | Streaming (`has_streaming`) | unsupported | `streaming_unsupported` |

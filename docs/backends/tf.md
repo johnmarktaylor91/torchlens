@@ -41,7 +41,7 @@ print(status.state)
 
 | Capability | Status | Note |
 |---|---|---|
-| backward_capture | unsupported | True backward graphs are deferred. |
+| backward_capture | supported | On a trace captured with `backward_ready=True`, `trace.backward(loss)` records one backward pass per call: each gradient rule TensorFlow runs becomes a `GradFn` linked to its forward op. A loaded trace refuses. |
 | has_validation_replay | supported | Live replay reports its verification coverage. |
 | fastlog | unsupported | `tl.record` runs the eager forward with lean per-op events; values only for selected ops; graph-only callables refuse. |
 | can_intervene | supported | Eager replacements (static or value-dependent conditions) and `stop_after=` use the writable wrapper layer. |
