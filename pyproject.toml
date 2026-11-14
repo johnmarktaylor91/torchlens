@@ -267,7 +267,7 @@ dev = [
     "pytest-xdist>=3.6,<4",
     "mypy==2.4.1",
     "pip-audit==2.10.1",
-    "pre-commit>=4,<5",
+    "pre-commit>=4.6.2,<5",
     # The packaging gates (test_built_wheel_manifest_is_diet,
     # test_built_sdist_manifest_is_governed) shell out to `python -m build`.
     # Declared so both gates have a real installed dependency instead of an
