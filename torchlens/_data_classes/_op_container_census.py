@@ -225,6 +225,10 @@ def _registry_container_cells(
     return result
 
 
+#: Cell classes the op-store census visits (tuples count ids; the rest are pool sites).
+_CENSUS_CELL_CLASSES = frozenset({tuple, dict, list, set, defaultdict})
+
+
 def _registry_store_sites(
     rows: list[list[Any]], fids: Any, sites: dict[tuple[int, int], Any], acc: tuple[Any, ...]
 ) -> None:
@@ -238,7 +242,13 @@ def _registry_store_sites(
 
     empty_keys = _EMPTY_CONTAINER_POOL_KEYS
     sanctioned = frozenset(fids)
-    ordered = sorted(sanctioned)
+    # Columns holding no container cell add nothing (every cell would take a
+    # ``continue``); dropping them keeps the row-major visit order of the rest.
+    ordered = [
+        fid
+        for fid in sorted(sanctioned)
+        if not _CENSUS_CELL_CLASSES.isdisjoint({row_cells[fid].__class__ for row_cells in rows})
+    ]
     for row_cells in rows:
         for fid in ordered:
             value = row_cells[fid]

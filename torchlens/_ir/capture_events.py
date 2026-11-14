@@ -558,15 +558,15 @@ class CaptureEvents:
         # boundary; the folded facts ARE the amended structural truth.
         structural_events: list[JournalOp] = []
         for event in map(journal_record, self.amended_op_records()):
-            tensor = replace(event.output.tensor, payload=None)
+            tensor = _clone_frozen_record(event.output.tensor, payload=None)
             transformed = event.output.transformed_tensor
             if transformed is not None:
-                transformed = replace(transformed, payload=None)
+                transformed = _clone_frozen_record(transformed, payload=None)
             child_versions = tuple(
-                (label, replace(child_tensor, payload=None))
+                (label, _clone_frozen_record(child_tensor, payload=None))
                 for label, child_tensor in event.output.child_versions
             )
-            output = replace(
+            output = _clone_frozen_record(
                 event.output,
                 tensor=tensor,
                 transformed_tensor=transformed,
@@ -575,7 +575,7 @@ class CaptureEvents:
             )
             templates = event.templates
             if templates is not None:
-                templates = replace(
+                templates = _clone_frozen_record(
                     templates,
                     saved_args=None,
                     saved_kwargs=None,
@@ -584,15 +584,15 @@ class CaptureEvents:
                 )
             if isinstance(event, OpRecord):
                 structural_events.append(
-                    replace(
+                    _clone_frozen_record(
                         event,
-                        core=replace(event.core, output=output),
+                        core=_clone_frozen_record(event.core, output=output),
                         templates=templates,
                     )
                 )
             else:
                 structural_events.append(
-                    replace(
+                    _clone_frozen_record(
                         event,
                         output=output,
                         templates=templates,
