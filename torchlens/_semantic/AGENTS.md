@@ -56,7 +56,7 @@
   `_allclose_sdpa()` compares against the captured output; failure yields
   `MissingFacet`, never a wrong tensor. `FacetView.__getitem__` and `declared()`
   turn that sentinel into `MissingFacetError` at access and a `needs_capture`
-  menu entry (`FacetView._refuse`); the served Facet pins the validated value
+  menu entry (`FacetView._serve_reconstruction`); the served Facet pins the validated value
   and is not cached on the view.
 - `_kernel_pattern_and_output()` follows the fused kernel's arithmetic: fp32
   scores and softmax, unnormalized probabilities rounded to the payload dtype

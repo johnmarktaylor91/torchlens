@@ -66,12 +66,11 @@ def _modules_with_pattern(trace: Any) -> list[str]:
     ]
 
 
-def _pattern_tensor(trace: Any, address: str, batch_index: int) -> tuple[torch.Tensor, str]:
-    """Read one module's pattern facet; return ``([head, dst, src], provenance)``."""
+def _pattern_facet(module: Any, address: str) -> Any:
+    """Return a module's pattern facet; refuse one that failed validation."""
 
-    module = trace.modules[address]
     try:
-        facet = module.facets["pattern"]
+        return module.facets["pattern"]
     except MissingFacetError as exc:
         refuse(
             code="tv_payload_missing",
@@ -79,6 +78,12 @@ def _pattern_tensor(trace: Any, address: str, batch_index: int) -> tuple[torch.T
             remedy=str(exc.reason.remedy or "recapture with the attention ops saved"),
             address=address,
         )
+
+
+def _pattern_tensor(trace: Any, address: str, batch_index: int) -> tuple[torch.Tensor, str]:
+    """Read one module's pattern facet; return ``([head, dst, src], provenance)``."""
+
+    facet = _pattern_facet(trace.modules[address], address)
     spec = getattr(facet, "spec", None)
     value = facet.value
     if not isinstance(value, torch.Tensor):
@@ -187,10 +192,7 @@ def _mask_from_eager(trace: Any, module: Any, batch_index: int) -> MaskInfo | No
 
     if not _has_facet(module, "scores"):
         return None
-    try:
-        spec = getattr(module.facets["scores"], "spec", None)
-    except MissingFacetError:  # a reconstruction that failed validation has no operand
-        return None
+    spec = getattr(module.facets.get("scores"), "spec", None)  # None: failed validation
     home_label = getattr(spec, "home_label", None)
     if home_label is None:
         return None

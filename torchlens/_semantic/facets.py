@@ -1170,22 +1170,25 @@ class FacetView(Mapping[FacetKey, Any]):
         _facet_access.refuse_collected_trace(self._record)
         if not self._computed:
             self._compute()
-        for name, value in builtins.list(self._cache.items()):
-            if isinstance(value, FacetSpec) and value.capability_flags.reconstructed:
-                with contextlib.suppress(MissingFacetError):
-                    self[name]  # validates; a refusal moves the facet to needs_capture
+        for name in builtins.list(self._cache):
+            self._serve_reconstruction(name)  # a refusal moves the facet to needs_capture
         return dict(self._menu_cache)
 
-    def _refuse(self, name: FacetKey, refusal: str) -> AbsenceReason:
-        """Move a reconstructed facet that failed validation to the view's absences."""
+    def _serve_reconstruction(self, name: FacetKey) -> Facet | None:
+        """Validate a cached reconstructed facet; a refusal moves it to needs_capture."""
 
-        remedy, detail = _facet_access.EAGER_ATTENTION_REMEDY, refusal.rstrip(".")
-        self._cache.pop(name, None)
-        previous = self._menu_cache.get(name)
-        recipe = previous.recipe if previous is not None else None
+        spec = self._cache.get(name)
+        if not (isinstance(spec, FacetSpec) and spec.capability_flags.reconstructed):
+            return None
+        raw = spec._home_value("out")  # computes and validates the reconstruction
+        if not isinstance(raw, MissingFacet):
+            return Facet(replace(spec, home=lambda: raw))  # not cached: never pins the tensor
+        remedy, detail = _facet_access.EAGER_ATTENTION_REMEDY, raw.reason.rstrip(".")
+        recipe = getattr(self._menu_cache.get(name), "recipe", None)
         self._menu_cache[name] = FacetMenuItem("needs_capture", recipe, remedy, detail)
-        self._missing[name] = AbsenceReason(status="needs_capture", remedy=remedy, detail=detail)
-        return self._missing[name]
+        self._missing[name] = AbsenceReason("needs_capture", remedy, detail)
+        del self._cache[name]  # the access miss path raises MissingFacetError
+        return None
 
     def head(self, head_index: int) -> AttentionHeadView:
         """Return a scoped view for one attention head."""
@@ -1199,6 +1202,8 @@ class FacetView(Mapping[FacetKey, Any]):
             return Facet(spec)
         if name not in self._cache:
             self._compute()
+        if (served := self._serve_reconstruction(name)) is not None:
+            return served
         if name not in self._cache:
             _facet_access.refuse_collected_trace(self._record)
             reason = self._missing.get(name)
@@ -1211,12 +1216,6 @@ class FacetView(Mapping[FacetKey, Any]):
             remedy, detail = _facet_access.absent_text(self._record, self._cache, name)
             raise MissingFacetError(name, AbsenceReason("structurally_absent", remedy, detail))
         value = self._cache[name]
-        if isinstance(value, FacetSpec) and value.capability_flags.reconstructed:
-            raw = value._home_value("out")  # computes and validates the reconstruction
-            if isinstance(raw, MissingFacet):
-                _facet_access.refuse_collected_trace(self._record)
-                raise MissingFacetError(name, self._refuse(name, raw.reason))
-            return Facet(replace(value, home=lambda: raw))  # not cached: never pins the tensor
         if isinstance(value, FacetSpec):
             value = Facet(value)
             self._cache[name] = value
