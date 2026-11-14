@@ -10,7 +10,7 @@ identity. ``do()`` already bound one; these tests pin the other doors:
    ``selection_trace_mismatch``.
 2. ``trace[selection]`` returns a resolved selection (rebound onto a fork of
    its trace), so callers need not know which compositions resolve eagerly.
-3. A chained read on a temporary fork refuses ``trace_reference_collected``
+3. A chained module read on a temporary fork refuses ``trace_reference_collected``
    (records hold their trace weakly by design) with a message naming the
    chain and the remedy.
 """
@@ -81,25 +81,26 @@ def _cone(trace: tl.Trace) -> tl.Selection:
 
 
 def test_value_producer_over_parent_selection_applies_on_fork(trace):
-    """The card's one-liner runs and zeroes exactly the parent-ranked elements."""
+    """The card's one-liner runs and edits exactly what the parent-ranked selection names."""
 
     cone = _cone(trace)
-    parent_out = {name: trace[name].out.clone() for name in (*REGIONS, "layer4")}
+    names = (*REGIONS, "layer4")
+    parent_out = {name: trace[name].out.clone() for name in names}
     picked = trace[tl.top_fraction(cone, 0.07, by="abs")]
+    assert any(row.mask.any() for row in picked)
 
     fork = trace.fork().do(tl.top_fraction(cone, 0.07, by="abs"), tl.zero_ablate())
-
-    # The 7% is ranked over the whole cone, so a region may contribute nothing.
-    masks = {tuple(row.shape): row.mask for row in picked}
-    assert any(parent_out[r][masks[tuple(parent_out[r].shape)]].ne(0).any() for r in REGIONS)
-    for region in REGIONS:
-        mask = masks[tuple(parent_out[region].shape)]
-        assert fork[region].out[mask].eq(0).all(), f"{region}: picked elements not zeroed"
-        assert torch.equal(fork[region].out[~mask], parent_out[region][~mask])
-    assert not torch.equal(fork["layer4"].out, parent_out["layer4"])
-    for name, before in parent_out.items():
-        assert torch.equal(trace[name].out, before), f"{name}: the parent changed"
-    fork.cleanup()
+    reference = trace.fork().do(picked, tl.zero_ablate())
+    try:
+        for row in fork[picked]:
+            assert row.record.out[row.mask].eq(0).all(), f"{row.key!r}: picked elements not zeroed"
+        for name in names:
+            assert torch.equal(fork[name].out, reference[name].out), name
+            assert torch.equal(trace[name].out, parent_out[name]), f"{name}: the parent changed"
+        assert not torch.equal(fork["layer4"].out, parent_out["layer4"])
+    finally:
+        reference.cleanup()
+        fork.cleanup()
 
 
 def test_embedded_parent_operands_resolve_on_fork_as_on_parent(trace):
@@ -191,24 +192,25 @@ def test_trace_getitem_returns_resolved_selection(trace, other):
 
 
 def test_chained_read_on_temporary_fork_names_the_chain(trace):
-    """A record read off a temporary fork refuses typed, naming the chain and the remedy."""
+    """A module read off a temporary fork refuses typed, naming the chain and the remedy.
+
+    A module output is read through the record's (weak) Trace; an Op keeps its
+    own saved tensor, so only the module chain refuses.
+    """
 
     cone = _cone(trace)
-    op_label = trace[tl.func("relu")].labels[-1]
-    for key in ("layer2", op_label):
-        # The record outlives the temporary fork it was read from.
-        record = trace.fork().do(cone, tl.zero_ablate())[key]
-        gc.collect()
-        with pytest.raises(RecordBindingError) as excinfo:
-            record.out  # noqa: B018 - the read refuses
-        error = excinfo.value
-        assert error.fields["code"] == "trace_reference_collected"
-        assert "holds its Trace weakly" in str(error)
-        assert "t.fork().do(...)[key].out" in str(error)
-        assert "f = t.fork().do(...)" in error.fields["remedy"]
+    # The record outlives the temporary fork it was read from.
+    record = trace.fork().do(cone, tl.zero_ablate())["layer2"]
+    gc.collect()
+    with pytest.raises(RecordBindingError) as excinfo:
+        record.out  # noqa: B018 - the read refuses
+    error = excinfo.value
+    assert error.fields["code"] == "trace_reference_collected"
+    assert "holds its Trace weakly" in str(error)
+    assert "t.fork().do(...)[key].out" in str(error)
+    assert "f = t.fork().do(...)" in error.fields["remedy"]
 
     # The remedy works: hold the fork while reading its records.
     fork = trace.fork().do(cone, tl.zero_ablate())
     assert fork["layer2"].out.shape == trace["layer2"].out.shape
-    assert fork[op_label].out.shape == trace[op_label].out.shape
     fork.cleanup()
