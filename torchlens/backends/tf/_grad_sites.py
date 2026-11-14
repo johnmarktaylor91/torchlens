@@ -85,8 +85,6 @@ def arm_tf_grad_sites(trace: Any, tf: Any) -> None:
     clauses arm afresh.
     """
 
-    if not staged_tf_grad_clauses(trace):
-        return
     neutral = grad_site_neutral()
     armed = list(trace.__dict__.get(_ARMED_KEYS, ())) if neutral.armed_grad_sites(trace) else []
     edits: list[Any] = []
