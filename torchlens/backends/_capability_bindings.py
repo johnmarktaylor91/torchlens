@@ -197,12 +197,17 @@ def _lazy_binding(
 
 
 def _native_backward_binding(name: str) -> Callable[[], object]:
-    """Return a resolver for ``name``'s native backward surface (imports no framework)."""
+    """Return a resolver for ``name``'s native backward surface (imports no framework).
+
+    The surface module is named as data, as in ``_lazy_binding``, so this table adds
+    no import edge into the native backward package.
+    """
 
     def _resolve() -> object:
-        from ._backward_native import native_backward_surface
+        """Import the native backward package and return ``name``'s surface."""
 
-        return native_backward_surface(name)
+        package = importlib.import_module("torchlens.backends._backward_native")
+        return package.native_backward_surface(name)
 
     return _resolve
 

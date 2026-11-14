@@ -8594,10 +8594,10 @@
         "tests/test_backend_protocol.py",
         "tests/test_debug_compare_structural_pairing.py",
         "tests/test_debug_cross_backend_modules.py",
-        "tests/test_doctor_backend_rows.py",
-        "tests/test_parity_b_shape_a_search.py",
-        "tests/test_rf_schema_slots_cache.py",
-        "tests/test_runnable_load_parse_hardening.py"
+        "tests/test_parity_b_influence_jax.py",
+        "tests/test_parity_b_influence_mlx.py",
+        "tests/test_parity_b_influence_paddle.py",
+        "tests/test_parity_b_influence_tf.py"
       ],
       "torchlens/backends/_backend_protocol.py": [
         "tests/backends/test_preview_facet_recipes.py",
@@ -8769,12 +8769,12 @@
       "torchlens/backends/_invariants.py": [
         "tests/backend_conformance/test_deviceref_vocabulary.py",
         "tests/test_events_metadata_invariants.py",
+        "tests/test_native_backward_invariant_backends.py",
         "tests/test_parity_b_adapter_jax_replay.py",
         "tests/test_parity_b_adapter_jax_roster.py",
         "tests/test_parity_b_adapter_jax_support.py",
         "tests/test_preview_grad_tolerance_tripwires.py",
-        "tests/test_preview_replay_tolerance_tripwires.py",
-        "tests/test_validation_reasons_structural.py"
+        "tests/test_preview_replay_tolerance_tripwires.py"
       ],
       "torchlens/backends/_module_returns.py": [
         "tests/backend_conformance/test_deviceref_vocabulary.py",
@@ -16406,9 +16406,9 @@
         "tests/test_conditional_invariants.py",
         "tests/test_events_metadata_invariants.py",
         "tests/test_mutation_driver_governance.py",
+        "tests/test_native_backward_invariant.py",
+        "tests/test_native_backward_invariant_backends.py",
         "tests/test_postprocess_executor.py",
-        "tests/test_r29_capval_hardening.py",
-        "tests/test_validation.py",
         "tests/test_w051_capt2_validate_forward_invariant.py"
       ],
       "torchlens/validation/_invariants_backward_domain.py": [
@@ -16422,11 +16422,11 @@
       ],
       "torchlens/validation/_invariants_backward_flow.py": [
         "tests/test_backward_p7_validation.py",
+        "tests/test_native_backward_invariant.py",
         "tests/test_replay_tolerance_dtype_tripwire.py",
         "tests/test_validation.py",
         "tests/test_validation_binding_swap_tripwire.py",
         "tests/test_validation_hardening.py",
-        "tests/test_validation_order_count_probes.py",
         "tests/validation_goldens/test_arm_campaign_killers_mutants3.py",
         "tests/validation_goldens/test_validation_exemption_hardening.py"
       ],
@@ -16461,8 +16461,8 @@
         "tests/validation_goldens/test_validation_exemption_hardening.py"
       ],
       "torchlens/validation/_invariants_conditional_modules.py": [
-        "tests/test_aten_values.py",
         "tests/test_conditional_invariants.py",
+        "tests/test_native_backward_invariant.py",
         "tests/test_postprocess_r14a_regressions.py",
         "tests/test_validation.py",
         "tests/test_validation_hardening.py",
@@ -16478,7 +16478,7 @@
       "torchlens/validation/_invariants_connectivity.py": [
         "tests/test_aten_values.py",
         "tests/test_capture_unification_p7.py",
-        "tests/test_r29_capval_hardening.py",
+        "tests/test_native_backward_invariant.py",
         "tests/test_validation.py",
         "tests/test_validation_hardening.py",
         "tests/validation_goldens/test_arm_campaign_killers_mutants2.py",
@@ -16492,7 +16492,7 @@
       ],
       "torchlens/validation/_invariants_entry.py": [
         "tests/test_aten_values.py",
-        "tests/test_capture_unification_p7.py",
+        "tests/test_native_backward_invariant.py",
         "tests/test_validation.py",
         "tests/test_validation_hardening.py",
         "tests/test_validation_module_call_counts.py",
@@ -16524,6 +16524,16 @@
         "tests/test_validation_hardening.py",
         "tests/test_validation_index_domain_in_range.py",
         "tests/validation_goldens/test_arm_campaign_killers_mutants2.py",
+        "tests/validation_goldens/test_arm_campaign_killers_mutants3.py",
+        "tests/validation_goldens/test_validation_exemption_hardening.py"
+      ],
+      "torchlens/validation/_invariants_native_backward.py": [
+        "tests/test_aten_values.py",
+        "tests/test_capture_unification_p7.py",
+        "tests/test_native_backward_invariant.py",
+        "tests/test_r29_capval_hardening.py",
+        "tests/test_validation.py",
+        "tests/test_validation_hardening.py",
         "tests/validation_goldens/test_arm_campaign_killers_mutants3.py",
         "tests/validation_goldens/test_validation_exemption_hardening.py"
       ],
