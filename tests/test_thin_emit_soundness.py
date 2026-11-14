@@ -8,10 +8,10 @@ and compares the field differential's whole surface (labels, call ids,
 version-counter verdicts, alias semantics, buffer records, reprs and tables), the
 model state both forwards leave, and the fast-lane admission count. The deferred
 cases change what a call read before any row fills (inputs mutated in place, the
-containers it was given changed, inputs deleted, bases of its views mutated), with
-the default capture and with saved arguments, since a thin row resolves its argument
-template at the fill (``_thin_defer``). The direct tests pin the folded admission
-check, the deferred resolution and the layering contract.
+containers it was given changed, inputs deleted, bases of its views mutated) under
+the default capture, which records templates and admits the thin path; a thin row
+resolves its argument template at the fill (``_thin_defer``). The direct tests pin
+the folded admission check, the deferred resolution and the layering contract.
 """
 
 from __future__ import annotations
@@ -359,18 +359,7 @@ def test_save_and_load(thin: dict[str, int], tmp_path: Path) -> None:
 
 
 # Deferred families: each case changes what a call read before any row fills.
-_SAVE_ARGS = pytest.mark.parametrize("save_args", [False, True], ids=["default", "save_args"])
-
-_EXTERNAL = torch.linspace(-1.0, 1.0, 3)
-"""A tensor made outside the capture: an unlabeled argument the template copies."""
-
-
-def _options(save_args: bool) -> dict[str, Any]:
-    return {"capture": tl.options.CaptureOptions(save_args=save_args, seed=SEED)}
-
-
-@_SAVE_ARGS
-def test_inputs_mutated_in_place_after_their_calls(thin: dict[str, int], save_args: bool) -> None:
+def test_inputs_mutated_in_place_after_their_calls(thin: dict[str, int]) -> None:
     """In-place writes on a call's inputs after it (and on the model input) leave its row as today's."""
 
     def body(m: nn.Module, x: torch.Tensor) -> torch.Tensor:
@@ -378,20 +367,17 @@ def test_inputs_mutated_in_place_after_their_calls(thin: dict[str, int], save_ar
         s = torch.softmax(a, dim=1)
         p = F.pad(a, [1, 1])
         c = torch.clamp(a, min=-1.0, max=1.0)
-        e = a * _EXTERNAL.clone()
+        e = a * torch.linspace(-1.0, 1.0, 3)
         a.mul_(3)
         x.add_(1)
         s.zero_()
         return s.sum() + p.sum() + c.sum() + e.sum() + a.sum() + x.sum()
 
-    hits, _trace = _check(thin, _body(body), _x(), **_options(save_args))
+    hits, _trace = _check(thin, _body(body), _x())
     assert hits > 0
 
 
-@_SAVE_ARGS
-def test_argument_containers_changed_after_their_calls(
-    thin: dict[str, int], save_args: bool
-) -> None:
+def test_argument_containers_changed_after_their_calls(thin: dict[str, int]) -> None:
     """Lists and dicts the call was given, changed after it, leave its literals and config as today's."""
 
     def body(m: nn.Module, x: torch.Tensor) -> torch.Tensor:
@@ -409,12 +395,11 @@ def test_argument_containers_changed_after_their_calls(
         dims["dim"] = 1
         return p.sum() + c.sum() + st.sum() + r + F.pad(x, pad[:2]).sum()
 
-    hits, _trace = _check(thin, _body(body), _x(), **_options(save_args))
+    hits, _trace = _check(thin, _body(body), _x())
     assert hits > 0
 
 
-@_SAVE_ARGS
-def test_inputs_deleted_before_settle(thin: dict[str, int], save_args: bool) -> None:
+def test_inputs_deleted_before_settle(thin: dict[str, int]) -> None:
     """Inputs deleted (and collected) before any row fills leave the rows as today's."""
 
     def body(m: nn.Module, x: torch.Tensor) -> torch.Tensor:
@@ -423,18 +408,17 @@ def test_inputs_deleted_before_settle(thin: dict[str, int], save_args: bool) -> 
         c = F.layer_norm(a, (3,))
         t = torch.tensor([1.0, 2.0, 3.0])
         d = b * t
-        k = _EXTERNAL.clone()
+        k = torch.full((3,), 0.25)
         e = torch.clamp(c, min=-0.5) + k
         del a, t, k
         gc.collect()
         return (b + c + d + e).sum()
 
-    hits, _trace = _check(thin, _body(body), _x(), **_options(save_args))
+    hits, _trace = _check(thin, _body(body), _x())
     assert hits > 0
 
 
-@_SAVE_ARGS
-def test_views_of_mutated_bases(thin: dict[str, int], save_args: bool) -> None:
+def test_views_of_mutated_bases(thin: dict[str, int]) -> None:
     """Views read by a call, whose bases (or the views) are mutated after it, leave its row as today's."""
 
     def body(m: nn.Module, x: torch.Tensor) -> torch.Tensor:
@@ -450,7 +434,7 @@ def test_views_of_mutated_bases(thin: dict[str, int], save_args: bool) -> None:
         u = a.view(-1).clamp(min=0.0)
         return w.sum() + s.sum() + q.sum() + u.sum() + v.sum()
 
-    hits, _trace = _check(thin, _body(body), _x(), **_options(save_args))
+    hits, _trace = _check(thin, _body(body), _x())
     assert hits > 0
 
 

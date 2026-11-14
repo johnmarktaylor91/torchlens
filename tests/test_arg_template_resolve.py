@@ -24,6 +24,7 @@ from torchlens.backends.torch import (
     _args_template_cache,
     _ops_argument_fields,
     _ops_arguments,
+    _thin_defer,
 )
 from torchlens.intervention._types import (
     CapturedArgTemplate,
@@ -125,6 +126,8 @@ def _record(
 
     with monkeypatch.context() as patch:
         patch.setattr(_ops_argument_fields, "resolve_arg_template_fields", recording)
+        # A thin row resolves its template at its fill (``_thin_defer``), not at the call.
+        patch.setattr(_thin_defer, "resolve_arg_template_fields", recording)
         tl.trace(model, x)
     assert captured, "the capture never observed a template"
     # Normalised after the capture: ``_norm`` runs torch functions, which the capture
