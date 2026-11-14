@@ -144,10 +144,10 @@ def test_identity_grad_site_edit_equals_plain_derived_gradients() -> None:
         rtol=1e-5,
         atol=1e-6,
     )
-    relu = _relu_op(armed).label
+    # Each capture numbers its own ops; compare the relu op of each.
     np.testing.assert_allclose(
-        _np(armed.autograd.intermediate_derived_grads[relu].grad),
-        _np(plain.autograd.intermediate_derived_grads[relu].grad),
+        _np(armed.autograd.intermediate_derived_grads[_relu_op(armed).label].grad),
+        _np(plain.autograd.intermediate_derived_grads[_relu_op(plain).label].grad),
         rtol=1e-5,
         atol=1e-6,
     )
