@@ -323,29 +323,16 @@ def _jax_known_red_cells() -> dict[tuple[str, str], str]:
     return _known_red_cells({}, jax_roster.CONFIG_BUILT_FAMILIES, {})
 
 
-#: TensorFlow's red cells on its packet roster (switch off). The JAX cause plus
-#: the Keras module rows: their parameter reads (``ReadVariableOp``) are effect
-#: regions validation reports ``unverified`` (a ruled honest state, never
-#: exempted), so the ladder stops at C0.
-_TF_KERAS_MODULE_ROWS: tuple[str, ...] = (
-    "mlp_module",
-    "shared_weight_module",
-    "cnn_module",
-    "nested_residual_module",
-)
-
-
 def _tf_known_red_cells() -> dict[tuple[str, str], str]:
-    """TensorFlow's named red cells, built from the roster module's family list."""
+    """TensorFlow's named red cells, built from the roster module's family list.
+
+    None remain: the Keras module rows validate (their parameter reads included),
+    and every TF trace saves, so each after-load cell passes and the pack reaches C2.
+    """
 
     from tests.conformance._rosters import tf as tf_roster
 
-    keras = {
-        (case_id, family): "effect regions unverified"
-        for family in _TF_KERAS_MODULE_ROWS
-        for case_id in ("c1_validation_passes", "c2_validation_after_load")
-    }
-    return _known_red_cells({}, tf_roster.CONFIG_BUILT_FAMILIES, keras)
+    return _known_red_cells({}, tf_roster.CONFIG_BUILT_FAMILIES, {})
 
 
 @pytest.mark.rare
@@ -372,10 +359,10 @@ def test_jax_pack_earns_c1_with_its_named_red_cells(
 @pytest.mark.rare
 @pytest.mark.heavy
 @pytest.mark.tf_backend
-def test_tf_pack_earns_c0_with_its_named_red_cells(
+def test_tf_pack_earns_c2_with_its_named_red_cells(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The tf pack on its nine-row packet roster earns C0; every red cell is named.
+    """The tf pack on its nine-row packet roster earns C2; every red cell is named.
 
     A new red or a fixed one both fail here; the fix removes its entry (and
     rewrites the shipped scorecard) in the same change.
@@ -385,7 +372,7 @@ def test_tf_pack_earns_c0_with_its_named_red_cells(
     from tests.conformance._rosters import ECOSYSTEM_ENV
 
     monkeypatch.delenv(ECOSYSTEM_ENV, raising=False)
-    _assert_named_reds(("tf", str(tf.__version__)), tmp_path, _tf_known_red_cells(), 9, "C0")
+    _assert_named_reds(("tf", str(tf.__version__)), tmp_path, _tf_known_red_cells(), 9, "C2")
 
 
 @pytest.mark.rare
