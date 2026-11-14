@@ -20,8 +20,11 @@ from __future__ import annotations
 from typing import Any
 
 from .._errors import InvalidArgumentError
-from ..backends._backend_names import TORCH_BACKEND_NAME
 from ..backends.registry import BackendRegistryError, get_backend_spec
+
+# The torch backend's registered name, kept local so this L1 module adds no upward
+# import (the _io modules keep the same private constant).
+_TORCH_BACKEND_NAME = "torch"
 
 
 def registered_backend_named(name: str) -> bool:
@@ -91,7 +94,7 @@ def live_grad_slot(param_log: Any) -> bool:
     if backend is None:
         return True
     name = str(backend)
-    if name != TORCH_BACKEND_NAME or not registered_backend_named(name):
+    if name != _TORCH_BACKEND_NAME or not registered_backend_named(name):
         return False
     return get_backend_spec(name).capabilities.backward_capture
 
