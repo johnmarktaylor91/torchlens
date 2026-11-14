@@ -1,4 +1,4 @@
-"""Access-time facet checks: validated reconstructions and a live owning Trace.
+"""Access-time facet helpers: the collected-Trace refusal and refusal texts.
 
 A reconstructed facet (fused-SDPA ``scores``/``pattern``/``z``/``result``) is
 validated when ``FacetView`` serves it or ``declared()`` reports it; a refusal

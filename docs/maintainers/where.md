@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1756 modules, 706247 lines, 0 modules without a docstring.
+85 packages, 1757 modules, 706421 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -36,7 +36,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._registry` | Private registry kernel package (never public API). | 3 | 556 |
 | `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 20 | 15063 |
 | `torchlens._selection` | Selection: naming sites and resolving them on a trace. | 23 | 10600 |
-| `torchlens._semantic` | Semantic facet views for TorchLens records. | 16 | 7432 |
+| `torchlens._semantic` | Semantic facet views for TorchLens records. | 17 | 7566 |
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 3073 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2141 |
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 16 | 4635 |
@@ -80,7 +80,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1923 |
 | `torchlens.intervention._topology` | Topology comparison and supergraph construction for intervention bundles. | 2 | 798 |
 | `torchlens.io` | Public I/O and administrative helpers for TorchLens. | 1 | 432 |
-| `torchlens.mechinterp` | The mechanistic-interpretability analysis kit: residual decomposition, direct logit attribution, patching grids, head and neuron scores,... | 29 | 9985 |
+| `torchlens.mechinterp` | The mechanistic-interpretability analysis kit: residual decomposition, direct logit attribution, patching grids, head and neuron scores,... | 29 | 10011 |
 | `torchlens.neuro` | The seam between a captured network and neuroscience tooling: hands per-site representations to rsatoolbox and Brain-Score with provenanc... | 7 | 4050 |
 | `torchlens.postprocessing` | Output decoding provenance: the public home of custom output detectors. | 1 | 61 |
 | `torchlens.preprocessing` | Preprocessing provenance + verification (NeuroAI audience). | 9 | 2811 |
@@ -92,7 +92,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.report._notebook` | Extras-gated notebook namespace with no public objects yet. | 11 | 2236 |
 | `torchlens.stats` | Streaming statistics for aggregating outputs over a dataloader: stat kernels, per-unit quantiles and top-k, and save/load of fitted accum... | 18 | 7246 |
 | `torchlens.trackers` | Experiment-tracker integration: one watch engine produces tensor-free statistics records, and sinks (TensorBoard, Weights & Biases, JSONL... | 15 | 5231 |
-| `torchlens.transformer` | Static transformer pictures: token-labeled attention heatmaps, logit-lens and per-token loss strips, and attention annotated with measure... | 15 | 5407 |
+| `torchlens.transformer` | Static transformer pictures: token-labeled attention heatmaps, logit-lens and per-token loss strips, and attention annotated with measure... | 15 | 5421 |
 | `torchlens.transforms` | Built-in activation transforms: one contract, declared not sniffed. | 13 | 6105 |
 | `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 87 | 34290 |
 | `torchlens.viz` | Visualization convenience namespace for TorchLens. | 10 | 2755 |
@@ -861,12 +861,13 @@ Selection: naming sites and resolving them on a trace. (23 modules, 10600 lines)
 
 ### `torchlens._semantic`
 
-Semantic facet views for TorchLens records. (16 modules, 7432 lines)
+Semantic facet views for TorchLens records. (17 modules, 7566 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Semantic facet views for TorchLens records. | 28 |
 | `_call_subject` | One call of a module, presented to facet recipes as a single-call Module. | 147 |
+| `_facet_access` | Access-time facet helpers: the collected-Trace refusal and refusal texts. | 95 |
 | `_facet_tensor_ops` | Tensor-level helpers behind facet primitives (head geometry, scatter-back). | 107 |
 | `_families` | Facet families: facets a registered codec (an SAE's latents) serves on its home op. | 100 |
 | `_hops` | Hop rule: grammar proposes, payload identity verifies. | 432 |
@@ -876,10 +877,10 @@ Semantic facet views for TorchLens records. (16 modules, 7432 lines)
 | `_state_guard` | Model-state and global-RNG guard shared by the facet patching helpers. | 195 |
 | `_structural_names` | Structural output names (''out0'', ''out1.key'') for facet records. | 76 |
 | `coverage` | Facet-coverage reporting for the recipe-maintenance pipeline. | 226 |
-| `facets` | Derived semantic facet views for TorchLens records. | 2043 |
+| `facets` | Derived semantic facet views for TorchLens records. | 2038 |
 | `logit_lens` | Logit-lens appliance over semantic facets. | 1433 |
 | `patching` | Prebuilt activation and attribution patching helpers for facets. | 1091 |
-| `reconstruction` | Read-only reconstruction helpers for semantic facets. | 671 |
+| `reconstruction` | Read-only reconstruction helpers for semantic facets. | 715 |
 | `tolerances` | Cancellation-aware error model for semantic facet RECONSTRUCTION gates. | 195 |
 
 ### `torchlens._semantic.recipes`
@@ -2006,7 +2007,7 @@ Public I/O and administrative helpers for TorchLens. (1 modules, 432 lines)
 
 ### `torchlens.mechinterp`
 
-The mechanistic-interpretability analysis kit: residual decomposition, direct logit attribution, patching grids, head and neuron scores,... (29 modules, 9985 lines)
+The mechanistic-interpretability analysis kit: residual decomposition, direct logit attribution, patching grids, head and neuron scores,... (29 modules, 10011 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -2027,7 +2028,7 @@ The mechanistic-interpretability analysis kit: residual decomposition, direct lo
 | `_faithfulness` | Circuit faithfulness areas: CPR and CMD over a faithfulness curve. | 154 |
 | `_feature` | Feature optimization through the shared capture-free intervention binding. | 249 |
 | `_grids` | The generic patching-grid driver + thin presets. | 458 |
-| `_heads` | Per-query-head attention contributions (TLens | 345 |
+| `_heads` | Per-query-head attention contributions (TLens | 355 |
 | `_interp_engine` | This trace's sites as interp-engine points: the points file and its writer. | 135 |
 | `_kv_heads` | Per-query-head patching under grouped-query attention (an op-level interceptor). | 552 |
 | `_lowered` | Lowered counterfactuals -- the TorchLens-original capability. | 299 |
@@ -2037,7 +2038,7 @@ The mechanistic-interpretability analysis kit: residual decomposition, direct lo
 | `_records` | Typed result records + the shared labeled-coordinate protocol. | 469 |
 | `_residual` | Residual accumulation + decomposition (TLens | 441 |
 | `_retention` | Retention plans: printable, priceable, composable save plans. | 288 |
-| `_scores` | Head-taxonomy scores (mikit section 8; credit: TLens ''head_detector''). | 319 |
+| `_scores` | Head-taxonomy scores (mikit section 8; credit: TLens ''head_detector''). | 335 |
 | `_walk` | The backward additive-tree walk (the decomposition engine). | 344 |
 
 ### `torchlens.neuro`
@@ -2299,7 +2300,7 @@ Experiment-tracker integration: one watch engine produces tensor-free statistics
 
 ### `torchlens.transformer`
 
-Static transformer pictures: token-labeled attention heatmaps, logit-lens and per-token loss strips, and attention annotated with measure... (15 modules, 5407 lines)
+Static transformer pictures: token-labeled attention heatmaps, logit-lens and per-token loss strips, and attention annotated with measure... (15 modules, 5421 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -2307,7 +2308,7 @@ Static transformer pictures: token-labeled attention heatmaps, logit-lens and pe
 | `_bridge` | CircuitsVis bridge + BertViz tuple adapter. | 212 |
 | `_decomp` | Score decomposition: the BertViz neuron-view DATA, term-complete. | 228 |
 | `_errors` | Typed refusals for the transformer-pictures package (tviz memo). | 59 |
-| `_extract` | Trace-side extractors: attention views with mask provenance. | 475 |
+| `_extract` | Trace-side extractors: attention views with mask provenance. | 489 |
 | `_generation_attention` | Per-step attention pictures from a recorded generation. | 257 |
 | `_lens_heatmap` | Layers-by-positions logit-lens heatmap over :class:'LogitLensResult'. | 386 |
 | `_metrics` | Per-token loss and per-context entropy strips (inspectus, matched). | 200 |
