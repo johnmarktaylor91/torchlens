@@ -68,19 +68,19 @@ def _check_flag_and_counts(trace: Any, name: str, pass_logs: Mapping[Any, Any]) 
         raise MetadataInvariantError(
             name,
             f"{len(pass_logs)} backward pass record(s) are present but has_backward_pass is false",
-            code="non_torch_backward_inert",
+            code="native_backward_records_consistent",
         )
     if has_pass and not pass_logs:
         raise MetadataInvariantError(
             name,
             "has_backward_pass is true but no backward pass record is present",
-            code="non_torch_backward_inert",
+            code="native_backward_records_consistent",
         )
     if trace._grad_fn_logs and not pass_logs:
         raise MetadataInvariantError(
             name,
             "grad_fn records are present but no backward pass record is present",
-            code="non_torch_backward_inert",
+            code="native_backward_records_consistent",
         )
     num_passes = trace._num_backward_passes or 0
     expected = list(range(1, num_passes + 1)) if isinstance(num_passes, int) else None
@@ -89,7 +89,7 @@ def _check_flag_and_counts(trace: Any, name: str, pass_logs: Mapping[Any, Any]) 
             name,
             f"num_backward_passes={num_passes!r} disagrees with the recorded backward pass "
             f"numbers {sorted(pass_logs)!r} (expected exactly 1..num_backward_passes)",
-            code="non_torch_backward_inert",
+            code="native_backward_records_consistent",
         )
 
 
@@ -109,14 +109,14 @@ def _check_grad_fn_ownership(
                 name,
                 f"grad_fn {label!r} has calls in backward pass(es) {unrecorded} that were "
                 "not recorded",
-                code="non_torch_backward_inert",
+                code="native_backward_records_consistent",
             )
         if not pass_numbers and object_id not in roots:
             raise MetadataInvariantError(
                 name,
                 f"grad_fn {label!r} is not owned by a recorded backward pass: it has no "
                 "call and is no recorded pass's root",
-                code="non_torch_backward_inert",
+                code="native_backward_records_consistent",
             )
 
 
