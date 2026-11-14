@@ -10,6 +10,7 @@ validation still re-executing every op against real witnesses.
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 from typing import Any
 
@@ -195,24 +196,35 @@ def test_random_forward_gives_identical_values() -> None:
     )
 
 
-def _bfloat16_linear_runs() -> bool:
-    """Whether this MLX build evaluates a bfloat16 linear layer (Linux CPU builds do not)."""
-
-    layer = nn.Linear(2, 2)
-    layer.set_dtype(mx.bfloat16)
-    try:
-        mx.eval(layer(mx.ones((1, 2), dtype=mx.bfloat16)))
-    except RuntimeError:
-        return False
-    return True
-
-
-@pytest.mark.skipif(
-    not _bfloat16_linear_runs(), reason="this MLX build has no bfloat16 matmul kernel"
+_BFLOAT16_LINEAR_PROBE = (
+    "import mlx.core as mx, mlx.nn as nn\n"
+    "layer = nn.Linear(2, 2)\n"
+    "layer.set_dtype(mx.bfloat16)\n"
+    "mx.eval(layer(mx.ones((1, 2), dtype=mx.bfloat16)))\n"
 )
+
+
+def _bfloat16_linear_runs() -> bool:
+    """Whether this MLX build evaluates a bfloat16 linear layer (Linux CPU builds do not).
+
+    The probe runs in a child process: a failed bfloat16 matmul leaves MLX state that
+    later crashes the interpreter that caught the error.
+    """
+
+    probe = subprocess.run(
+        [sys.executable, "-c", _BFLOAT16_LINEAR_PROBE],
+        capture_output=True,
+        timeout=300,
+        check=False,
+    )
+    return probe.returncode == 0
+
+
 def test_bfloat16_witnesses_spill() -> None:
     """Half-precision witnesses spill to disk too."""
 
+    if not _bfloat16_linear_runs():
+        pytest.skip("this MLX build has no bfloat16 matmul kernel")
     model = ResidualMLP()
     model.set_dtype(mx.bfloat16)
     x = mx.random.normal((3, 16)).astype(mx.bfloat16)
