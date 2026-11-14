@@ -91,7 +91,7 @@ class TFBackend:
     """TensorFlow eager op-callback backend."""
 
     name = "tf"
-    supports_backward_capture = False
+    supports_backward_capture = True
 
     def capture_trace(
         self,

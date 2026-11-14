@@ -7,8 +7,9 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
 from torchlens._data_classes._site_key import ROOT_MODULE_ADDRESS
-from torchlens.backends.registry import UnknownBackendError
+from torchlens.backends.registry import UnknownBackendError, get_backend_spec
 
+from ._invariants_native_backward import check_declared_backward_records
 from ._status import has_importer_region_provenance, is_region_replay_annotation
 
 if TYPE_CHECKING:
@@ -439,8 +440,30 @@ def _check_backend_identity_invariants(trace: Trace) -> None:
         )
 
 
+def _declares_backward_capture(trace: Trace) -> bool:
+    """Return whether the trace's registered backend declares backward capture.
+
+    A trace with no backend name, or one naming an unregistered backend, does not
+    declare it, so the inert arms still run on it (fail closed).
+    """
+
+    backend = getattr(trace, "_provenance_backend", None)
+    if not isinstance(backend, str) or backend == "":
+        return False
+    try:
+        spec = get_backend_spec(backend)
+    except UnknownBackendError:
+        return False
+    return bool(spec.capabilities.backward_capture)
+
+
 def _check_non_torch_backward_inert(trace: Trace) -> None:
-    """Check that non-torch traces do not fake true backward graph metadata.
+    """Check that non-torch backward metadata is inert, or consistent where declared.
+
+    A backend that does not declare ``backward_capture`` must leave every
+    true-backward field empty. A backend that declares it records backward
+    through the neutral builder, and its records must be consistent instead
+    (``check_declared_backward_records``).
 
     Parameters
     ----------
@@ -450,10 +473,14 @@ def _check_non_torch_backward_inert(trace: Trace) -> None:
     Raises
     ------
     MetadataInvariantError
-        If true-backward metadata is populated on a non-torch trace.
+        If true-backward metadata is populated on a non-declaring backend's
+        trace, or a declaring backend's backward records are inconsistent.
     """
 
     name = "non_torch_backward_inert"
+    if _declares_backward_capture(trace):
+        check_declared_backward_records(trace, name)
+        return
     if trace._autograd_has_backward_pass:
         raise MetadataInvariantError(name, "non-torch traces must not set has_backward_pass")
     if trace._grad_fn_logs:

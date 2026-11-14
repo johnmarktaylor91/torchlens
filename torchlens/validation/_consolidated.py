@@ -20,6 +20,7 @@ from .._save_budget import SaveBudgetOption, resolve_save_budget
 from .._utils._display_card import render_card
 from .._utils.display import user_stacklevel
 from .._utils.rng import restores_rng_streams
+from ..backends._backend_names import TORCH_BACKEND_NAME
 from ..backends.registry import BackendName, resolve_backend_spec
 from ..errors import TorchLensWarning
 from ..options import CaptureOptions
@@ -711,7 +712,7 @@ def validate(
     save_options = _save_option_kwargs(output_device, save_budget)
     if normalized_scope == "backward":
         spec = resolve_backend_spec(backend, model, inputs, input_kwargs)
-        if not spec.capabilities.backward_capture:
+        if spec.name != TORCH_BACKEND_NAME or not spec.capabilities.backward_capture:
             raise BackendUnsupportedError(
                 f"Backend {spec.name!r} does not support backward validation."
             )
@@ -730,7 +731,7 @@ def validate(
         )
     if normalized_scope == "receptive_field":
         spec = resolve_backend_spec(backend, model, inputs, input_kwargs)
-        if not spec.capabilities.backward_capture:
+        if spec.name != TORCH_BACKEND_NAME or not spec.capabilities.backward_capture:
             raise BackendUnsupportedError(
                 f"Backend {spec.name!r} does not support receptive-field validation."
             )

@@ -15,7 +15,11 @@ from torchlens._io.payload_codec import get_payload_codec
 from torchlens._io.tensor_policy import FailReason, Ok
 from torchlens._utils._record_group_table import record_member
 from torchlens.backends.jax import capabilities
-from torchlens.errors import BackendRuntimeCompatibilityError, BackendUnsupportedError
+from torchlens.errors import (
+    BackendRuntimeCompatibilityError,
+    BackendUnsupportedError,
+    RunCapabilityUnavailableError,
+)
 
 jax = pytest.importorskip("jax")
 jnp = pytest.importorskip("jax.numpy")
@@ -1080,9 +1084,9 @@ def test_jax_rejects_callback_effects() -> None:
     ("kwargs", "pattern"),
     (
         ({"save": ["tanh"]}, "full-save only"),
-        # Gated options refuse through the central capability gate, whose
-        # canonical message names the owning flag and the refused option.
-        ({"save_grads": True}, "backward_capture=False.*save_grads"),
+        # backward_capture is True, but the JAX capture path does not consume
+        # save_grads, so the gate refuses it as an undispatched option.
+        ({"save_grads": True}, r"rejects option 'save_grads' and never\s+dispatches"),
     ),
 )
 def test_jax_rejects_save_shaping_kwargs(kwargs: dict[str, Any], pattern: str) -> None:
@@ -1156,10 +1160,9 @@ def test_jax_public_surface_matrix(tmp_path: Path) -> None:
     assert trace.provenance.param_source == "pytree-derived"
     assert set(trace.params.keys()) == {"w", "b"}
     assert trace.autograd.has_backward_pass is False
-    # The public pass count is len(trace.autograd.backward_passes); a backend without
-    # backward capture refuses that read typed rather than reporting zero passes.
-    with pytest.raises(ValueError, match="do not capture true backward graphs"):
-        _ = trace.autograd.backward_passes
+    # JAX declares backward capture, so before any trace.backward() the public pass
+    # count, len(trace.autograd.backward_passes), is zero rather than a refusal.
+    assert len(trace.autograd.backward_passes) == 0
     assert trace.autograd.num_backward_edges is None
 
     outpath = tmp_path / "jax_graph"
@@ -1193,12 +1196,10 @@ def test_jax_public_surface_matrix(tmp_path: Path) -> None:
     assert loaded_status.payload_load_status == "loaded_device_best_effort"
     with pytest.raises(TypeError, match="not a boolean"):
         bool(loaded_status)
-    with pytest.raises(BackendUnsupportedError, match="backward capture.*derived_grads"):
+    with pytest.raises(RunCapabilityUnavailableError, match="loss must be a callable"):
         trace.backward(cast(Any, trace[trace.output_layers[0]].out))
-    with pytest.raises(ValueError, match="derived_grads"):
-        _ = trace.autograd.backward_passes
-    with pytest.raises(ValueError, match="derived_grads"):
-        _ = trace[0].autograd.grads
+    assert len(trace.autograd.backward_passes) == 0
+    assert len(trace[0].autograd.grads) == 0
 
 
 def test_jax_capability_flags_match_preview_contract() -> None:
@@ -1206,7 +1207,7 @@ def test_jax_capability_flags_match_preview_contract() -> None:
 
     spec = tl.backends.spec("jax")
 
-    assert spec.capabilities.backward_capture is False
+    assert spec.capabilities.backward_capture is True
     assert spec.capabilities.has_validation_replay is True
     assert spec.capabilities.fastlog is True
     assert spec.capabilities.can_intervene is True
@@ -1216,7 +1217,7 @@ def test_jax_capability_flags_match_preview_contract() -> None:
     assert spec.capabilities.module_identity_modes == ("function_root", "pytree_module")
     assert spec.serialization_policy.payload_policy == "array_payloads"
     assert spec.serialization_policy.body_format == "safetensors"
-    assert capabilities.supports_backward_capture is False
+    assert capabilities.supports_backward_capture is True
     assert capabilities.supports_validation_replay is True
     assert capabilities.supports_fastlog is True
     assert capabilities.supports_intervention is True

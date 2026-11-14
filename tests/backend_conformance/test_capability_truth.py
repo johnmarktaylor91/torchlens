@@ -115,9 +115,9 @@ EXPECTED_GATED_CAPABILITIES: dict[str, dict[str, bool]] = {
         "structure_only_capture": True,
     },
     "jax": {
-        # Held 2026-11: native backward capture (torchlens.backends._backward_native.jax)
-        # is built but not declared until the non_torch_backward_inert contract allows it.
-        "backward_capture": False,
+        # Lifted 2026-11 (parity wave B): native backward capture through
+        # torchlens.backends._backward_native.jax (tests/test_parity_b_bwd_jax_records.py).
+        "backward_capture": True,
         # Lifted 2026-11 (pp-b-jax-cap): tl.record lean events (tests/test_parity_b_jax_cap_record.py).
         "fastlog": True,
         # Lifted 2026-11 (pp-b-jax-int): live intervene= edits equation outputs
@@ -137,9 +137,9 @@ EXPECTED_GATED_CAPABILITIES: dict[str, dict[str, bool]] = {
         "structure_only_capture": False,
     },
     "paddle": {
-        # Held 2026-11: native backward capture (torchlens.backends._backward_native.paddle)
-        # is built but not declared until the non_torch_backward_inert contract allows it.
-        "backward_capture": False,
+        # Lifted 2026-11 (parity wave B): native backward capture through
+        # torchlens.backends._backward_native.paddle (tests/test_parity_b_backward_flips.py).
+        "backward_capture": True,
         # Lifted 2026-11 (pp-b-paddle-cap): tl.record lean events (tests/test_parity_b_paddle_cap_record.py).
         "fastlog": True,
         # Lifted 2026-08: live intervene=/halt= dispatch through the eager
@@ -153,9 +153,9 @@ EXPECTED_GATED_CAPABILITIES: dict[str, dict[str, bool]] = {
         "structure_only_capture": True,
     },
     "tf": {
-        # Held 2026-11: native backward capture (torchlens.backends._backward_native.tf)
-        # is built but not declared until the non_torch_backward_inert contract allows it.
-        "backward_capture": False,
+        # Lifted 2026-11 (parity wave B): native backward capture through
+        # torchlens.backends._backward_native.tf (tests/test_parity_b_backward_flips.py).
+        "backward_capture": True,
         # Lifted 2026-11 (pp-b-tf-cap): tl.record lean eager events (tests/test_parity_b_tf_cap_record.py).
         "fastlog": True,
         # Lifted 2026-08: intervene= and halt= for eager entries via the
@@ -380,7 +380,7 @@ class _StubTrace:
         self._provenance_backend = backend
 
 
-@pytest.mark.parametrize("name", ("mlx", "tinygrad", "paddle", "tf"))
+@pytest.mark.parametrize("name", ("mlx", "tinygrad"))
 def test_backward_accessor_guard_redirects_to_derived_grads(name: str) -> None:
     """Derived-grads backends refuse with the derived-gradient redirect."""
 
@@ -394,9 +394,10 @@ def test_backward_accessor_guard_without_derived_surface_has_no_redirect(
     """A backend declaring no derived-gradient surface must not get the redirect.
 
     Every registered preview now declares ``intermediate_derived_grads=True``,
-    so the no-surface branch is exercised through a flag-flipped spec: the
-    guard must keep refusing typed without pointing at an accessor that does
-    not exist.
+    so the no-surface branch is exercised through a flag-flipped spec (TF's,
+    with backward capture and the derived surface both undeclared): the guard
+    must keep refusing typed without pointing at an accessor that does not
+    exist.
     """
 
     from torchlens._data_classes import _backend_capability_guards as guards
@@ -404,7 +405,9 @@ def test_backward_accessor_guard_without_derived_surface_has_no_redirect(
     original = tl.backends.spec("tf")
     flipped = dataclasses.replace(
         original,
-        capabilities=dataclasses.replace(original.capabilities, intermediate_derived_grads=False),
+        capabilities=dataclasses.replace(
+            original.capabilities, backward_capture=False, intermediate_derived_grads=False
+        ),
     )
     monkeypatch.setattr(guards, "get_backend_spec", lambda _name: flipped)
     with pytest.raises(ValueError, match="declares no derived-gradient surface"):

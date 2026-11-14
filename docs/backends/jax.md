@@ -36,9 +36,9 @@ print(status.state)
 
 | Capability | Status | Note |
 |---|---|---|
-| backward_capture | unsupported | True backward graphs are deferred. |
+| backward_capture | supported | `trace.backward(loss_fn)` records one backward pass per call from JAX's own derivative rules; custom-VJP calls and whole control-flow regions refuse. |
 | has_validation_replay | supported | Replay distinguishes verified operations and partial regions. |
-| fastlog | supported | Sparse recording with `tl.record` is supported. |
+| fastlog | supported | `tl.record(..., backend="jax")` records per-equation values with the same raw labels as `tl.trace`; see Recording. |
 | can_intervene | supported | `intervene=` edits equation outputs at capture and, with `grad_options=`, the gradient at `tl.grad(...)` sites; derived gradients follow the edited program; `stop_after=` halts at the first matching equation. See Edits. |
 | rng_replay | unsupported | RNG replay is not declared. |
 | payload_materialization | supported | Portable forward and derived array payloads are materialized. |

@@ -160,10 +160,10 @@ named code), `not yet proven` (False, refusal not yet pinned by a passing suite 
 | Source lines (`op.source.frames`, `save_source_context`) | supported | |
 | Intermediate derived gradients (`intermediate_derived_grads`; `grad_options=`) | supported | |
 | Backward capture (`backward_capture`; `save_grads`, `backward_ready`) | unsupported | `backward_capture_unsupported` |
-| Fastlog (`fastlog`) | supported | |
+| Fastlog (`fastlog`): `tl.record(..., backend="mlx")` | supported | |
 | RNG replay (`rng_replay`; `save_rng`) | unsupported | `rng_replay_unsupported` |
 | Streaming (`has_streaming`) | unsupported | `streaming_unsupported` |
-| Structure-only capture (`structure_only_capture`) | supported | |
+| Structure-only capture (`structure_only_capture`): the full graph with no payloads | supported | |
 | Explicit `random_seed=` | unsupported | `explicit_seed_unsupported` |
 | Trace options outside `module_identity_mode`, `grad_options` | unsupported | `trace_option_unsupported` |
 | `mx.compile` / `mx.grad` / `mx.vmap` wrappers as the traced entry | unsupported | `traced_transform_entry_unsupported` |

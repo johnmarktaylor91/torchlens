@@ -323,11 +323,12 @@ def _jax_known_red_cells() -> dict[tuple[str, str], str]:
     return _known_red_cells({}, jax_roster.CONFIG_BUILT_FAMILIES, {})
 
 
-#: TensorFlow's packet roster (switch off). No red cell remains: a verified
-#: ``ReadVariableOp`` parameter read validates as a parameter source, live and
-#: after load, so the Keras module rows pass and the pack reaches C2.
 def _tf_known_red_cells() -> dict[tuple[str, str], str]:
-    """TensorFlow's named red cells, built from the roster module's family list."""
+    """TensorFlow's named red cells, built from the roster module's family list.
+
+    None remain: the Keras module rows validate (their parameter reads included),
+    and every TF trace saves, so each after-load cell passes and the pack reaches C2.
+    """
 
     from tests.conformance._rosters import tf as tf_roster
 
@@ -358,10 +359,10 @@ def test_jax_pack_earns_c1_with_its_named_red_cells(
 @pytest.mark.rare
 @pytest.mark.heavy
 @pytest.mark.tf_backend
-def test_tf_pack_earns_c0_with_its_named_red_cells(
+def test_tf_pack_earns_c2_with_its_named_red_cells(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The tf pack on its nine-row packet roster reaches C2; every red cell is named.
+    """The tf pack on its nine-row packet roster earns C2; every red cell is named.
 
     A new red or a fixed one both fail here; the fix removes its entry (and
     rewrites the shipped scorecard) in the same change.

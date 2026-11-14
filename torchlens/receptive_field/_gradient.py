@@ -15,7 +15,7 @@ import torch
 from .. import _state
 from .._utils._record_group_table import record_member
 from .._utils._torch_compat import tensor_any_over_dims
-from ..backends.registry import get_backend_spec
+from ..backends._backend_names import TORCH_BACKEND_NAME
 from . import _engine, _rules
 from ._errors import (
     ReceptiveFieldConfigurationError,
@@ -694,7 +694,7 @@ def gradient_for_unit(
             # route it through the input path so the result is byte-identical.
             input_op = _source_op
             source = None
-    if not get_backend_spec(str(trace._provenance_backend)).capabilities.backward_capture:
+    if str(trace._provenance_backend) != TORCH_BACKEND_NAME:  # autograd path is torch-only
         return replay_probe("receptive")(target, unit, input_op, source, atol, rtol)
     if not trace._options_backward_ready:
         raise ReceptiveFieldUnavailableError(

@@ -163,7 +163,8 @@ the captured output before it publishes any gradient.
 
 A `tl.grad(site)` clause edits the gradient arriving at the site's output, as on
 PyTorch, and may sit in the same spec as activation edits. Paddle records no backward
-pass during capture, so the clause is armed on the finished trace and applied when
+pass during capture (only `trace.backward` on a `backward_ready=True` trace records one),
+so the clause is armed on the finished trace and applied when
 derived gradients are computed. Input and parameter gradients come from `paddle.grad`
 with the edit registered as a gradient hook on the site output. The edited gradient at
 each op (`trace.autograd.intermediate_derived_grads`, with
@@ -203,11 +204,11 @@ conformance cell yet.
 | Gradient edits at `tl.grad(...)` sites, applied to derived gradients | supported | |
 | A `tl.grad(...)` site whose gradient passes through an op the replay adapter cannot replay (a live activation edit, a training-mode dropout, an untracked tensor) | refuses, naming the op | `run_capability_unavailable` |
 | Derived gradients, including intermediates and edited or halted captures (`intermediate_derived_grads`) | supported | |
-| True backward capture (`backward_capture`) | unsupported | `backward_capture_unsupported` |
-| Fast logging (`fastlog`) | supported | |
+| True backward capture (`backward_capture`) on a `backward_ready=True` trace: one pass per `trace.backward(loss)`, one `GradFn` per dygraph grad node | supported | |
+| Fast logging (`fastlog`): `tl.record(backend="paddle")` | supported | |
 | RNG replay (`rng_replay`) | unsupported | `rng_replay_unsupported` |
-| Streaming (`has_streaming`) | supported | |
-| Structure-only capture (`structure_only_capture`) | supported | |
+| Streaming (`has_streaming`): `storage=tl.to_disk(path)` streams payloads into a bundle during capture, not combined with `save=` or structure-only | supported | |
+| Structure-only capture (`structure_only_capture`): the real forward with no payloads; validation refuses typed | supported | |
 
 Other refusals the backend raises: `explicit_seed_unsupported` (`random_seed=`),
 `trace_option_unsupported` (an option outside the backend's list), `module_identity_mode_unsupported`,

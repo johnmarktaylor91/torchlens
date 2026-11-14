@@ -10,7 +10,11 @@ import numpy as np
 import pytest
 
 import torchlens as tl
-from torchlens.errors import BackendUnsupportedError, CaptureGapWarning
+from torchlens.errors import (
+    BackendUnsupportedError,
+    CaptureGapWarning,
+    RunCapabilityUnavailableError,
+)
 from torchlens.validation._invariants import check_metadata_invariants
 
 jax = pytest.importorskip("jax")
@@ -721,20 +725,21 @@ def _assert_pytree_validate_surface(trace: Any, tmp_path: Path) -> None:
 
 
 def _assert_pytree_grad_surface(trace: Any, tmp_path: Path) -> None:
-    """Assert current pytree-module gradient surface contract."""
+    """Assert a pytree-module trace with no backward pass exposes empty grad records."""
 
     del tmp_path
     assert trace.autograd.has_backward_pass is False
-    with pytest.raises(ValueError, match="derived_grads"):
-        _ = trace[0].autograd.grads
+    assert len(trace.autograd.backward_passes) == 0
+    assert len(trace[0].autograd.grads) == 0
 
 
 def _assert_pytree_backward_surface(trace: Any, tmp_path: Path) -> None:
-    """Assert backward capture rejects with derived-gradient guidance."""
+    """Assert JAX backward refuses an array loss without recording a pass."""
 
     del tmp_path
-    with pytest.raises(BackendUnsupportedError, match="backward capture.*derived_grads"):
+    with pytest.raises(RunCapabilityUnavailableError, match="loss must be a callable"):
         trace.backward(trace[trace.output_layers[0]].out)
+    assert trace.autograd.has_backward_pass is False
 
 
 @pytest.mark.parametrize(

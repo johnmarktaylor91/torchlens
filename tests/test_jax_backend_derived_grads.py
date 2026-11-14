@@ -19,7 +19,7 @@ from torchlens.backends.jax.backend import (
     _JaxIntermediateTapSpec,
 )
 from torchlens.backends.jax.jaxpr import _jax_zero_tap
-from torchlens.errors import BackendUnsupportedError
+from torchlens.errors import BackendUnsupportedError, RunCapabilityUnavailableError
 
 jax = pytest.importorskip("jax")
 jnp = pytest.importorskip("jax.numpy")
@@ -464,7 +464,7 @@ def test_jax_derived_grads_reject_non_scalar_output_without_loss_fn() -> None:
 
 
 def test_jax_derived_grads_are_not_backward_capture() -> None:
-    """JAX traces should reject true backward surfaces with derived-grad guidance."""
+    """Derived grads never record a backward pass; an array loss is refused, typed."""
 
     params = _params()
     trace = tl.trace(
@@ -474,14 +474,12 @@ def test_jax_derived_grads_are_not_backward_capture() -> None:
         capture=tl.options.CaptureOptions(grad_options=GradOptions(params=params, loss_fn=_loss)),
     )
 
-    with pytest.raises(BackendUnsupportedError, match="trace\\.autograd\\.derived_grads"):
+    assert {"params.b", "params.w"} <= set(trace.autograd.derived_grads.keys())
+    with pytest.raises(RunCapabilityUnavailableError, match="loss must be a callable"):
         trace.backward(cast(Any, trace[trace.output_layers[0]].out))
-    with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
-        _ = trace.autograd.backward_passes
-    with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
-        _ = trace.saved_grad_ops
-    with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
-        _ = trace[0].autograd.grads
+    assert trace.autograd.has_backward_pass is False
+    assert len(trace.autograd.backward_passes) == 0
+    assert len(trace[0].autograd.grads) == 0
 
 
 def test_jax_derived_grads_reject_closed_over_scalar_host_state() -> None:

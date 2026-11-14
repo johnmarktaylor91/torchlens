@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import torch
 
 from .._record_type import record_type
-from ..backends.registry import get_backend_spec
+from ..backends._backend_names import TORCH_BACKEND_NAME
 from ._engine_forward import solve_projective
 from ._errors import ReceptiveFieldUnavailableError
 from ._gradient import (
@@ -484,7 +484,7 @@ def projective_gradient_for_unit(
     if atol < 0 or rtol < 0:
         raise ValueError("atol and rtol must be non-negative.")
     trace: Trace = source.source_trace
-    if not get_backend_spec(str(trace._provenance_backend)).capabilities.backward_capture:
+    if str(trace._provenance_backend) != TORCH_BACKEND_NAME:  # autograd path is torch-only
         probe = replay_probe("projective")
         return probe(source, unit, target=target, atol=atol, rtol=rtol)
     if not trace._options_backward_ready:
