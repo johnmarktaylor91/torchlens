@@ -49,6 +49,7 @@ class WeakProducerIndex(MutableMapping[object, str]):
         """Weak-reference callback removing the entry for a tensor that died."""
 
         def forget(dead: weakref.ref[Any]) -> None:
+            """Drop the entry when it still belongs to the dead reference."""
             entry = self._by_id.get(ident)
             if entry is not None and entry[0] is dead:
                 del self._by_id[ident]

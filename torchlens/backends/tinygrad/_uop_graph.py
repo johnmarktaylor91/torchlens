@@ -7,7 +7,7 @@ reaches an output as data.
 
 from __future__ import annotations
 
-from collections.abc import Collection, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from hashlib import blake2b
 from typing import Any, cast
 
@@ -195,6 +195,39 @@ def _uop_signature(uop: Any, memo: dict[int, str] | None = None) -> str:
             f"{_uop_name(uop)}:{getattr(uop, 'dtype', None)}:{getattr(uop, 'arg', None)}[{kids}]"
         )
     return memo[id(uop)]
+
+
+SOURCE_SIGNATURE = "source"
+"""The signature a graph source (a captured input) takes in place of its history."""
+
+
+def source_memo(sources: Iterable[Any]) -> dict[int, str]:
+    """A :func:`_uop_signature` memo that names each source UOp by role, not history.
+
+    A capture input is unrealized when the capture records it and realized when
+    a later pass runs the model again, so its structural history differs
+    between the two. Naming it ``source`` on both sides keeps every op
+    downstream of it matchable; two sources that meet the same op stay
+    ambiguous, and an ambiguous match is skipped, never guessed.
+    """
+
+    return {id(uop): SOURCE_SIGNATURE for uop in sources}
+
+
+def capture_source_memo(captures: Sequence[Any]) -> dict[int, str]:
+    """:func:`source_memo` over the capture's input sources.
+
+    A parent label with no capture record of its own is an input source (constants
+    and parameters have records); its UOp is the parent's ``src`` at that position.
+    """
+
+    captured = {capture.label_raw for capture in captures}
+    return source_memo(
+        capture.uop.src[position]
+        for capture in captures
+        for position, label in capture.parent_arg_positions
+        if label not in captured
+    )
 
 
 def _op_func_name(observed_names: Sequence[str], op_name: str) -> str:

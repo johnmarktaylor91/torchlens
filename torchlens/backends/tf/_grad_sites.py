@@ -144,9 +144,14 @@ def _tape_edit(apply: Callable[[Any, Any], Any], tf: Any) -> Callable[..., Any]:
     """An activation action: identity forward, ``apply`` on the incoming gradient."""
 
     def action(out: Any, *, ctx: Any = None) -> Any:
+        """Pass ``out`` through a custom-gradient identity that edits its gradient."""
+
         @tf.custom_gradient
         def identity(value: Any) -> Any:
+            """The identity forward whose gradient function applies the edit."""
+
             def grad_fn(upstream: Any) -> Any:
+                """The edited incoming gradient."""
                 return apply(upstream, ctx)
 
             return tf.identity(value), grad_fn

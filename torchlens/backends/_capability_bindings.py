@@ -185,6 +185,8 @@ def _lazy_binding(
     """
 
     def _resolve() -> object:
+        """Import ``module`` and return the bound object (called when ``call`` is set)."""
+
         target = importlib.import_module(module)
         if attr is None:
             return target

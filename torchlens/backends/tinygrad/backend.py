@@ -85,7 +85,7 @@ from .._validation_shared import (
     replay_payload,
     scalar_replay_close,
 )
-from . import _captures as hooks
+from . import _captures as hooks, _uop_graph
 from ._capture_state import begin_capture, event_module_frames, mark_edit, realize_with_state
 from ._captures import TinygradIntermediateCandidate, TinygradUOpCapture
 from ._derived_grads import (
@@ -2479,9 +2479,7 @@ def _tinygrad_signature_key(
     uop_signature
         Recursive structural UOp signature.
     ordinal
-        Legacy topological ordinal retained in the internal call signature for
-        compatibility. tinygrad 0.13's graph normalization introduces
-        unobserved UOps, so this value is intentionally excluded from matching.
+        Unused: tinygrad 0.13's graph normalization adds unobserved UOps.
     parent_signatures
         Direct parent structural signatures.
     shape
@@ -2520,15 +2518,16 @@ def _tinygrad_trace_op_signatures(
     """
 
     uop_by_label = {capture.label_raw: capture.uop for capture in captures}
+    memo = _uop_graph.capture_source_memo(captures)
     grouped: dict[tuple[Any, ...], list[Any]] = defaultdict(list)
     for ordinal, op in enumerate(ops):
         uop = uop_by_label.get(op._label_raw)
         if uop is None:
             continue
         key = _tinygrad_signature_key(
-            uop_signature=_uop_signature(uop),
+            uop_signature=_uop_signature(uop, memo),
             ordinal=ordinal,
-            parent_signatures=tuple(_uop_signature(src) for src in getattr(uop, "src", ())),
+            parent_signatures=tuple(_uop_signature(src, memo) for src in getattr(uop, "src", ())),
             shape=tuple(getattr(op, "shape", ()) or ()),
             dtype=str(getattr(op, "dtype", "")),
         )
@@ -2565,22 +2564,23 @@ def _tinygrad_live_intermediate_candidates(
     """
 
     grouped: dict[tuple[Any, ...], list[TinygradIntermediateCandidate]] = defaultdict(list)
-    source_ids = frozenset(
-        id(cast(Any, leaf).uop)
+    memo = _uop_graph.source_memo(
+        cast(Any, leaf).uop
         for _path, leaf in _tree_leaves_with_paths(tuple(args))
         if backend.is_tensor(leaf)
     )
-    for ordinal, uop in enumerate(_data_flow_uops(_unique_uops(outputs), outputs, source_ids)):
+    for ordinal, uop in enumerate(_data_flow_uops(_unique_uops(outputs), outputs, memo)):
         tensors = observed_tensors.get(id(uop), ())
+        parents = tuple(_uop_signature(src, memo) for src in getattr(uop, "src", ()))
         for tensor in tensors:
             if not backend.is_tensor(tensor):
                 continue
             shape = tuple(getattr(tensor, "shape", ()) or ())
             dtype = str(getattr(tensor, "dtype", ""))
             key = _tinygrad_signature_key(
-                uop_signature=_uop_signature(uop),
+                uop_signature=_uop_signature(uop, memo),
                 ordinal=ordinal,
-                parent_signatures=tuple(_uop_signature(src) for src in getattr(uop, "src", ())),
+                parent_signatures=parents,
                 shape=shape,
                 dtype=dtype,
             )
