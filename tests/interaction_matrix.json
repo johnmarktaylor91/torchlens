@@ -357,7 +357,7 @@
    "evidence": "docs/reference/limitations.md",
    "code": "backend_unsupported",
    "confidence": "high",
-   "note": "Every non-torch backend refuses storage=, streaming= and chunk_size; tests/test_paddle_backend_interventions.py::test_paddle_streaming_still_refuses_typed."
+   "note": "Every non-torch backend except Paddle refuses storage=, streaming= and chunk_size; Paddle streams to disk (tests/test_parity_b_paddle_cap_stream.py)."
   },
   {
    "a": "backend",

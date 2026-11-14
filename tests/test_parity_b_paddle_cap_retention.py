@@ -172,7 +172,7 @@ _PEAK_SCRIPT = textwrap.dedent(
 
     def chain(v):
         for _ in range(12):
-            v = paddle.nn.functional.relu(paddle.multiply(paddle.add(v, 1.0), 0.5))
+            v = paddle.nn.functional.relu((v + 1.0) * 0.5)
         return paddle.exp(v * 0.01)
 
     config = sys.argv[1]

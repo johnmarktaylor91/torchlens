@@ -546,11 +546,14 @@ def test_paddle_recipes_snapshot_dispatches() -> None:
         tl.trace(_mlp, _inputs(), backend="paddle", facets=["not-callable"])
 
 
-def test_paddle_streaming_still_refuses_typed() -> None:
-    """The unlifted gated options keep their typed refusals."""
+def test_paddle_streaming_writes_a_bundle(tmp_path: Any) -> None:
+    """Streaming is lifted on Paddle: ``storage=tl.to_disk`` writes a loadable bundle."""
 
-    with pytest.raises(BackendUnsupportedError):
-        tl.trace(_mlp, _inputs(), backend="paddle", storage=tl.to_disk("unused.tlspec"))
+    path = tmp_path / "streamed.tlspec"
+    trace = tl.trace(_mlp, _inputs(), backend="paddle", storage=tl.to_disk(path))
+    assert path.is_dir()
+    assert tl.load(path).provenance.backend == "paddle"
+    assert trace._layer_list
 
 
 def test_paddle_intervene_and_save_predicates_compose() -> None:
