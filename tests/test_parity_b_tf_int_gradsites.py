@@ -187,18 +187,13 @@ def test_entry_grad_site_edit_equals_the_hand_split(name: str) -> None:
     helper, edit = _EDITS[name]
     model, x = _DenseRelu(), tf.constant(_X)
     _output, expected = _by_hand(model, x, edit)
-    try:
-        trace = tl.trace(
-            model,
-            x,
-            backend="tf",
-            intervene=_clause(helper),
-            capture=tl.options.CaptureOptions(grad_options=GradOptions(loss_fn=_loss)),
-        )
-    except BackendUnsupportedError as refusal:
-        if "does not combine" in str(refusal):
-            pytest.skip("the tf capture entry does not yet pass edits to the gradient replay")
-        raise
+    trace = tl.trace(
+        model,
+        x,
+        backend="tf",
+        intervene=_clause(helper),
+        capture=tl.options.CaptureOptions(grad_options=GradOptions(loss_fn=_loss)),
+    )
     _assert_grads(_grads(trace), expected)
 
 

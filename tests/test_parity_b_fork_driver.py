@@ -16,7 +16,12 @@ from typing import Any
 import numpy as np
 import pytest
 
-from torchlens.intervention._backend_replay import ReplayStep, ReplayWalk, propagate
+from torchlens.intervention._backend_replay import (
+    ReplayStep,
+    ReplayWalk,
+    propagate,
+    verify_backend_replay,
+)
 from torchlens.intervention.errors import HookValueError, ReplayPreconditionError
 
 
@@ -173,3 +178,29 @@ def test_preserved_origin_value_stands_as_given() -> None:
     propagate(walk, steps)
     assert np.array_equal(walk.overlay["y"], new_y)
     assert np.array_equal(walk.overlay["sq"], new_y * new_y)
+
+
+def test_downstream_layout_change_refuses() -> None:
+    """An edit that sends a downstream op down a shape-dependent branch refuses."""
+
+    steps, payloads = _graph()
+    steps[2] = ReplayStep(
+        _op("sq", lambda a, b: (np.repeat(a * b, 2) if a[0] > 2.5 else a * b,)),
+        ("sq",),
+        ("y", "y"),
+        "op",
+        False,
+    )
+    walk = _walk(_NumpyAdapter(), payloads, {"y": lambda v: v + 1.0})
+    with pytest.raises(ReplayPreconditionError) as caught:
+        propagate(walk, steps)
+    assert caught.value.fields["code"] == "backend_replay_layout_changed"
+    assert "sq" not in walk.overlay
+
+
+def test_verify_refuses_a_trace_without_a_replay_adapter() -> None:
+    """A PyTorch trace has no backend replay adapter, so the verifier refuses it."""
+
+    with pytest.raises(ReplayPreconditionError) as caught:
+        verify_backend_replay(SimpleNamespace(_provenance_backend="torch"))
+    assert caught.value.fields["code"] == "backend_replay_no_adapter"

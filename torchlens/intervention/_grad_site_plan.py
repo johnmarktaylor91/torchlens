@@ -33,6 +33,7 @@ from .._data_classes._trace_missing_attrs import is_live_trace
 from .._ir.selector_eval import looks_like_finalized_label, normalize_selector_like
 from .._selection.resolver import _resolve_unchecked
 from .._selection.selectors import CompositeSelector, NotSelector, label
+from ..backends._backend_names import TORCH_BACKEND_NAME
 from ..options import ReplayOptions
 from ._audit import record_intervention_event, site_keys_for_labels
 from ._edit_guards import detach_handles, internal_mutation
@@ -203,8 +204,8 @@ def do_signal_plan(trace: Trace, plan: _SignalPlan, request: _SignalDoRequest) -
         ``set_only``.
     """
 
-    backend = getattr(trace, "_provenance_backend", None) or "torch"
-    if backend != "torch":
+    backend = getattr(trace, "_provenance_backend", None) or TORCH_BACKEND_NAME
+    if backend != TORCH_BACKEND_NAME:
         return cast("Trace", do_signal_plan_off_torch(trace, plan, request, backend))
     preflight_txn = _preflight_signal_do(trace, plan, request)
     if preflight_txn.engine == "rerun":

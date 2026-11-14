@@ -26,7 +26,7 @@ keras = pytest.importorskip("keras")
 import torchlens as tl  # noqa: E402
 from torchlens.backends.tf import GradOptions  # noqa: E402
 from torchlens.backends.tf.derived_grads import attach_tf_derived_grads  # noqa: E402
-from torchlens.errors import BackendUnsupportedError, InvalidArgumentError  # noqa: E402
+from torchlens.errors import InvalidArgumentError  # noqa: E402
 
 pytestmark = [pytest.mark.tf_backend, pytest.mark.rare]
 
@@ -194,20 +194,15 @@ def test_engine_replay_leaves_the_halt_record_as_captured() -> None:
 
 
 def _entry(model: Any, x: Any, **kwargs: Any) -> Any:
-    """``tl.trace`` with grad_options; skipped while the entry still refuses the pair."""
+    """``tl.trace`` with grad_options (the entry passes edits and halts to the gradient replay)."""
 
-    try:
-        return tl.trace(
-            model,
-            x,
-            backend="tf",
-            capture=tl.options.CaptureOptions(grad_options=GradOptions(loss_fn=_loss)),
-            **kwargs,
-        )
-    except BackendUnsupportedError as refusal:
-        if "does not combine" in str(refusal):
-            pytest.skip("the tf capture entry does not yet pass edits to the gradient replay")
-        raise
+    return tl.trace(
+        model,
+        x,
+        backend="tf",
+        capture=tl.options.CaptureOptions(grad_options=GradOptions(loss_fn=_loss)),
+        **kwargs,
+    )
 
 
 @pytest.mark.parametrize("name", sorted(_EDITS))

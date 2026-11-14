@@ -50,7 +50,8 @@ from ..._ir.events import (
 from ..._ir.predicate import RetroactiveCaptureDecision
 from ..._quantities import Bytes, Duration
 from ..._state import pause_logging
-from ..._trace_core.record_rows import BackwardEpoch, adopt_rows
+from ..._trace_core import record_rows
+from ..._trace_core.record_rows import BackwardEpoch
 from ..._utils._display_bounded import short_dataclass_repr
 from ..._utils._package_frames import is_torchlens_code
 from ..._utils._record_group_table import record_member
@@ -975,9 +976,10 @@ def _bind_backward_epoch(
             call_map = getattr(grad_fn_record.calls, "_dict", grad_fn_record.calls)
             calls.extend(call_map.values())
         passes = list((trace._backward_pass_logs or {}).values())
-    adopt_rows(epoch.stores, "grad_fn", grad_fns)
-    adopt_rows(epoch.stores, "grad_fn_call", calls)
-    adopt_rows(epoch.stores, "backward_pass", passes)
+    # Looked up on the module at call time, so a failure injected there is seen here.
+    record_rows.adopt_rows(epoch.stores, "grad_fn", grad_fns)
+    record_rows.adopt_rows(epoch.stores, "grad_fn_call", calls)
+    record_rows.adopt_rows(epoch.stores, "backward_pass", passes)
     epoch.revision = revision
     epoch.watermark = watermark
     if staged:

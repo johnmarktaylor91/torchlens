@@ -277,8 +277,6 @@ PADDLE_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
         "lookback": 0,
         "lookback_payload_policy": "metadata_only",
         "capture": None,
-        "storage": None,
-        "streaming": None,
         "inference_only": False,
         "cache": False,
         "stop_after": None,
@@ -293,7 +291,8 @@ PADDLE_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
 
 ``intervene`` and ``halt`` are absent because the Paddle capture path pops
 and dispatches them before extra-kwarg rejection runs (the ``interventions``
-capability flag owns both); ``facets`` is popped and snapshotted the same way
+capability flag owns both); ``storage`` and ``streaming`` are absent for the same
+reason (the ``has_streaming`` flag owns them); ``facets`` is popped and snapshotted the same way
 under the backend-neutral ``facet_recipes`` record.
 """
 

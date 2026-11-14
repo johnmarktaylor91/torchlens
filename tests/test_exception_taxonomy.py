@@ -1096,6 +1096,36 @@ _BUILTIN_EXCEPTION_ROOTS = frozenset(
 # current: a stale entry (class deleted or later registered) fails the gate
 # just like a missing one.
 _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
+    # Preview-backend stop signals: each recorder raises its own private signal to
+    # unwind the forward at a stop decision and catches it in the same module.
+    "torchlens.backends.jax._record._StopRecording": (
+        "private stop signal raised in the JAX equation hook and caught by the JAX "
+        "recorder's own run loop, never escapes"
+    ),
+    "torchlens.backends.mlx._record._StopRecording": (
+        "private stop signal raised in an MLX wrapper and caught by the MLX recorder's "
+        "own run loop, never escapes"
+    ),
+    "torchlens.backends.paddle._record._StopRecording": (
+        "private stop signal raised in a Paddle wrapper and caught by the Paddle "
+        "recorder's own run loop, never escapes"
+    ),
+    "torchlens.backends.tf._record._StopRecording": (
+        "private stop signal raised in the TF op callback and caught by the TF "
+        "recorder's own run loop, never escapes"
+    ),
+    "torchlens.backends.jax._interp_hooks.InterpreterHalt": (
+        "private halt signal that unwinds the JAX interpreter at the halt frontier; "
+        "caught in backends/jax/jaxpr.py, which returns the frontier capture"
+    ),
+    "torchlens.backends.paddle._edit_replay._ReplayHalt": (
+        "private BaseException that stops a replayed Paddle forward at the captured "
+        "halt call; caught in the same module, which returns its frontier output"
+    ),
+    "torchlens.receptive_field._unit_vjp.ReplayRefusal": (
+        "private signal that a probed op cannot be replayed or differentiated; the "
+        "gradient provider converts it to ReceptiveFieldUnavailableError, never escapes"
+    ),
     # Paddle native backward: one private signal inside the grad-node walk; the
     # recorder catches it and raises its coded RunCapabilityUnavailableError.
     "torchlens.backends._backward_native._paddle_nodes.Unavailable": (

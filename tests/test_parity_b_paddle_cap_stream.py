@@ -12,6 +12,7 @@ paddle = pytest.importorskip("paddle")
 
 import torchlens as tl  # noqa: E402
 from torchlens._errors import InvalidArgumentError  # noqa: E402
+from torchlens._io import ArtifactError  # noqa: E402
 from torchlens._io.streaming import BundleStreamWriter  # noqa: E402
 from torchlens.backends.paddle import _stream_capture  # noqa: E402
 from torchlens.backends.paddle._retention import STREAM_KEY  # noqa: E402
@@ -187,3 +188,14 @@ def test_plain_capture_is_unchanged_and_saves(tmp_path: Path) -> None:
     path = tmp_path / "saved"
     trace.save(path)
     _assert_payloads_equal(tl.load(path), trace)
+
+
+def test_duplicate_paddle_blob_id_refuses(tmp_path: Path) -> None:
+    """A second Paddle payload under a used blob id refuses with its code and writes nothing."""
+
+    writer = _stream_capture.paddle_writer_class(BundleStreamWriter)(tmp_path / "bundle.tlspec")
+    writer.submit_blob("0000000001", _input(), kind="out", label="first")
+    with pytest.raises(ArtifactError) as caught:
+        writer.submit_blob("0000000001", _input(), kind="out", label="second")
+    assert caught.value.fields["code"] == "stream_blob_id_duplicate"
+    assert not (tmp_path / "bundle.tlspec").exists()

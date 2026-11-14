@@ -135,7 +135,7 @@ def test_forward_equals_saved_payload_on_every_replayable_op(name: str) -> None:
 
 
 def _reverse_accumulate(trace: Any) -> dict[str, Any]:
-    """Cotangent per op label from ``vjp`` composed in reverse graph order (seed: ones)."""
+    """Cotangent per op label from ``vjp`` composed in reverse graph order (seed: the loss weights)."""
 
     cotangent = _output_seeds(trace)
     ops = _unique_ops(trace)
@@ -296,7 +296,8 @@ def test_extra_kernels_and_repeated_parent_replay_and_differentiate() -> None:
     cotangent = _reverse_accumulate(trace)
     with tf.GradientTape() as tape:
         tape.watch(example)
-        loss = tf.reduce_sum(_extra_ops_function(example))
+        out = _extra_ops_function(example)
+        loss = tf.reduce_sum(out * _loss_weights(out))
     (input_op,) = [op for op in _unique_ops(trace) if bool(getattr(op, "is_input", False))]
     assert ADAPTER.close(tape.gradient(loss, example), cotangent[input_op.label])
 

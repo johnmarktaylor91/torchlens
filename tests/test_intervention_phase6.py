@@ -13,6 +13,7 @@ import pytest
 import torch
 
 import torchlens as tl
+from torchlens.intervention import _replay_sites
 from torchlens.intervention._replay_sites import _unmet_log_precondition
 from torchlens.intervention.errors import (
     ControlFlowDivergenceWarning,
@@ -363,19 +364,38 @@ def test_replay_rejects_non_intervention_ready_logs() -> None:
         log.do({tl.func("relu"): _identity_hook}, intervention=_CONFIRM)
 
 
-@pytest.mark.parametrize("backend", ["jax", "tf", "mlx", "paddle", "tinygrad"])
-def test_replay_refusal_names_the_preview_backend(backend: str) -> None:
-    """A preview trace has no argument templates; the refusal names its backend, not tl.record."""
+def _preview_log(backend: str) -> SimpleNamespace:
+    """A finished preview-backend trace stand-in that records no argument templates."""
 
-    preview_log = SimpleNamespace(
+    return SimpleNamespace(
         _tracing_finished=True, is_replayable=False, options=None, _provenance_backend=backend
     )
 
-    message = _unmet_log_precondition(cast(Any, preview_log))
+
+@pytest.mark.parametrize("backend", ["jax", "tf", "mlx", "paddle", "tinygrad"])
+def test_replay_refusal_names_the_preview_backend(
+    backend: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With no replay adapter built, the refusal names the backend, not tl.record."""
+
+    monkeypatch.setattr(_replay_sites, "backend_adapter", lambda log: None)
+
+    message = _unmet_log_precondition(cast(Any, _preview_log(backend)))
 
     assert message is not None
     assert f"the {backend} backend cannot edit or patch a finished trace" in message
     assert "every other" not in message
+
+
+@pytest.mark.parametrize("backend", ["jax", "tf", "mlx", "paddle", "tinygrad"])
+def test_preview_backend_with_a_replay_adapter_passes_the_log_precondition(
+    backend: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A backend whose replay adapter is built replays op by op, so the log check passes."""
+
+    monkeypatch.setattr(_replay_sites, "backend_adapter", lambda log: object())
+
+    assert _unmet_log_precondition(cast(Any, _preview_log(backend))) is None
 
 
 def test_replay_runs_on_default_capture() -> None:

@@ -446,6 +446,10 @@ TRACE_EXTERNAL_WRITE_EXEMPTIONS: dict[str, str] = {
     ),
     "_paddle_module_stack": "paddle: module-stack scratch, attached/deleted around the forward",
     "_paddle_intervention_runtime": "paddle: live intervention runtime for the dygraph forward",
+    "_paddle_edit_replay_tap": (
+        "paddle: edit-replay tap attached around one replayed forward and "
+        "deleted in its finally block, read back by the paddle intervention hooks"
+    ),
     "_tf_static_region_labels": (
         "tf: FuncGraph static-path region captures (scrub-declared runtime-only)"
     ),
@@ -454,6 +458,10 @@ TRACE_EXTERNAL_WRITE_EXEMPTIONS: dict[str, str] = {
     ),
     "_jax_capture_index_to_raw_op_label": (
         "jax: capture-index to raw-label map (scrub-declared runtime-only)"
+    ),
+    "_jax_backward_captures": (
+        "jax: equation captures a backward-ready forward keeps for a later "
+        "record_backward (DROP in the field spec, runtime-only binding)"
     ),
     "_selective_save_hidden_payloads": (
         "previews: neutral selective-save side channel (scrub-declared runtime-only)"
