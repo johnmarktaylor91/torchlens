@@ -177,8 +177,7 @@ def test_tf_derived_grads_do_not_create_backward_logs() -> None:
     assert trace.autograd.has_backward_pass is False
     assert not trace._backward_pass_logs
     assert not trace._grad_fn_logs
-    with pytest.raises(ValueError, match="derived_grads"):
-        trace.autograd.backward_passes
+    assert len(trace.autograd.backward_passes) == 0
 
 
 def test_tf_intermediate_grads_match_direct_oracle_and_skip_disconnected() -> None:

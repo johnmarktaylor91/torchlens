@@ -15,7 +15,11 @@ from torchlens._io.payload_codec import get_payload_codec
 from torchlens._io.tensor_policy import FailReason, Ok
 from torchlens._utils._record_group_table import record_member
 from torchlens.backends.jax import capabilities
-from torchlens.errors import BackendRuntimeCompatibilityError, BackendUnsupportedError
+from torchlens.errors import (
+    BackendRuntimeCompatibilityError,
+    BackendUnsupportedError,
+    RunCapabilityUnavailableError,
+)
 
 jax = pytest.importorskip("jax")
 jnp = pytest.importorskip("jax.numpy")
@@ -1192,12 +1196,10 @@ def test_jax_public_surface_matrix(tmp_path: Path) -> None:
     assert loaded_status.payload_load_status == "loaded_device_best_effort"
     with pytest.raises(TypeError, match="not a boolean"):
         bool(loaded_status)
-    with pytest.raises(BackendUnsupportedError, match="backward capture.*derived_grads"):
+    with pytest.raises(RunCapabilityUnavailableError, match="loss must be a callable"):
         trace.backward(cast(Any, trace[trace.output_layers[0]].out))
-    with pytest.raises(ValueError, match="derived_grads"):
-        _ = trace.autograd.backward_passes
-    with pytest.raises(ValueError, match="derived_grads"):
-        _ = trace[0].autograd.grads
+    assert len(trace.autograd.backward_passes) == 0
+    assert len(trace[0].autograd.grads) == 0
 
 
 def test_jax_capability_flags_match_preview_contract() -> None:
