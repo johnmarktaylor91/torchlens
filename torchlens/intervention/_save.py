@@ -17,7 +17,7 @@ import torch
 from .._errors import InvalidArgumentError
 from .._io._durability import fsync_tree
 from .._io._json import read_bounded
-from .._io._staging import settle_failed_staging
+from .._io._staging import begin_staging, settle_failed_staging
 from .._io.format3.contract import INTERVENTION_FILE
 from .._io.format3.payloads import PayloadStore
 from .._io.format3.recipe import (
@@ -140,7 +140,7 @@ def save_intervention(
     try:
         if target_path.exists() and not overwrite:
             raise FileExistsError(f"Intervention spec path already exists: {target_path}")
-        tmp_path.mkdir(parents=True)
+        begin_staging(target_path, tmp_path, overwrite=overwrite)
 
         spec = getattr(trace, "_intervention_spec", None) or InterventionSpec()
         _sync_spec_records_from_log(spec, trace)

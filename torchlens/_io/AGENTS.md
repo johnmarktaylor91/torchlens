@@ -10,7 +10,11 @@ hostile input, and every load path here is fail-closed.
   remapped target is still gated through the allowlist.
 - `cleanup_tmp()` removes stale partial-save temp directories.
 - `_staging.refuse_stale_load()` runs at the top of `load()` (top-level path only): a sibling
-  `<name>.tmp.*` staging folder at least as new as the target refuses `newer_save_unfinished`.
+  `<name>.tmp.*` staging folder at least as new as the target, or the `NEWER_SAVE_UNFINISHED.json`
+  record inside it, refuses `newer_save_unfinished`. Every overwriting saver calls
+  `_staging.begin_staging()` (record first, then the staging folder); a failure rewrites the
+  record with the exception type (`settle_failed_staging()` / `record_failed_save()`), and
+  `cleanup_tmp()` removes it once no staging folder remains. Format3 verification never names it.
   `_staging.settle_failed_staging()` is how the non-bundle savers keep a failed overwrite's
   staging folder PARTIAL; `sibling_staging_dirs()` is the one escaped, symlink-refusing glob.
 - `_root_manifest.load_by_root_manifest()` routes merged, fastlog and extraction directories by

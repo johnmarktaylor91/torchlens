@@ -2070,9 +2070,14 @@ that is not on the site.
 - Failed or unfinished saves: every save stages into `<name>.tmp.<hex>` beside the path and
   renames it into place. A failed overwrite puts the previous copy back and leaves that
   staging folder marked `PARTIAL`, with a `REASON.txt`; a killed save leaves it unmarked.
-  While such a folder is at least as new as the copy on disk, `tl.load` raises
-  `newer_save_unfinished` instead of serving the older copy as current. Re-save, or run
-  `tl.io.cleanup_tmp(path)` to accept the older copy (`force=True` for an unmarked folder).
+  Before staging, an overwrite also writes a `NEWER_SAVE_UNFINISHED.json` record inside the
+  copy it is replacing: a completed overwrite replaces it along with the copy, while a
+  failed or killed one leaves it in the older copy, so it travels with any copy of the
+  directory. While the record is present, or such a folder is at least as new as the copy on
+  disk, `tl.load` raises `newer_save_unfinished` instead of serving the older copy as
+  current, on any machine. Re-save, or run `tl.io.cleanup_tmp(path)` to accept the older
+  copy (`force=True` for an unmarked folder); it removes the record once no staging folder
+  is left.
   A leftover folder older than the copy only warns. A failed first save leaves nothing at
   the path, and loading it fails as for any missing path.
 - Values with no typed encoding: written as text and counted in the manifest's

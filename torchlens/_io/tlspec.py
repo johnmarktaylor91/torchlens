@@ -20,7 +20,7 @@ from .._errors import InvalidArgumentError
 from .._utils._record_group_table import record_member
 from . import TLSPEC_VERSION, refuse_bundle_exists
 from ._durability import _restrict_mode, _restrict_tree_modes, fsync_dir, fsync_tree
-from ._staging import settle_failed_staging
+from ._staging import begin_staging, settle_failed_staging
 from ._tlspec_identity import _backend_v2_fields, _model_fingerprint, _model_signature, _safe_len
 from ._tlspec_json_helpers import _json_int_or_none, _json_str_or_none, _utc_timestamp
 from .format3.container import write_members
@@ -264,7 +264,7 @@ class _TlSpecWriter:
         try:
             if target_path.exists() and not overwrite:
                 refuse_bundle_exists(target_path, overwritable=True)
-            tmp_path.mkdir(parents=True)
+            begin_staging(target_path, tmp_path, overwrite=overwrite)
             _restrict_mode(tmp_path, 0o700)
             # Sweepable from birth: mark the staging dir PARTIAL so a SIGKILL
             # anywhere before publish leaves a directory ``cleanup_tmp()``

@@ -28,7 +28,7 @@ from typing import Any, NamedTuple
 
 from .._errors import InvalidArgumentError
 from .._io._durability import fsync_tree
-from .._io._staging import settle_failed_staging
+from .._io._staging import mark_superseding_save, settle_failed_staging
 from .._io.format3.contract import INTERVENTION_FILE
 from .._io.format3.payloads import PayloadStore
 from .._io.format3.reader import validate_artifact
@@ -187,6 +187,7 @@ def save_recipe(
     try:
         if target_path.exists() and not overwrite:
             raise FileExistsError(f"Recipe path already exists: {target_path}")
+        mark_superseding_save(target_path, overwrite=overwrite)
         _write_recipe_tree(tmp_path, recipe, save_level)
         if target_path.exists():
             if not overwrite:

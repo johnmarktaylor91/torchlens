@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any, Final
 
 from .._artifact_anchors import check_manifest_metadata_anchors
-from .._extra_files import _warn_extra_files
+from .._extra_files import _warn_extra_files, is_unnamed_extra_file
 from .._injected_row_cells import refuse_stamped_model_rows
 from .._json import loads_bounded, read_bytes_bounded
 from .._runtime_identity import check_runtime_identity, parse_pep440
@@ -423,7 +423,7 @@ def verify_listed_files(root: Path, manifest: Mapping[str, Any]) -> None:
     for parent, _dirnames, filenames in os.walk(root, followlinks=False):
         for name in sorted(filenames):
             relpath = (Path(parent) / name).relative_to(root).as_posix()
-            if relpath not in listed:
+            if relpath not in listed and not is_unnamed_extra_file(relpath):
                 unlisted.append(relpath)
     if unlisted:
         shown = ", ".join(unlisted[:8]) + (

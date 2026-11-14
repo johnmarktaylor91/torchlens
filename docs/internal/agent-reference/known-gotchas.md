@@ -93,8 +93,12 @@
 - A failed or killed save leaves `<name>.tmp.<hex>` beside the path (`PARTIAL` plus `REASON.txt`
   after a failed overwrite, unmarked after a kill). `tl.load` then refuses `newer_save_unfinished`
   while that folder is at least as new as the copy on disk (directory mtimes; a rename keeps the
-  mtime), because the copy on disk is the older one. `tl.io.cleanup_tmp(path)` accepts the older
-  copy (`force=True` for an unmarked folder). Every saver (`Trace.save`, `Bundle.save`,
+  mtime), because the copy on disk is the older one. The folder stays on the saving machine, so an
+  overwrite also writes `NEWER_SAVE_UNFINISHED.json` inside the old copy before staging
+  (`_staging.begin_staging`); a failed or killed overwrite leaves it there, a copied directory
+  carries it, and load refuses on it with no mtime involved. `tl.io.cleanup_tmp(path)` accepts the
+  older copy (`force=True` for an unmarked folder) and removes the record once no folder is left.
+  Tests that compare a restored copy's files byte for byte must skip or clean the record first. Every saver (`Trace.save`, `Bundle.save`,
   `save_intervention`, `Recipe.save`, merged, `to_disk`) stages under that name; tests that
   fail an overwrite and then load must clean up first.
 - A streamed (`to_disk`) trace does not run: every `trace.run(...)` door refuses

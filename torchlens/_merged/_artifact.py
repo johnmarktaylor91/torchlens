@@ -30,7 +30,7 @@ from typing import Any
 
 from .._io import _json
 from .._io._durability import fsync_dir, fsync_tree
-from .._io._staging import settle_failed_staging
+from .._io._staging import begin_staging, settle_failed_staging
 from .._utils.hashing import update_hasher_from_file
 from ._engine import _STRUCTURAL_KINDS, PerRankRef, derive_merge
 from ._enums import (
@@ -332,7 +332,7 @@ def save_merged(merged: MergedTrace, path: str | Path, *, overwrite: bool = Fals
     backup_root: Path | None = None
     try:
         members_dir = staging_root / "members"
-        members_dir.mkdir(parents=True)
+        begin_staging(root, members_dir, overwrite=overwrite)
         _restrict_mode(staging_root, 0o700)
         _restrict_mode(members_dir, 0o700)
         (staging_root / "merge").mkdir()

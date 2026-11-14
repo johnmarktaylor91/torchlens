@@ -90,10 +90,12 @@ from ._save_gates import (
 from ._save_subject import resolve_save_subject
 from ._skipped_blobs import _apply_skipped_blobs_to_scrubbed_state
 from ._staging import (
-    PARTIAL_SENTINEL,
+    begin_staging,
+    clear_record_when_unstaged,
     mark_partial as _mark_partial,
+    record_failed_save,
     refuse_stale_load,
-    sibling_staging_dirs,
+    sweep_staging_dirs,
 )
 from ._tlspec_identity import _preflight_schema_v2_runtime
 from .format3 import (
@@ -613,9 +615,7 @@ def save(
     try:
         if bundle_path.exists() and not overwrite:
             refuse_bundle_exists(bundle_path, overwritable=True)
-
-        tmp_path.parent.mkdir(parents=True, exist_ok=True)
-        tmp_path.mkdir()
+        begin_staging(bundle_path, tmp_path, overwrite=overwrite)
         (tmp_path / "blobs").mkdir()
         # Bundle directories are 0700 from the start (no second principal can swap
         # a blob in a group-writable dir); the written files are 0600 below.
@@ -2269,8 +2269,9 @@ def cleanup_tmp(path: str | Path, *, force: bool = False) -> list[Path]:
     Returns
     -------
     list[Path]
-        Removed temp directory paths, plus any restored backup paths (now
-        living at ``bundle_path``).
+        Removed temp directory paths, restored backup paths (now at
+        ``bundle_path``), and the ``NEWER_SAVE_UNFINISHED.json`` record inside the
+        copy, removed once no staging folder is left beside it.
 
     Raises
     ------
@@ -2292,23 +2293,11 @@ def cleanup_tmp(path: str | Path, *, force: bool = False) -> list[Path]:
 
     bundle_path = Path(path)
     _reject_symlink_path(bundle_path, context="cleanup target")
-    removed: list[Path] = []
+    removed = sweep_staging_dirs(bundle_path, force=force)
     # the bundle basename is DATA, not a pattern. Escaping it stops glob
     # metacharacters in a legal filename (e.g. ``job*``) from widening the sweep --
     # and, crucially, the backup RESTORATION below -- to sibling bundles.
     escaped_name = glob.escape(bundle_path.name)
-    for candidate in sibling_staging_dirs(bundle_path):
-        if not candidate.is_dir():
-            continue
-        if force or (candidate / PARTIAL_SENTINEL).exists():
-            shutil.rmtree(candidate)
-            removed.append(candidate)
-            continue
-        warnings.warn(
-            f"Leaving non-partial temp directory {candidate} in place; pass force=True to remove it.",
-            TorchLensWarning,
-            stacklevel=2,
-        )
 
     bak_pattern = f"{escaped_name}.bak.*"
     for candidate in bundle_path.parent.glob(bak_pattern):
@@ -2349,7 +2338,7 @@ def cleanup_tmp(path: str | Path, *, force: bool = False) -> list[Path]:
             TorchLensWarning,
             stacklevel=2,
         )
-    return removed
+    return [*removed, *clear_record_when_unstaged(bundle_path)]
 
 
 def _scrub_trace_for_bundle(
@@ -3655,6 +3644,7 @@ def _run_save_recovery(
     try:
         if backup_path is not None and not bundle_path.exists() and backup_path.exists():
             _restore_backup(backup_path, bundle_path)
+        record_failed_save(bundle_path, type(primary).__name__)  # the copy's record
     except Exception as failure:
         _disclose("backup-restore", failure)
 
