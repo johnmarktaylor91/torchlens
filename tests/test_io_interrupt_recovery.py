@@ -82,13 +82,13 @@ def test_tlspec_stranded_backup_is_restored_by_cleanup(
     marker_bytes = (target / "manifest.json").read_bytes()
 
     real_replace = tlspec_mod.os.replace
-    calls = {"n": 0}
 
     def killing_replace(src, dst):  # type: ignore[no-untyped-def]
-        calls["n"] += 1
-        if calls["n"] == 1:
-            return real_replace(src, dst)  # target renamed aside to the backup
-        raise KeyboardInterrupt  # simulated kill before/at the publish rename
+        # The record inside the target and the aside-rename to the backup go through;
+        # the publish rename of the staging dir is where the kill lands.
+        if Path(src).name.startswith(f"{target.name}.tmp."):
+            raise KeyboardInterrupt
+        return real_replace(src, dst)
 
     monkeypatch.setattr(tlspec_mod.os, "replace", killing_replace)
     # Disable the in-process handler's cleanup/restore too: a real SIGKILL
@@ -142,5 +142,8 @@ def test_bundle_save_recovery_failure_never_masks_the_interrupt(
             trace.save(target, overwrite=True)
 
     assert any("recovery step 'mark-partial' itself failed" in str(w.message) for w in caught)
-    # The backup restore still ran: the pre-existing bundle is back in place.
-    assert sorted(p.name for p in target.iterdir()) == before
+    # The backup restore still ran: the pre-existing bundle is back in place, with the
+    # record of the failed overwrite inside it.
+    assert sorted(p.name for p in target.iterdir()) == sorted(
+        [*before, "NEWER_SAVE_UNFINISHED.json"]
+    )

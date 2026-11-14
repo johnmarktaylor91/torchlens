@@ -608,7 +608,7 @@ def test_bundle_save_overwrite_typeerror_preserves_original_and_marks_partial(
     with pytest.raises(ArtifactError) as refused:
         load(bundle_path)
     assert refused.value.fields["code"] == "newer_save_unfinished"
-    assert cleanup_tmp(bundle_path) == [tmp_dir]
+    assert cleanup_tmp(bundle_path) == [tmp_dir, bundle_path / "NEWER_SAVE_UNFINISHED.json"]
     restored = load(bundle_path)
     first_output = first_log._layer_list[-1].out
     restored_output = restored._layer_list[-1].out
@@ -687,7 +687,7 @@ def test_bundle_save_overwrite_arbitrary_exception_preserves_original_and_marks_
     with pytest.raises(ArtifactError) as refused:
         load(bundle_path)
     assert refused.value.fields["code"] == "newer_save_unfinished"
-    assert cleanup_tmp(bundle_path) == [tmp_dir]
+    assert cleanup_tmp(bundle_path) == [tmp_dir, bundle_path / "NEWER_SAVE_UNFINISHED.json"]
     restored = load(bundle_path)
     first_output = first_log._layer_list[-1].out
     restored_output = restored._layer_list[-1].out

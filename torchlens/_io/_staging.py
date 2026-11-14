@@ -37,6 +37,7 @@ from typing import Any, NoReturn
 
 from ..errors._base import TorchLensWarning
 from ._durability import fsync_dir
+from ._json import loads_bounded
 from .format_errors import ArtifactError
 
 PARTIAL_SENTINEL = "PARTIAL"
@@ -160,7 +161,7 @@ def _read_record(target: Path) -> dict[str, Any] | None:
     try:
         with record_path.open("rb") as handle:
             raw = handle.read(_MAX_RECORD_BYTES)
-        data = json.loads(raw.decode("utf-8", errors="replace"))
+        data = loads_bounded(raw.decode("utf-8", errors="replace"))
     except (OSError, ValueError):
         return {}
     return data if isinstance(data, dict) else {}

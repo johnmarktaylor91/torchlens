@@ -95,7 +95,7 @@ def test_cleanup_tmp_does_not_sweep_siblings_via_glob_metachars(tmp_path: Path) 
     sibling_tmp = tmp_path / "jobB.tmp.bbbb"
     for directory in (target_tmp, sibling_tmp):
         directory.mkdir()
-        (directory / bundle_mod.PARTIAL_SENTINEL).write_text("", encoding="utf-8")
+        (directory / _staging.PARTIAL_SENTINEL).write_text("", encoding="utf-8")
 
     removed = cleanup_tmp(tmp_path / "job*", force=True)
 
