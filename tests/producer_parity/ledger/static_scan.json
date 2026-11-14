@@ -6028,7 +6028,7 @@
   "field": "label_raw",
   "file": "torchlens/backends/_replay_adapters/tf.py",
   "has_default": false,
-  "sites": 7,
+  "sites": 8,
   "via_getattr": false
  },
  {
@@ -6068,7 +6068,7 @@
   "field": "parents",
   "file": "torchlens/backends/_reverse_engine.py",
   "has_default": false,
-  "sites": 6,
+  "sites": 7,
   "via_getattr": false
  },
  {
@@ -6128,6 +6128,14 @@
   "via_getattr": false
  },
  {
+  "ambiguous": true,
+  "field": "params",
+  "file": "torchlens/backends/jax/_edited_grads.py",
+  "has_default": false,
+  "sites": 3,
+  "via_getattr": false
+ },
+ {
   "ambiguous": false,
   "field": "func_call_id",
   "file": "torchlens/backends/jax/_edits.py",
@@ -6172,7 +6180,7 @@
   "field": "label_raw",
   "file": "torchlens/backends/jax/_edits.py",
   "has_default": false,
-  "sites": 11,
+  "sites": 13,
   "via_getattr": false
  },
  {
@@ -6180,7 +6188,7 @@
   "field": "layer_type",
   "file": "torchlens/backends/jax/_edits.py",
   "has_default": false,
-  "sites": 2,
+  "sites": 3,
   "via_getattr": false
  },
  {
@@ -6204,7 +6212,71 @@
   "field": "type_index",
   "file": "torchlens/backends/jax/_edits.py",
   "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "label_raw",
+  "file": "torchlens/backends/jax/_halt.py",
+  "has_default": false,
   "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "layer_type",
+  "file": "torchlens/backends/jax/_halt.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "layer_type",
+  "file": "torchlens/backends/jax/_halt.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "type_index",
+  "file": "torchlens/backends/jax/_halt.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "type_index",
+  "file": "torchlens/backends/jax/_halt.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/backends/jax/_interp_hooks.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "params",
+  "file": "torchlens/backends/jax/_jaxpr_inlining.py",
+  "has_default": false,
+  "sites": 8,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "params",
+  "file": "torchlens/backends/jax/_jit_consts.py",
+  "has_default": false,
+  "sites": 4,
   "via_getattr": false
  },
  {
@@ -6224,9 +6296,73 @@
   "via_getattr": false
  },
  {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/backends/jax/_module_stacks.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "module_stack",
+  "file": "torchlens/backends/jax/_module_stacks.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
   "ambiguous": false,
   "field": "equivalence_class",
   "file": "torchlens/backends/jax/_raw_relabel.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/backends/jax/_record.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "label_raw",
+  "file": "torchlens/backends/jax/_record.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "layer_type",
+  "file": "torchlens/backends/jax/_record.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "module_stack",
+  "file": "torchlens/backends/jax/_record.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "raw_index",
+  "file": "torchlens/backends/jax/_record.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "type_index",
+  "file": "torchlens/backends/jax/_record.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -6388,7 +6524,7 @@
   "field": "params",
   "file": "torchlens/backends/jax/jaxpr.py",
   "has_default": false,
-  "sites": 53,
+  "sites": 44,
   "via_getattr": false
  },
  {
@@ -6414,6 +6550,38 @@
   "has_default": true,
   "sites": 1,
   "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "label_raw",
+  "file": "torchlens/backends/mlx/_record.py",
+  "has_default": false,
+  "sites": 3,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "layer_type",
+  "file": "torchlens/backends/mlx/_record.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "raw_index",
+  "file": "torchlens/backends/mlx/_record.py",
+  "has_default": false,
+  "sites": 3,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "type_index",
+  "file": "torchlens/backends/mlx/_record.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
  },
  {
   "ambiguous": true,
@@ -6452,7 +6620,7 @@
   "field": "label_raw",
   "file": "torchlens/backends/mlx/backend.py",
   "has_default": false,
-  "sites": 9,
+  "sites": 10,
   "via_getattr": false
  },
  {
@@ -6508,7 +6676,7 @@
   "field": "label_raw",
   "file": "torchlens/backends/mlx/interventions.py",
   "has_default": false,
-  "sites": 2,
+  "sites": 3,
   "via_getattr": false
  },
  {
@@ -6573,6 +6741,86 @@
   "file": "torchlens/backends/paddle/_capture_helpers.py",
   "has_default": false,
   "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/backends/paddle/_grad_sites.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "label_raw",
+  "file": "torchlens/backends/paddle/_record.py",
+  "has_default": false,
+  "sites": 5,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "layer_type",
+  "file": "torchlens/backends/paddle/_record.py",
+  "has_default": false,
+  "sites": 4,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "output",
+  "file": "torchlens/backends/paddle/_record.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "raw_index",
+  "file": "torchlens/backends/paddle/_record.py",
+  "has_default": false,
+  "sites": 3,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "type_index",
+  "file": "torchlens/backends/paddle/_record.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "label_raw",
+  "file": "torchlens/backends/paddle/_retention.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "layer_type",
+  "file": "torchlens/backends/paddle/_retention.py",
+  "has_default": false,
+  "sites": 4,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "raw_index",
+  "file": "torchlens/backends/paddle/_retention.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "type_index",
+  "file": "torchlens/backends/paddle/_retention.py",
+  "has_default": false,
+  "sites": 3,
   "via_getattr": false
  },
  {
@@ -6708,7 +6956,7 @@
   "field": "func_call_id",
   "file": "torchlens/backends/paddle/interventions.py",
   "has_default": false,
-  "sites": 2,
+  "sites": 4,
   "via_getattr": false
  },
  {
@@ -6792,6 +7040,14 @@
   "via_getattr": true
  },
  {
+  "ambiguous": false,
+  "field": "pass_index",
+  "file": "torchlens/backends/tf/_grad_sites.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
   "ambiguous": true,
   "field": "kind",
   "file": "torchlens/backends/tf/_halt.py",
@@ -6808,12 +7064,100 @@
   "via_getattr": false
  },
  {
+  "ambiguous": false,
+  "field": "func_call_id",
+  "file": "torchlens/backends/tf/_record.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/backends/tf/_record.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "label_raw",
+  "file": "torchlens/backends/tf/_record.py",
+  "has_default": false,
+  "sites": 3,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "label_raw",
+  "file": "torchlens/backends/tf/_record.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "layer_type",
+  "file": "torchlens/backends/tf/_record.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "module_stack",
+  "file": "torchlens/backends/tf/_record.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "output",
+  "file": "torchlens/backends/tf/_record.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "raw_index",
+  "file": "torchlens/backends/tf/_record.py",
+  "has_default": false,
+  "sites": 3,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "type_index",
+  "file": "torchlens/backends/tf/_record.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "label_raw",
+  "file": "torchlens/backends/tf/_replay_exemptions.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
   "ambiguous": true,
   "field": "modules",
   "file": "torchlens/backends/tf/_tf_compat.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "label_raw",
+  "file": "torchlens/backends/tf/_variable_reads.py",
+  "has_default": true,
+  "sites": 2,
+  "via_getattr": true
  },
  {
   "ambiguous": true,
@@ -7002,6 +7346,14 @@
  {
   "ambiguous": true,
   "field": "label_raw",
+  "file": "torchlens/backends/tinygrad/_edited_grads.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "label_raw",
   "file": "torchlens/backends/tinygrad/_edits.py",
   "has_default": false,
   "sites": 5,
@@ -7033,8 +7385,24 @@
  },
  {
   "ambiguous": true,
+  "field": "label_raw",
+  "file": "torchlens/backends/tinygrad/_retention.py",
+  "has_default": false,
+  "sites": 4,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "modules",
   "file": "torchlens/backends/tinygrad/_source_lines.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/backends/tinygrad/_value_edits.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -9022,6 +9390,22 @@
   "has_default": true,
   "sites": 1,
   "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/intervention/_grad_site_neutral.py",
+  "has_default": false,
+  "sites": 3,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "pass_index",
+  "file": "torchlens/intervention/_grad_site_neutral.py",
+  "has_default": false,
+  "sites": 3,
+  "via_getattr": false
  },
  {
   "ambiguous": true,

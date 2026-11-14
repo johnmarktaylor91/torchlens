@@ -20,3 +20,4 @@ torchlens/_visualization/_text_metrics.py::_face
 torchlens/_visualization/_text_metrics.py::text_width
 torchlens/agent/_example_bank.py::load_bank
 torchlens/agent/_example_bank.py::load_fixtures
+torchlens/backends/paddle/_stream_capture.py::paddle_writer_class
