@@ -190,8 +190,9 @@ def _compact_store_rows(
     pooled_classes = _POOLED_CLASSES
     pool_get = pool.get
     helpers = (pooled_classes, _pool_container_members, _pool_value)
+    inert = _inert_columns(rows, store.layout.names)  # D stays: see _inert_columns
     for fid, name in enumerate(store.layout.names):
-        if name in _UNPOOLED_SLOTS:
+        if name in _UNPOOLED_SLOTS or fid in inert:
             continue
         if name in _BY_OBJECT_FIELDS and _sweep_by_object(rows, fid, pool, tokens, helpers):
             continue
@@ -219,6 +220,36 @@ def _compact_store_rows(
                     row_cells[fid] = pooled
             elif isinstance(value, dict):
                 _pool_container_members(value, pool, 0)
+
+
+#: Cell classes the per-cell ladder never pools or descends into: ``None``, the
+#: unset sentinel, a default-omitted cell and the plain numbers.
+_INERT_CELL_CLASSES = frozenset({type(None), type(_MISSING), LazyCell, bool, int, float})
+
+#: Fewest rows at which the inert-column scan pays for itself (the postprocess
+#: column threshold); shorter stores keep the plain per-cell ladder.
+_COLUMN_SKIP_MIN_ROWS = 32
+
+
+def _inert_columns(rows: list[list[Any]], names: Any) -> frozenset[int]:
+    """Return the ids of the plain-ladder fields whose every cell is of an inert class.
+
+    ``_compact_store_rows``'s per-cell ladder leaves each such cell as it is, so
+    skipping the column changes no cell and no pool entry; every other column is
+    visited as before. By-object fields keep their own sweep and are never
+    listed. A store under ``_COLUMN_SKIP_MIN_ROWS`` rows gets no skips: the scan
+    would cost the one-op trace more than it saves. The skip is one test on the
+    ladder's existing ``continue`` line, so the ladder's grade does not change.
+    """
+
+    if len(rows) < _COLUMN_SKIP_MIN_ROWS:
+        return frozenset()
+    inert = _INERT_CELL_CLASSES.issuperset
+    return frozenset(
+        fid
+        for fid, (name, column) in enumerate(zip(names, zip(*rows, strict=True), strict=True))
+        if name not in _BY_OBJECT_FIELDS and inert(map(type, column))
+    )
 
 
 #: Op fields whose cells repeat a few value objects (part C1: row ingest interns
