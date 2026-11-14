@@ -90,7 +90,10 @@ def _replay_values(trace: Any, adapter: Any) -> tuple[dict[str, Any], list[Any]]
 def _seed(trace: Any, adapter: Any, values: dict[str, Any], loss_fn: Any) -> dict[str, Any]:
     """``{output label: d loss / d output}`` for the one tensor output of the capture."""
 
-    outputs = [op for op in trace._layer_list if op.is_output]
+    # tinygrad records no output marker ops; its model outputs are the output parents.
+    outputs = [op for op in trace._layer_list if op.is_output] or [
+        op for op in trace._layer_list if op.graph.is_output_parent
+    ]
     if len(outputs) != 1:
         raise _refuse_grad_site(
             f"tl.grad(...) edits need a single tensor model output; this capture has {len(outputs)}.",
@@ -100,16 +103,15 @@ def _seed(trace: Any, adapter: Any, values: dict[str, Any], loss_fn: Any) -> dic
     label = str(outputs[0]._label_raw) if recipe is None else recipe.output_slots[0]
     from tinygrad import Tensor
 
-    # tinygrad 0.13 takes requires_grad= at runtime; its annotations omit it.
-    leaf = Tensor(values[label].numpy(), requires_grad=True)  # type: ignore[call-arg,unused-ignore]
+    leaf = Tensor(values[label].numpy())
     loss = loss_fn(leaf) if loss_fn is not None else leaf
     if tuple(loss.shape) not in ((), (1,)):
         raise ValueError(
             "tinygrad derived gradients require loss_fn(raw_output) to be scalar unless "
             "the traced output is already scalar."
         )
-    loss.sum().backward()
-    return {label: leaf.grad}
+    (grad,) = loss.sum().gradient(leaf)
+    return {label: grad}
 
 
 def _record_fields(backend: Any, grad: Any) -> dict[str, Any]:

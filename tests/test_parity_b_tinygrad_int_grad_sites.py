@@ -71,10 +71,10 @@ def _oracle(edit: Callable[[Any], Any]) -> tuple[np.ndarray, np.ndarray]:
     """``(input gradient, edited site gradient)`` by tinygrad ``backward`` of each half."""
 
     model = _TinyMLP()
-    hidden = Tensor(_np(model.hidden(Tensor(_X))), requires_grad=True)
+    hidden = Tensor(_np(model.hidden(Tensor(_X))))
     hidden.matmul(model.w2).sum().backward()
     site_grad = Tensor(_np(edit(hidden.grad)))
-    x = Tensor(_X, requires_grad=True)
+    x = Tensor(_X)
     (model.hidden(x) * site_grad).sum().backward()
     return _np(x.grad), _np(site_grad)
 
@@ -94,7 +94,7 @@ def _options(**overrides: Any) -> Any:
 _EDITS: list[tuple[str, Any, Callable[[Any], Any]]] = [
     ("scale", tl.scale(0.25), lambda g: g * 0.25),
     ("clamp", tl.clamp(low=-0.5, high=0.5), lambda g: g.clip(-0.5, 0.5)),
-    ("callable", lambda grad, ctx: grad * 2.0, lambda g: g * 2.0),
+    ("callable", lambda grad, *, ctx: grad * 2.0, lambda g: g * 2.0),
 ]
 
 
@@ -135,7 +135,7 @@ def test_identity_grad_site_edit_equals_plain_derived_gradients() -> None:
         _TinyMLP(),
         Tensor(_X),
         backend="tinygrad",
-        intervene=tl.when(tl.grad(tl.func("where")), lambda grad, ctx: grad),
+        intervene=tl.when(tl.grad(tl.func("where")), lambda grad, *, ctx: grad),
         capture=_options(),
     )
     np.testing.assert_allclose(
@@ -177,4 +177,4 @@ def test_grad_site_naming_no_op_refuses_typed() -> None:
             intervene=tl.when(tl.grad(tl.func("conv2d")), tl.scale(0.5)),
             capture=_options(),
         )
-    assert getattr(caught.value, "code", None) == "run_capability_unavailable"
+    assert caught.value.fields["code"] == "run_capability_unavailable"

@@ -190,7 +190,7 @@ def _hand_gradients(edit: Callable[[Any], Any]) -> tuple[np.ndarray, np.ndarray]
     """tinygrad's input and relu gradients of the edited program, computed by hand."""
 
     model = _TinyMLP()
-    x = Tensor(_X, requires_grad=True)
+    x = Tensor(_X)
     hidden = edit(model.hidden(x))
     loss = hidden.matmul(model.w2).sum()
     loss.backward()
@@ -260,7 +260,7 @@ def test_edited_gradients_differ_from_plain_gradients() -> None:
 def test_edited_gradients_leave_input_grad_untouched() -> None:
     """The bracketed gradient run restores the user's input ``.grad``."""
 
-    x = Tensor(_X, requires_grad=True)
+    x = Tensor(_X)
     tl.trace(
         _TinyMLP(),
         x,
