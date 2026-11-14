@@ -5923,3 +5923,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: c9c0d53813804811b661c1af51b2f1f1c2a00366
 recorded: 2026-11-10T00:43:14+00:00
+---
+generator: scripts/regen_ledgers.py (producer static half)
+flag: none (deterministic ledger step)
+reason: sg-select: fork binding moved to _selection/_fork_binding; three operand refusals now bind through Selection._resolve
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: d7bf3116bb7415f191d33ae1fe30dbf7dd203d83
+recorded: 2026-11-14T05:09:58Z

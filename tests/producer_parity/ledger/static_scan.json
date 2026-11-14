@@ -3913,6 +3913,14 @@
  },
  {
   "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/_selection/_fork_binding.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "parents",
   "file": "torchlens/_selection/_resolver_messages.py",
   "has_default": true,
@@ -3956,7 +3964,7 @@
   "field": "kind",
   "file": "torchlens/_selection/do_plan.py",
   "has_default": false,
-  "sites": 5,
+  "sites": 3,
   "via_getattr": false
  },
  {

@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1756 modules, 706247 lines, 0 modules without a docstring.
+85 packages, 1757 modules, 706252 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -35,7 +35,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._quickstart` | TorchLens quickstart: input resolution, input provenance and the drawing entry point. | 9 | 2016 |
 | `torchlens._registry` | Private registry kernel package (never public API). | 3 | 556 |
 | `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 20 | 15063 |
-| `torchlens._selection` | Selection: naming sites and resolving them on a trace. | 23 | 10600 |
+| `torchlens._selection` | Selection: naming sites and resolving them on a trace. | 24 | 10604 |
 | `torchlens._semantic` | Semantic facet views for TorchLens records. | 16 | 7432 |
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 3073 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2141 |
@@ -76,7 +76,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.experimental` | Experimental TorchLens APIs with unstable naming and behavior. | 2 | 372 |
 | `torchlens.export` | Static export helpers for TorchLens logs. | 15 | 5549 |
 | `torchlens.export._model_explorer` | Google Model Explorer export: a writer for Model Explorer's file-ingest schema with module-hierarchy namespaces, op-type labels, ported e... | 16 | 3039 |
-| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 86 | 38178 |
+| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 86 | 38179 |
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1923 |
 | `torchlens.intervention._topology` | Topology comparison and supergraph construction for intervention bundles. | 2 | 798 |
 | `torchlens.io` | Public I/O and administrative helpers for TorchLens. | 1 | 432 |
@@ -831,33 +831,34 @@ Frozen type contracts for sparse runnable ''.tlspec'' artifacts. (20 modules, 15
 
 ### `torchlens._selection`
 
-Selection: naming sites and resolving them on a trace. (23 modules, 10600 lines)
+Selection: naming sites and resolving them on a trace. (24 modules, 10604 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Selection: naming sites and resolving them on a trace. | 17 |
 | `_display` | Metadata-only cards for selections and their resolved sites. | 145 |
 | `_entry_order` | Deterministic and graph-order sorting of resolved selection entries. | 54 |
+| `_fork_binding` | Bind a resolved selection to a trace or to a fork descended from its trace. | 144 |
 | `_module_facet_fold` | ''module(address) & facet'': folding a module scope into a facet selector. | 50 |
 | `_resolver_messages` | Multi-match warning wording for the selector resolver. | 52 |
 | `_site_record` | ''Site.record'': the record a selection row names, through a weak trace link. | 105 |
 | `_site_refusals` | Site-query refusals: the argument checks, the fan-out bound, and the no-match and multi-pass refusals. | 162 |
 | `align` | Cross-run selection alignment (L6 stage 4a). | 270 |
 | `compare` | Comparative selection producers: differential and cross-pass (L6 producer wave). | 989 |
-| `do_plan` | The ''do(selection, edit)'' plan builder for :mod:'torchlens._selection.selection'. | 289 |
+| `do_plan` | The ''do(selection, edit)'' plan builder for :mod:'torchlens._selection.selection'. | 162 |
 | `errors` | Refusal classes raised while naming or resolving sites. | 265 |
-| `graph` | Graph-structural selection producers (L6 producer wave, graph slice). | 600 |
+| `graph` | Graph-structural selection producers (L6 producer wave, graph slice). | 592 |
 | `mask` | Canonical internal mask algebra for :mod:'torchlens._selection.selection'. | 179 |
 | `module_alias_guard` | Refuse a shared module's alias spelling in a selector, identically at every door. | 241 |
 | `provenance` | Per-entry provenance disclosure for :mod:'torchlens._selection.selection'. | 126 |
 | `resolver` | Resolve TorchLens intervention selectors against model logs. | 992 |
-| `selection` | Selection / intervention algebra: the dual selection types. | 1662 |
+| `selection` | Selection / intervention algebra: the dual selection types. | 1661 |
 | `selector_base` | The selector base class, its composites and the address-universe classification. | 767 |
 | `selectors` | Typed selectors for TorchLens intervention site resolution. | 1825 |
 | `subspace` | Subspace selection producer: directions in activation space (L6 producer wave). | 353 |
 | `target` | Portable target specs: the saved form of a selector plus its slice. | 162 |
 | `universal` | The universal selector ''tl.all_sites'', the named form of ''tl.label_matches(".*")''. | 65 |
-| `values` | Value-based and statistical selection producers (L6 producer wave). | 1230 |
+| `values` | Value-based and statistical selection producers (L6 producer wave). | 1226 |
 
 ### `torchlens._semantic`
 
@@ -1884,7 +1885,7 @@ Google Model Explorer export: a writer for Model Explorer's file-ingest schema w
 
 ### `torchlens.intervention`
 
-Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (86 modules, 38178 lines)
+Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (86 modules, 38179 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1967,7 +1968,7 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `_trace_edits` | Trace edit functions reached from the records through ''_data_classes._doors.intervention''. | 781 |
 | `_trace_hooks` | Trace hook functions reached from the records through ''_data_classes._doors.intervention''. | 142 |
 | `_trace_run` | Trace run functions reached from the records through ''_data_classes._doors.intervention''. | 800 |
-| `_trace_selection_edits` | Selection-kind ''do'' bodies of ''Trace'' (record rebuild destination). | 653 |
+| `_trace_selection_edits` | Selection-kind ''do'' bodies of ''Trace'' (record rebuild destination). | 654 |
 | `_types` | Shared dataclass ownership for TorchLens intervention schemas. | 855 |
 | `_zero_fire` | One zero-fire policy for every intervention door (experimental). | 515 |
 | `_zero_fire_doors` | Door-specific zero-fire disclosure: the bound-model and rerun doors. | 138 |
