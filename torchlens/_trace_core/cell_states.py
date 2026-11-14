@@ -257,8 +257,11 @@ def settle_default_cells(
     shared: dict[int, Any] = {}
     fresh: set[int] = set()
     for row in rows:
-        for fid, value in enumerate(row):
-            if value.__class__ is not LazyCell or value.state != STATE_DEFAULT:
+        # One comprehension finds the row's lazy cells (most cells hold plain
+        # values); they are then visited in field order, as a full scan would.
+        for fid in [fid for fid, cell in enumerate(row) if cell.__class__ is LazyCell]:
+            value = row[fid]
+            if value.state != STATE_DEFAULT:
                 continue
             if not value.make:
                 row[fid] = value.source

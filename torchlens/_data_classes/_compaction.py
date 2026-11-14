@@ -187,38 +187,65 @@ def _compact_store_rows(
     rows = store.rows_building()
     if rows is None:
         return
-    pooled_classes = _POOLED_CLASSES
-    pool_get = pool.get
-    helpers = (pooled_classes, _pool_container_members, _pool_value)
+    helpers = (_POOLED_CLASSES, _pool_container_members, _pool_value)
     for fid, name in enumerate(store.layout.names):
         if name in _UNPOOLED_SLOTS:
             continue
         if name in _BY_OBJECT_FIELDS and _sweep_by_object(rows, fid, pool, tokens, helpers):
             continue
-        for row_cells in rows:
-            value = row_cells[fid]
-            if value is None or value is _MISSING:
+        _sweep_column(rows, fid, pool, tokens, helpers)
+
+
+#: Cell classes the per-cell ladder never pools or descends into: ``None``, the
+#: unset sentinel, a default-omitted cell and the plain numbers.
+_INERT_CELL_CLASSES = frozenset({type(None), type(_MISSING), LazyCell, bool, int, float})
+
+
+def _sweep_column(
+    rows: list[list[Any]],
+    fid: int,
+    pool: dict[Any, Any],
+    tokens: ContainerTokens | None,
+    helpers: tuple[Any, Any, Any],
+) -> None:
+    """Pool one column cell by cell (the per-cell ladder of ``Op._compact_metadata``).
+
+    A column whose cells are all of an inert class is skipped whole: the ladder
+    leaves each such cell as it is, so the skip changes no cell and no pool entry.
+    Any other column visits its cells in row order, as before.
+    """
+
+    # Essential complexity (D): the class ladder moved here whole from
+    # _compact_store_rows, which drops to its column dispatch; it stays one hot
+    # loop because a call per cell would cost more than the skip saves.
+    column = [row_cells[fid] for row_cells in rows]
+    if _INERT_CELL_CLASSES.issuperset(map(type, column)):
+        return
+    pooled_classes, pool_container_members, pool_value = helpers
+    pool_get = pool.get
+    for row_cells, value in zip(rows, column, strict=True):
+        if value is None or value is _MISSING:
+            continue
+        cls = value.__class__
+        if cls is bool or cls is int or cls is LazyCell or cls is float:
+            continue  # plain numbers never pool; a default-omitted cell holds no value
+        if cls in pooled_classes and (cls is not Duration or not value):
+            key = (cls, value.hex()) if cls is Duration else (cls, value)
+            pooled = pool_get(key)
+            if pooled is None:
+                pool[key] = value
+            elif pooled is not value:
+                row_cells[fid] = pooled
+        elif cls is list or cls is set or cls is dict:
+            if cls is dict and tokens is not None and members_inert(tokens, value):
                 continue
-            cls = value.__class__
-            if cls is bool or cls is int or cls is LazyCell or cls is float:
-                continue  # plain numbers never pool; a default-omitted cell holds no value
-            if cls in pooled_classes and (cls is not Duration or not value):
-                key = (cls, value.hex()) if cls is Duration else (cls, value)
-                pooled = pool_get(key)
-                if pooled is None:
-                    pool[key] = value
-                elif pooled is not value:
-                    row_cells[fid] = pooled
-            elif cls is list or cls is set or cls is dict:
-                if cls is dict and tokens is not None and members_inert(tokens, value):
-                    continue
-                _pool_container_members(value, pool, 0)
-            elif cls is tuple or cls is frozenset:
-                pooled = _pool_value(value, pool)
-                if pooled is not value:
-                    row_cells[fid] = pooled
-            elif isinstance(value, dict):
-                _pool_container_members(value, pool, 0)
+            pool_container_members(value, pool, 0)
+        elif cls is tuple or cls is frozenset:
+            pooled = pool_value(value, pool)
+            if pooled is not value:
+                row_cells[fid] = pooled
+        elif isinstance(value, dict):
+            pool_container_members(value, pool, 0)
 
 
 #: Op fields whose cells repeat a few value objects (part C1: row ingest interns
