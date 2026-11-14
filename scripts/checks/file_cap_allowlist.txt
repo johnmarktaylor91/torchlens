@@ -178,7 +178,7 @@ torchlens/_io/_safe_unpickle.py::_BundleAllowlistPolicy._resolve_global	313
 torchlens/_io/_save_gates.py::_capture_activation_blob_specs	107
 torchlens/_io/_scrub_identities.py::_scrub_nondeterministic_identities	202
 torchlens/_io/_source_privacy.py::_scrub_signature_string	66
-torchlens/_io/bundle.py	3637
+torchlens/_io/bundle.py	3627
 torchlens/_io/bundle.py::_attach_fast_copy_specs	64
 torchlens/_io/bundle.py::_bind_archived_activation_payload	103
 torchlens/_io/bundle.py::_bind_embedded_nonpersistent_buffer_payload	73
@@ -190,9 +190,9 @@ torchlens/_io/bundle.py::_load_trace_payload	173
 torchlens/_io/bundle.py::_load_unified_tlspec	94
 torchlens/_io/bundle.py::_preflight_unified_trace_manifest	90
 torchlens/_io/bundle.py::_scrub_trace_for_bundle	62
-torchlens/_io/bundle.py::cleanup_tmp	106
+torchlens/_io/bundle.py::cleanup_tmp	95
 torchlens/_io/bundle.py::load	131
-torchlens/_io/bundle.py::save	581
+torchlens/_io/bundle.py::save	579
 torchlens/_io/bundle_container.py::_load_unified_bundle	81
 torchlens/_io/bundle_container.py::_load_unified_bundle_directory	77
 torchlens/_io/bundle_metadata.py::_load_gated_member_relations	88

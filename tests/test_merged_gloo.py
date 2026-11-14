@@ -218,7 +218,8 @@ class TestArtifact:
         with pytest.raises(tl.errors.ArtifactError) as refused:
             tl.load(art)
         assert refused.value.fields["code"] == "newer_save_unfinished"
-        assert len(tl.io.cleanup_tmp(art)) == 1
+        removed = tl.io.cleanup_tmp(art)  # the staging dir, then the record inside the copy
+        assert len(removed) == 2 and removed[1] == art / "NEWER_SAVE_UNFINISHED.json"
         restored = tl.load(art)
         assert restored.alignment.value == "aligned"
 
