@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-90 packages, 1893 modules, 741580 lines, 0 modules without a docstring.
+90 packages, 1893 modules, 741592 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 56 | 26853 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1504 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 9 | 4798 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 125 | 43146 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 125 | 43152 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives, artifact v2 and model identity. | 4 | 1263 |
 | `torchlens._distributed` | Honest detection of distributed (DTensor / device-mesh / TP / PP) model state. | 5 | 3101 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 602 |
@@ -58,7 +58,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends._backward_native` | Native backward capture, one private module per backend. | 8 | 3837 |
 | `torchlens.backends._protocols` | Per-backend ''BackendProtocol'' objects, kept import-light. | 8 | 928 |
 | `torchlens.backends._replay_adapters` | Private per-backend replay adapters (see :mod:'._contract'). | 10 | 4984 |
-| `torchlens.backends._rng_capture` | Random-state capture and replay for the non-PyTorch backends (private). | 5 | 1585 |
+| `torchlens.backends._rng_capture` | Random-state capture and replay for the non-PyTorch backends (private). | 5 | 1591 |
 | `torchlens.backends.jax` | JAX backend exports. | 34 | 12573 |
 | `torchlens.backends.mlx` | MLX backend for TorchLens. | 24 | 8927 |
 | `torchlens.backends.paddle` | Paddle backend. | 24 | 9037 |
@@ -319,7 +319,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (9 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (125 modules, 43146 lines)
+Core data structures for representing a logged forward pass. (125 modules, 43152 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -386,7 +386,7 @@ Core data structures for representing a logged forward pass. (125 modules, 43146
 | `_repr` | Shared record representation helpers. | 64 |
 | `_runtime_handles` | Shared runtime handle resolution for TorchLens records. | 77 |
 | `_schema_bindings` | GENERATED storage bindings for the declared record schema. DO NOT EDIT. | 691 |
-| `_schema_bindings_trace` | GENERATED storage bindings for the ''trace'' record. DO NOT EDIT. | 355 |
+| `_schema_bindings_trace` | GENERATED storage bindings for the ''trace'' record. DO NOT EDIT. | 361 |
 | `_site_key` | Structural site keys (''site_key_v1''): the portable bridging relation. | 273 |
 | `_staged_spec` | Staged intervention spec reads shared by the ''Trace.run'' door. | 28 |
 | `_state_adapter` | Class-agnostic live-state enumeration and restoration helpers. | 122 |
@@ -1428,13 +1428,13 @@ Private per-backend replay adapters (see :mod:'._contract'). (10 modules, 4984 l
 
 ### `torchlens.backends._rng_capture`
 
-Random-state capture and replay for the non-PyTorch backends (private). (5 modules, 1585 lines)
+Random-state capture and replay for the non-PyTorch backends (private). (5 modules, 1591 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Random-state capture and replay for the non-PyTorch backends (private). | 371 |
 | `mlx` | MLX random-state capture and replay (private; contract in the package docstring). | 245 |
-| `paddle` | Paddle random-state capture and replay (private; contract in the package docstring). | 302 |
+| `paddle` | Paddle random-state capture and replay (private; contract in the package docstring). | 308 |
 | `tf` | TensorFlow random-state capture and replay (private; contract in the package docstring). | 357 |
 | `tinygrad` | tinygrad random-state capture and replay (private; contract in the package docstring). | 310 |
 
