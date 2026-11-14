@@ -247,7 +247,7 @@ def _inert_columns(rows: list[list[Any]], names: Any) -> frozenset[int]:
     inert = _INERT_CELL_CLASSES.issuperset
     return frozenset(
         fid
-        for fid, (name, column) in enumerate(zip(names, zip(*rows)))
+        for fid, (name, column) in enumerate(zip(names, zip(*rows, strict=True), strict=True))
         if name not in _BY_OBJECT_FIELDS and inert(map(type, column))
     )
 
