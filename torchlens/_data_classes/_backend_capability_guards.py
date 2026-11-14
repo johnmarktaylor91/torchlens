@@ -20,6 +20,7 @@ from __future__ import annotations
 from typing import Any
 
 from .._errors import InvalidArgumentError
+from ..backends._backend_names import TORCH_BACKEND_NAME
 from ..backends.registry import BackendRegistryError, get_backend_spec
 
 
@@ -65,10 +66,11 @@ def backend_materializes_payloads(name: str) -> bool:
 def live_grad_slot(param_log: Any) -> bool:
     """Return whether the live parameter behind ``param_log`` carries a framework gradient slot.
 
-    Only a true-backward backend (``backward_capture=True``) fills a gradient slot on
-    the live parameter (``nn.Parameter.grad``). Every other backend reaches a Param's
-    gradient only as a derived payload (``mirror_param_derived_grads``), so its live
-    arrays and variables are never read for one.
+    Only the PyTorch backend fills a gradient slot on the live parameter
+    (``nn.Parameter.grad``). Every other backend, including one that records native
+    backward passes, reaches a Param's gradient only as a derived payload
+    (``mirror_param_derived_grads``), so its live arrays and variables are never read
+    for one.
 
     Parameters
     ----------
@@ -80,8 +82,8 @@ def live_grad_slot(param_log: Any) -> bool:
     Returns
     -------
     bool
-        The owning trace backend's registered ``backward_capture``; ``False`` for an
-        unregistered backend name.
+        Whether the owning trace backend is PyTorch with ``backward_capture``;
+        ``False`` for every other or unregistered backend name.
     """
 
     trace = param_log.trace
@@ -89,7 +91,9 @@ def live_grad_slot(param_log: Any) -> bool:
     if backend is None:
         return True
     name = str(backend)
-    return registered_backend_named(name) and get_backend_spec(name).capabilities.backward_capture
+    if name != TORCH_BACKEND_NAME or not registered_backend_named(name):
+        return False
+    return get_backend_spec(name).capabilities.backward_capture
 
 
 def raise_if_no_backward_capture(trace: Any, *, plural_subject: str) -> None:

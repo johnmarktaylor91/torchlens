@@ -97,8 +97,11 @@ def test_fires_on_a_grad_fn_no_recorded_pass_owns(declaring: None) -> None:
     """A grad fn with no call that is no pass's root is not owned by a recorded pass."""
 
     logs = {11: _grad_fn("mul_back_1_1", 1), 12: _grad_fn("sum_back_1_2", 1), 13: _grad_fn("x")}
-    with pytest.raises(MetadataInvariantError, match="not owned by a recorded backward pass"):
+    with pytest.raises(
+        MetadataInvariantError, match="not owned by a recorded backward pass"
+    ) as excinfo:
         _check_non_torch_backward_inert(_consistent(_grad_fn_logs=logs))  # type: ignore[arg-type]
+    assert excinfo.value.fields["code"] == "backward_records_inconsistent"
 
 
 def test_fires_on_a_call_in_an_unrecorded_pass(declaring: None) -> None:
