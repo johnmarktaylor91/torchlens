@@ -106,11 +106,11 @@ def _load(root: Path, *, lazy: bool) -> Any:
     return tl.load(root, lazy=True) if lazy else tl.load(root)
 
 
-def _refusal_code(root: Path, *, lazy: bool) -> str:
+def _refusal_code(root: Path, *, lazy: bool, allowed: frozenset[str] = INTEGRITY_CODES) -> str:
     with pytest.raises(ArtifactError) as info:
         _load(root, lazy=lazy)
     code = info.value.fields.get("code")
-    assert code in INTEGRITY_CODES, f"{root}: {code!r}: {info.value}"
+    assert code in allowed, f"{root}: {code!r}: {info.value}"
     return str(code)
 
 
@@ -217,8 +217,16 @@ def test_a_manifest_stripped_of_any_file_entry_refuses(
                 # The file is now unlisted, so the load may first name it in the
                 # advisory; the refusal is what this test checks.
                 warnings.filterwarnings("ignore", "Artifact .* unreferenced", TorchLensWarning)
-                _refusal_code(copy, lazy=lazy)
+                _refusal_code(copy, lazy=lazy, allowed=_strip_codes(relpath))
         shutil.rmtree(copy)
+
+
+def _strip_codes(relpath: str) -> frozenset[str]:
+    """An unlisted recipe refuses as "carries no intervention recipe" (the recipe door's code)."""
+
+    if relpath == contract.INTERVENTION_FILE:
+        return frozenset({contract.REFUSAL_CODES["kind_mismatch"]})
+    return INTEGRITY_CODES
 
 
 def _in_member(relpath: str) -> bool:
