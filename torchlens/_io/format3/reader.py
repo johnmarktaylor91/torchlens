@@ -153,7 +153,9 @@ def read_manifest(path: str | Path) -> dict[str, Any]:
         )
     if "format" not in manifest:
         raise pre3_error(root, "manifest.json without a format key", code=BELOW_FLOOR)
-    _refuse_schema_errors(manifest_path, manifest_schema_errors(manifest))
+    _refuse_schema_errors(
+        manifest_path, [*manifest_schema_errors(manifest), *_recipe_listing(manifest)]
+    )
     check_version_window(manifest, root)
     check_runtime_policy(manifest)
     if manifest["save_level"] not in contract.SAVE_LEVELS:
@@ -227,23 +229,18 @@ def _validate_envelope(path: str | Path) -> dict[str, Any]:
     manifest = read_manifest(root)
     verify_listed_files(root, manifest)
     check_runnable_slots(root, manifest)
-    _check_recipe_listed(root, manifest)
     return manifest
 
 
-def _check_recipe_listed(root: Path, manifest: Mapping[str, Any]) -> None:
+def _recipe_listing(manifest: Mapping[str, Any]) -> list[str]:
     """A manifest naming a recipe must list its file: an unlisted file is never read."""
 
-    if (
-        manifest.get("intervention") is not None
-        and contract.INTERVENTION_FILE not in manifest["files"]
-    ):
-        raise artifact_error(
-            f"The manifest of {root} names an intervention recipe its files table does not list.",
-            code=_CODES["manifest_invalid"],
-            remedy="re-save the trace with trace.save()",
-            file_path=str(root / contract.INTERVENTION_FILE),
-        )
+    files = manifest.get("files")
+    if manifest.get("intervention") is None or not isinstance(files, dict):
+        return []
+    if contract.INTERVENTION_FILE in files:
+        return []
+    return [f"intervention names {contract.INTERVENTION_FILE}, which files does not list"]
 
 
 # ---- Tensor references -----------------------------------------------------
