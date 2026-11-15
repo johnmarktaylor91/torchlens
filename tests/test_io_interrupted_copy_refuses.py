@@ -222,15 +222,38 @@ def test_a_manifest_stripped_of_any_file_entry_refuses(
 
 
 def _strip_codes(relpath: str) -> frozenset[str]:
-    """An unlisted recipe refuses as "carries no intervention recipe" (the recipe door's code)."""
+    """The codes an unlisted file refuses with; a recipe the manifest names but does not list
+    refuses ``manifest_schema_invalid``, and an intervention artifact without a listed recipe
+    refuses at the recipe door as carrying none (``artifact_kind_mismatch``)."""
 
     if relpath == contract.INTERVENTION_FILE:
-        return frozenset({contract.REFUSAL_CODES["kind_mismatch"]})
+        return frozenset(
+            {contract.REFUSAL_CODES["manifest_invalid"], contract.REFUSAL_CODES["kind_mismatch"]}
+        )
     return INTEGRITY_CODES
 
 
 def _in_member(relpath: str) -> bool:
     return relpath.startswith("members/")
+
+
+def test_a_trace_whose_manifest_drops_its_recipe_listing_refuses_before_reading_it(
+    saved: dict[str, Path], tmp_path: Path
+) -> None:
+    """The recipe file is read only when listed and digest-checked, eager and lazy."""
+
+    copy = tmp_path / "unlisted-recipe"
+    shutil.copytree(saved["trace_with_recipe"], copy)
+    manifest = read_manifest(copy)
+    assert manifest.get("intervention") is not None
+    del manifest["files"][contract.INTERVENTION_FILE]
+    write_manifest(copy, manifest)
+    (copy / contract.INTERVENTION_FILE).write_text("{", encoding="utf-8")  # would not parse
+    for lazy in (False, True):
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", "Artifact .* unreferenced", TorchLensWarning)
+            code = _refusal_code(copy, lazy=lazy)
+        assert code == contract.REFUSAL_CODES["manifest_invalid"], code
 
 
 def test_the_manifest_lists_every_other_file_the_save_wrote(saved: dict[str, Path]) -> None:

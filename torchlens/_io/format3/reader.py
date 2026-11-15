@@ -227,7 +227,23 @@ def _validate_envelope(path: str | Path) -> dict[str, Any]:
     manifest = read_manifest(root)
     verify_listed_files(root, manifest)
     check_runnable_slots(root, manifest)
+    _check_recipe_listed(root, manifest)
     return manifest
+
+
+def _check_recipe_listed(root: Path, manifest: Mapping[str, Any]) -> None:
+    """A manifest naming a recipe must list its file: an unlisted file is never read."""
+
+    if (
+        manifest.get("intervention") is not None
+        and contract.INTERVENTION_FILE not in manifest["files"]
+    ):
+        raise artifact_error(
+            f"The manifest of {root} names an intervention recipe its files table does not list.",
+            code=_CODES["manifest_invalid"],
+            remedy="re-save the trace with trace.save()",
+            file_path=str(root / contract.INTERVENTION_FILE),
+        )
 
 
 # ---- Tensor references -----------------------------------------------------

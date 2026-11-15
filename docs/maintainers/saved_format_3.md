@@ -357,7 +357,7 @@ One table for the writer and the reader. Codes are rows of
 | no `manifest.json` | `manifest_missing` | reader |
 | manifest unreadable or over the parse bound | `manifest_unreadable` | reader |
 | manifest root not an object | `manifest_not_json_object` | reader |
-| manifest violates this contract (missing field, wrong type, a version stamp that is not PEP 440, `records` or `files` entry wrong) | `manifest_schema_invalid` | reader |
+| manifest violates this contract (missing field, wrong type, a version stamp that is not PEP 440, `records` or `files` entry wrong, an `intervention` or `runnable` entry whose file `files` does not list) | `manifest_schema_invalid` | reader |
 | pre-2.38 artifact, `format_version` below 3, record contract below the floor, or a `torchlens_version` older than the first TorchLens that writes format 3 (2.38.0) | `artifact_version_below_floor` | reader |
 | `format_version` above 3 or record contract above the runtime | `artifact_version_above_runtime` | reader |
 | specialized loader given another kind | `artifact_kind_mismatch` | reader |
