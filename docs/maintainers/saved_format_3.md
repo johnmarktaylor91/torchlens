@@ -100,6 +100,19 @@ advisory warning, without opening them, and the load succeeds. The manifest itse
 of its own; the save preflight (section 6) reloads the written directory once, so a manifest
 that does not describe its directory never publishes.
 
+The writer writes `manifest.json` last, after every other file, and computes `files` from what is
+on disk at that point; the staged directory is then fsynced and renamed into place. Every load
+door (`tl.load` eager or `lazy=True`, the intervention and recipe doors, each bundle
+member) checks every listed file, tensor chunks included, before it parses any record. So a copy
+interrupted part way (an `rsync` killed mid-transfer, a `cp` that ran out of disk) fails closed in
+whatever order the files were copied: a listed file that is absent refuses
+`bundle_metadata_integrity_refused` (`bundle_blob_missing` for a `blobs/` chunk), a file cut short
+refuses `bundle_metadata_integrity_refused` on its byte count, a missing manifest refuses
+`manifest_missing` and a manifest cut short refuses `manifest_unreadable`. A file the reader opens
+must be listed: a `records`, `intervention` or `runnable` entry, or a tensor reference, whose file is
+absent from `files` refuses. The `NEWER_SAVE_UNFINISHED.json` record of a failed overwrite sits at the
+root of the older copy, outside `files`, and is never listed.
+
 ## 2. Records
 
 ### Record files
@@ -352,6 +365,7 @@ One table for the writer and the reader. Codes are rows of
 | file digest or length mismatch, truncated record file | `bundle_metadata_integrity_refused` | reader |
 | key not in the record contract, or a `runtime` kind key | `unknown_persisted_field` | reader |
 | record value violates the contract (type, row length, column the level forbids, typed object with an unknown tag, `record` type off the allowlist) | `record_schema_invalid` | reader |
+| listed `blobs/` chunk absent from the directory | `bundle_blob_missing` | reader |
 | blob file or entry named by a reference is missing | `bundle_load_failed` | reader |
 | blob in a structure-only artifact, or a structure-only marker over retained payloads | `artifact_structure_only_incoherent` | writer, reader |
 | load path is a symlink | `load_path_symlink_rejected` | reader |

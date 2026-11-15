@@ -2080,6 +2080,13 @@ that is not on the site.
   is left.
   A leftover folder older than the copy only warns. A failed first save leaves nothing at
   the path, and loading it fails as for any missing path.
+- Interrupted copies: the save writes `manifest.json` last, and it records the SHA-256 and
+  byte count of every other file in the directory. `tl.load` (eager or `lazy=True`) checks
+  every listed file before it reads any of them, so a copy that stopped part way (a killed
+  `rsync`, a full disk) refuses instead of loading what is there: a missing or short file
+  raises `bundle_metadata_integrity_refused` (`bundle_blob_missing` for a missing tensor
+  chunk), and a missing or short manifest raises `manifest_missing` or `manifest_unreadable`.
+  Copy the directory again.
 - Values with no typed encoding: written as text and counted in the manifest's
   `disclosures`. They load back as `tl.types.UnencodableValue`, a frozen stand-in carrying
   `type_name` (the original type's dotted name), `repr_text` (its `repr`, cut at 256
