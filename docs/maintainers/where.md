@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1756 modules, 706481 lines, 0 modules without a docstring.
+85 packages, 1756 modules, 706494 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -24,7 +24,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 602 |
 | `torchlens._extraction` | Private implementation of dataset extraction. | 20 | 11066 |
 | `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 68 | 37738 |
-| `torchlens._io.format3` | The 2.38 saved format: typed JSON records plus safetensors blobs, no pickle. | 26 | 9242 |
+| `torchlens._io.format3` | The 2.38 saved format: typed JSON records plus safetensors blobs, no pickle. | 26 | 9255 |
 | `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 25 | 12739 |
 | `torchlens._merged` | Cross-rank trace merging. | 15 | 6005 |
 | `torchlens._observability` | Shared observability substrate. | 22 | 8273 |
@@ -578,7 +578,7 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (6
 
 ### `torchlens._io.format3`
 
-The 2.38 saved format: typed JSON records plus safetensors blobs, no pickle. (26 modules, 9242 lines)
+The 2.38 saved format: typed JSON records plus safetensors blobs, no pickle. (26 modules, 9255 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -596,7 +596,7 @@ The 2.38 saved format: typed JSON records plus safetensors blobs, no pickle. (26
 | `decode` | Typed JSON cells back to Python values: the decoder half of the 3.0 value codec. | 761 |
 | `inventory` | Inert inventory of a 3.0 save's record tables against the persisted-state contract. | 163 |
 | `payloads` | Tensor payloads of the 3.0 saved format: chunked safetensors files and lazy references. | 614 |
-| `reader` | Reader of the 2.38 saved format: manifest first, digests, record tables, records. | 780 |
+| `reader` | Reader of the 2.38 saved format: manifest first, digests, record tables, records. | 793 |
 | `recipe` | The intervention recipe of the 3.0 saved format: ''intervention.json''. | 725 |
 | `recipe_shape` | Structural checks of a recipe document, run before any value is decoded. | 120 |
 | `restore` | Record state restore for the 3.0 reader: one decoded row becomes one record object. | 185 |
