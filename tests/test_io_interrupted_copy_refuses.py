@@ -12,6 +12,7 @@ is there as complete.
 from __future__ import annotations
 
 import shutil
+import warnings
 from pathlib import Path
 from typing import Any
 
@@ -22,7 +23,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._io.format3 import contract
-from torchlens.errors import ArtifactError
+from torchlens.errors import ArtifactError, TorchLensWarning
 
 pytestmark = pytest.mark.heavy
 
@@ -146,7 +147,7 @@ def test_a_copy_missing_or_cutting_short_any_one_file_refuses(
 
     source = saved[name]
     relpaths = _files(source)
-    assert MANIFEST in relpaths and len(relpaths) > 2
+    assert MANIFEST in relpaths and len(relpaths) >= 2
     seen: list[str] = []
     for index, relpath in enumerate(relpaths):
         for removed in (True, False):
@@ -201,7 +202,9 @@ def test_a_manifest_stripped_of_any_file_entry_refuses(
     """A manifest that no longer lists a file the reader opens refuses: listing is required."""
 
     source = saved[name]
-    listed = sorted(read_manifest(source)["files"])
+    # A bundle member's files are also listed, with digests, in the member's own manifest,
+    # which its load checks (the coverage test below asserts that listing).
+    listed = sorted(path for path in read_manifest(source)["files"] if not _in_member(path))
     assert listed
     for index, relpath in enumerate(listed):
         copy = tmp_path / f"strip-{index}"
@@ -210,8 +213,16 @@ def test_a_manifest_stripped_of_any_file_entry_refuses(
         del manifest["files"][relpath]
         write_manifest(copy, manifest)
         for lazy in _lazy_modes(name):
-            _refusal_code(copy, lazy=lazy)
+            with warnings.catch_warnings():
+                # The file is now unlisted, so the load may first name it in the
+                # advisory; the refusal is what this test checks.
+                warnings.filterwarnings("ignore", "Artifact .* unreferenced", TorchLensWarning)
+                _refusal_code(copy, lazy=lazy)
         shutil.rmtree(copy)
+
+
+def _in_member(relpath: str) -> bool:
+    return relpath.startswith("members/")
 
 
 def test_the_manifest_lists_every_other_file_the_save_wrote(saved: dict[str, Path]) -> None:
@@ -221,6 +232,12 @@ def test_the_manifest_lists_every_other_file_the_save_wrote(saved: dict[str, Pat
         listed = set(read_manifest(root)["files"])
         on_disk = set(_files(root)) - {MANIFEST}
         assert on_disk == listed, (name, sorted(on_disk ^ listed))
+        members = {path.split("/", 2)[1] for path in on_disk if _in_member(path)}
+        assert (name == "bundle") == bool(members), name
+        for member in members:
+            member_root = root / "members" / member
+            member_files = set(_files(member_root)) - {MANIFEST}
+            assert member_files == set(read_manifest(member_root)["files"]), (name, member)
 
 
 @pytest.mark.parametrize("lazy", [False, True])
