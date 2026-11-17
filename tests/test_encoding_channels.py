@@ -209,6 +209,44 @@ def test_one_element_tensor_accepted(mlp_log: tl.Trace, tmp_path: Path) -> None:
     assert NOTE_CONSTANT in state.notes
 
 
+class _PinnedShare:
+    """A callable color source that fixes its ramp ends at 0 and 1."""
+
+    color_domain = (0.0, 1.0)
+    __name__ = "share"
+
+    def __init__(self, value: float, split: bool = True) -> None:
+        self.value = value
+        self.split = split
+
+    def __call__(self, node: Any) -> float:
+        if self.split and record_type(node) != "relu":
+            return self.value / 2
+        return self.value
+
+
+def test_color_domain_pins_the_ramp_ends(mlp_log: tl.Trace, tmp_path: Path) -> None:
+    """A source's color_domain keeps 0.6 vs 0.3 at their places on 0..1, not at the ends."""
+
+    _draw(mlp_log, tmp_path, color_by=_PinnedShare(0.6))
+    state = _state(mlp_log)
+    assert state.domain == (0.0, 1.0)
+    relu_key = next(key for key in state.colors if key.startswith("relu"))
+    other_key = next(key for key in state.colors if not key.startswith("relu"))
+    ramp = DARK_RAMP if state.dark_theme else LIGHT_RAMP
+    assert state.colors[relu_key] == state.ramp_color(0.6)
+    assert state.colors[other_key] == state.ramp_color(0.3)
+    assert state.colors[relu_key] not in (ramp[0], ramp[-1])
+    # One shared value still paints on a pinned scale: its place on it is known.
+    _draw(mlp_log, tmp_path, color_by=_PinnedShare(0.5, split=False))
+    assert set(_state(mlp_log).colors.values()) == {_state(mlp_log).ramp_color(0.5)}
+
+    bad = _PinnedShare(0.5)
+    bad.color_domain = (1.0, 1.0)  # type: ignore[misc]
+    with pytest.raises(Exception, match="color_domain"):
+        _draw(mlp_log, tmp_path, color_by=bad)
+
+
 # Kept by shrink-r4 (per-id subset rule): sole coverage of _visualization/_encoding.py.
 def test_non_finite_degrades_to_unencoded(mlp_log: tl.Trace, tmp_path: Path) -> None:
     def source(node: Any) -> float:

@@ -1526,6 +1526,33 @@ def _transform_fractions(state: EncodingState, raw_values: dict[str, float]) -> 
     return {key: (value - low) / span for key, value in raw_values.items()}
 
 
+def _pinned_color_domain(state: EncodingState) -> tuple[float, float] | None:
+    """Return the fixed ramp ends a callable ``color_by`` source declares, if any.
+
+    A source object may carry ``color_domain = (low, high)`` beside its
+    ``__call__`` (and ``module_value``); a linear channel then paints every
+    value at its place between those ends, clipped to them, and the key
+    prints them. Anything else (no attribute, another transform) returns
+    ``None`` and the domain stays the drawn values' min and max.
+    """
+
+    spec = state.spec
+    if spec is None or spec.source_kind != "callable" or spec.transform != "linear":
+        return None
+    declared = getattr(spec.source, "color_domain", None)
+    if declared is None:
+        return None
+    low, high = (float(value) for value in declared)
+    if not (math.isfinite(low) and math.isfinite(high)) or high <= low:
+        raise _encoding_error(
+            f"color_domain must be two finite numbers, low < high; received {declared!r}",
+            code="encoding_source_invalid",
+            remedy="set color_domain to (low, high) with low < high",
+            argument="color_by",
+        )
+    return (low, high)
+
+
 def _normalize_color_values(state: EncodingState, raw_values: dict[str, float]) -> None:
     """Normalize collected color values into the configured sequential ramp.
 
@@ -1537,9 +1564,21 @@ def _normalize_color_values(state: EncodingState, raw_values: dict[str, float]) 
     if not raw_values:
         state.note(NOTE_NA_UNENCODED)
         return
+    state.values = raw_values
+    pinned = _pinned_color_domain(state)
+    if pinned is not None:
+        # The source fixes the ramp ends (a share drawn on 0..1), so values
+        # keep their place on that fixed scale instead of stretching to fill it.
+        low, high = pinned
+        state.domain = pinned
+        fractions = {
+            key: min(1.0, max(0.0, (value - low) / (high - low)))
+            for key, value in raw_values.items()
+        }
+        state.colors = {key: state.ramp_color(fraction) for key, fraction in fractions.items()}
+        return
     low = min(raw_values.values())
     high = max(raw_values.values())
-    state.values = raw_values
     if low == high:
         state.note(NOTE_CONSTANT)
         return
