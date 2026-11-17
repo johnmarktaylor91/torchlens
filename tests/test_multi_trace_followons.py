@@ -219,3 +219,52 @@ def test_bundle_graph_style_primitives_and_chrome_trace_diff(tmp_path: Path) -> 
     assert "#0072B2" in source
     assert payload["metadata"]["schema"] == "torchlens.chrome_trace_diff.v1"
     assert payload["traceEvents"]
+
+
+class _BranchModel(nn.Module):
+    """A model whose forward takes one of two module branches, chosen by ``use_b``."""
+
+    def __init__(self) -> None:
+        """Initialize the stem, both branches and the head."""
+
+        super().__init__()
+        self.stem = nn.Linear(4, 4)
+        self.branch_a = nn.Linear(4, 4)
+        self.branch_b = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 4))
+        self.head = nn.Linear(4, 2)
+        self.use_b = False
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the stem, the selected branch, then the head."""
+
+        h = torch.relu(self.stem(x))
+        h = self.branch_b(h) if self.use_b else self.branch_a(h)
+        return self.head(h)
+
+
+def test_supergraph_merges_a_branch_the_reference_member_skipped() -> None:
+    """Ops that only non-reference members ran become one shared node, not one per member."""
+
+    model = _BranchModel().eval()
+    runs = {}
+    for name, use_b in (("a0", False), ("b1", True), ("b2", True), ("a3", False), ("b4", True)):
+        model.use_b = use_b
+        runs[name] = tl.trace(model, torch.randn(1, 4))
+    graph = tl.Bundle(runs).supergraph
+
+    def members_in(module: str) -> list[list[str]]:
+        """Return each node's sorted member list for the nodes inside ``module``."""
+
+        return [
+            sorted(node.traces)
+            for node in graph.nodes.values()
+            if str(node.module_path or "").startswith(module)
+        ]
+
+    assert not [name for name in graph.nodes if "@" in name]
+    branch_b = members_in("branch_b")
+    assert len(branch_b) == 3
+    assert all(traces == ["b1", "b2", "b4"] for traces in branch_b)
+    assert members_in("branch_a") == [["a0", "a3"]]
+    head = members_in("head")
+    assert head == [["a0", "a3", "b1", "b2", "b4"]]

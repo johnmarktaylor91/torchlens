@@ -364,6 +364,53 @@ def _cycle_refusal(
     )
 
 
+def _align_to_earlier_additions(
+    unmatched: list[Layer],
+    added_by_trace: list[list[Layer]],
+    canonical_by_trace: list[dict[str, str]],
+) -> dict[str, str]:
+    """Resolve a member's reference-unmatched layers onto nodes earlier members added.
+
+    A layer the reference member never ran (a branch it did not take, an extra
+    loop pass, an expert it did not route to) may still have run in an earlier
+    non-reference member. Each earlier member's additions are tried in member
+    order with the same monotone, parent-compatible alignment the reference
+    pass uses, so the same op in several members becomes one node.
+
+    Parameters
+    ----------
+    unmatched:
+        The member's layers the reference alignment left unmatched, in order.
+    added_by_trace:
+        Per earlier member, the layers it added as new nodes, in order.
+    canonical_by_trace:
+        Per earlier member, layer label to canonical node name.
+
+    Returns
+    -------
+    dict[str, str]
+        Layer label to the canonical name of the earlier node it matched.
+    """
+
+    resolved: dict[str, str] = {}
+    remaining = list(unmatched)
+    for earlier_idx, earlier_added in enumerate(added_by_trace):
+        if not remaining:
+            break
+        if not earlier_added:
+            continue
+        pairs = _find_alignment(earlier_added, remaining)
+        if not pairs:
+            continue
+        earlier_names = canonical_by_trace[earlier_idx]
+        for earlier_pos, remaining_pos in pairs:
+            label = str(remaining[remaining_pos].layer_label)
+            resolved[label] = earlier_names[str(earlier_added[earlier_pos].layer_label)]
+        matched_positions = {remaining_pos for _earlier_pos, remaining_pos in pairs}
+        remaining = [layer for pos, layer in enumerate(remaining) if pos not in matched_positions]
+    return resolved
+
+
 def _unique_canonical_name(
     base_name: str,
     *,
@@ -698,6 +745,9 @@ def build_supergraph(traces: list[Trace], names: list[str]) -> Supergraph:
     ordered_layers_by_trace = [_ordered_layers(trace) for trace in traces]
     reference_layers = ordered_layers_by_trace[0] if ordered_layers_by_trace else []
     canonical_by_trace: list[dict[str, str]] = []
+    # Per member, the layers that member added as new supergraph nodes (none for
+    # the reference, whose layers all are the starting nodes).
+    added_by_trace: list[list[Layer]] = []
     preferred_order: list[str] = []
     preferred_positions: dict[str, int] = {}
 
@@ -706,6 +756,7 @@ def build_supergraph(traces: list[Trace], names: list[str]) -> Supergraph:
         trace_name = names[trace_idx]
         layers = ordered_layers_by_trace[trace_idx]
         canonical_for_layer: dict[str, str] = {}
+        added: list[Layer] = []
 
         if trace_idx == 0:
             for layer in layers:
@@ -719,10 +770,18 @@ def build_supergraph(traces: list[Trace], names: list[str]) -> Supergraph:
                 canonical_for_layer[str(layers[candidate_idx].layer_label)] = str(
                     reference_layers[reference_idx].layer_label
                 )
+            unmatched = [
+                layer
+                for layer_idx, layer in enumerate(layers)
+                if layer_idx not in matched_candidate_indices
+            ]
+            canonical_for_layer.update(
+                _align_to_earlier_additions(unmatched, added_by_trace, canonical_by_trace)
+            )
             existing_names = set(super_g.nodes)
             existing_names.update(canonical_for_layer.values())
-            for layer_idx, layer in enumerate(layers):
-                if layer_idx in matched_candidate_indices:
+            for layer in unmatched:
+                if str(layer.layer_label) in canonical_for_layer:
                     continue
                 canonical = _unique_canonical_name(
                     str(layer.layer_label),
@@ -731,7 +790,9 @@ def build_supergraph(traces: list[Trace], names: list[str]) -> Supergraph:
                 )
                 canonical_for_layer[str(layer.layer_label)] = canonical
                 existing_names.add(canonical)
+                added.append(layer)
         canonical_by_trace.append(canonical_for_layer)
+        added_by_trace.append(added)
 
         # Pass 2: node payloads + preferred stable ordering.
         last_preferred_index = -1
