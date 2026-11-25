@@ -9,6 +9,7 @@ from ._buffer_visibility import (
     _is_buffer_visible,
     _is_noise_buffer,
 )
+from ._collapsed_call_currency import collapsed_endpoint_address, end_label_indices, pass_calls
 from ._container_edges import (
     _occurrence_matches_op,
     _op_is_model_input_container_leaf,
@@ -35,7 +36,7 @@ from ._render_module_scope import (
     _place_rolled_endpoints_in_pass_scope,
 )
 from ._render_utils import html_escape
-from ._rolled_edges import _html_combined_recurrence_label
+from ._rolled_edges import _html_combined_recurrence_label, _RolledEdgeMaps
 from ._segment_descriptors import _is_recorded_module_key
 from .collapse_plan import OpSegment
 
@@ -1150,10 +1151,7 @@ def _add_edges_for_node(
             edge_is_self_loop
             and not edge_touches_run_fold
             and not _is_rolled_loop_carried_self_edge(
-                parent_node,
-                child_node,
-                vis_mode,
-                rolled_maps,
+                parent_node, child_node, vis_mode, rolled_maps, tail_name
             )
         ):
             continue
@@ -1414,56 +1412,12 @@ def _projected_antiparallel_edge_attrs() -> dict[str, str]:
     }
 
 
-class _RolledEdgeMaps:
-    """Per-draw memo of the ``Layer`` rolled-edge map properties.
-
-    ``child_ops_per_layer``, ``parent_ops_per_layer`` and ``parents_per_pass``
-    are computed properties that rebuild their dicts
-    from every pass's op record on each access, and one rolled draw reads them
-    O(edges) times.  Layer graph fields do not change during a draw, so a draw
-    shares one computation per layer.  Every cached value comes from the
-    existing property itself, so cached and uncached reads cannot diverge.
-    The cache must not outlive its draw: ``Trace._remove_log_entry`` may scrub
-    op children/parents between draws.
-    """
-
-    __slots__ = ("_child_ops", "_parent_ops", "_parents_per_pass")
-
-    def __init__(self) -> None:
-        self._child_ops: dict[str, dict[str, list[int]]] = {}
-        self._parent_ops: dict[str, dict[str, list[int]]] = {}
-        self._parents_per_pass: dict[str, dict[int, list[str]]] = {}
-
-    def child_ops_per_layer(self, layer: "Layer") -> dict[str, list[int]]:
-        """Per-draw memo of ``Layer.child_ops_per_layer``."""
-
-        found = self._child_ops.get(layer.layer_label)
-        if found is None:
-            found = self._child_ops[layer.layer_label] = layer.graph.child_ops_per_layer
-        return found
-
-    def parent_ops_per_layer(self, layer: "Layer") -> dict[str, list[int]]:
-        """Per-draw memo of ``Layer.parent_ops_per_layer``."""
-
-        found = self._parent_ops.get(layer.layer_label)
-        if found is None:
-            found = self._parent_ops[layer.layer_label] = layer.graph.parent_ops_per_layer
-        return found
-
-    def parents_per_pass(self, layer: "Layer") -> dict[int, list[str]]:
-        """Per-draw memo of ``Layer.parents_per_pass``."""
-
-        found = self._parents_per_pass.get(layer.layer_label)
-        if found is None:
-            found = self._parents_per_pass[layer.layer_label] = layer.graph.parents_per_pass
-        return found
-
-
 def _is_rolled_loop_carried_self_edge(
     parent_node: GraphNode,
     child_node: GraphNode,
     vis_mode: str,
     rolled_maps: "_RolledEdgeMaps | None" = None,
+    rendered_name: str | None = None,
 ) -> bool:
     """Return whether a same-endpoint edge represents rolled loop-carried flow.
 
@@ -1475,6 +1429,10 @@ def _is_rolled_loop_carried_self_edge(
         Rendered target node before endpoint collapsing.
     vis_mode:
         Active visualization mode.
+    rendered_name:
+        Node the self-edge is drawn on. When it is a collapsed module box the edge
+        must advance from an earlier module call to a later one; flow between
+        passes of one call (an inner Python loop) stays inside the box.
 
     Returns
     -------
@@ -1491,6 +1449,9 @@ def _is_rolled_loop_carried_self_edge(
     maps = rolled_maps if rolled_maps is not None else _RolledEdgeMaps()
     parent_passes = maps.child_ops_per_layer(parent_base).get(child_base.layer_label, [])
     child_passes = maps.parent_ops_per_layer(child_base).get(parent_base.layer_label, [])
+    if rendered_name is not None and collapsed_endpoint_address(parent_base, rendered_name):
+        parent_passes = pass_calls(parent_base, rendered_name, parent_passes)
+        child_passes = pass_calls(child_base, rendered_name, child_passes)
     return any(
         child_pass > parent_pass
         for parent_pass, child_pass in zip(parent_passes, child_passes, strict=False)
@@ -1778,18 +1739,19 @@ def _label_rolled_call_indexs(
         rolled_maps: Optional per-draw memo of the rolled-edge map properties.
     """
     maps = rolled_maps if rolled_maps is not None else _RolledEdgeMaps()
-    parent_call_indexs = maps.child_ops_per_layer(parent_node)[child_node.layer_label]
-    child_call_indexs = maps.parent_ops_per_layer(child_node)[parent_node.layer_label]
-    out_label = (
-        f"Out {int_list_to_compact_str(parent_call_indexs)}"
-        if len(set(parent_call_indexs)) < parent_node.num_passes
-        else None
+    child_label, parent_label = child_node.layer_label, parent_node.layer_label
+    parent_call_indexs, parent_total = end_label_indices(
+        parent_node, edge_dict["tail_name"], maps.child_ops_per_layer(parent_node)[child_label]
     )
-    in_label = (
-        f"In {int_list_to_compact_str(child_call_indexs)}"
-        if len(set(child_call_indexs)) < child_node.num_passes
-        else None
+    child_call_indexs, child_total = end_label_indices(
+        child_node, edge_dict["head_name"], maps.parent_ops_per_layer(child_node)[parent_label]
     )
+    out_label = None
+    if len(set(parent_call_indexs)) < parent_total:
+        out_label = f"Out {int_list_to_compact_str(parent_call_indexs)}"
+    in_label = None
+    if len(set(child_call_indexs)) < child_total:
+        in_label = f"In {int_list_to_compact_str(child_call_indexs)}"
 
     if out_label is None and in_label is None:
         _space_from_reverse_edge(child_node, parent_node, edge_dict, maps)

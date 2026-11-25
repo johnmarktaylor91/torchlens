@@ -44,7 +44,7 @@ def _get_lowest_module_for_two_nodes(
     - Rolled mode: pass suffixes are stripped from module names so that all
       ops share the same cluster.
     - Both-collapsed case: when both nodes are collapsed module boxes, the
-      containing module must be at least one level above the collapse depth.
+      containing module is above the collapse depth (rolled self-edges too).
 
     Args:
         node1: The first node.
@@ -74,7 +74,7 @@ def _get_lowest_module_for_two_nodes(
     ):
         return -1  # no submodule contains them both.
 
-    if node1 == node2:
+    if node1 == node2 and not both_nodes_collapsed_modules:
         if node1.module_context.is_atomic_module and (len(node1_modules) == 1):
             return -1
         elif node1.module_context.is_atomic_module and (len(node1_modules) > 1):

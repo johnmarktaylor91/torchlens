@@ -22,6 +22,7 @@ from ._branch_label_text import (
     _format_branch_edge_label_html,
     _format_branch_kind_text,
 )
+from ._collapsed_call_currency import CallPartitionJoin
 from ._forward_op_module import _module_key_for_forward_op
 from ._render_common import *
 from ._render_node_parts import _compact_int_ranges
@@ -1415,11 +1416,12 @@ def _format_call_groups(call_groups: Sequence[Sequence[int]]) -> str:
 def _collapsed_module_rolling_suffix_map(trace: "Trace") -> dict[str, str]:
     """Build every collapsed module's rolling face suffix in one pass.
 
-    Walks the rolled layers once and keeps, per module address, the first
-    partition with the most groups -- exactly the strictly-greater ``candidate``
-    rule the per-address scan applied while iterating the same layers in the same
-    order. Addresses with no split partition are simply absent, which the caller
-    reads back as the empty suffix.
+    Each multi-pass layer directly inside one module reports which of that module's
+    calls its passes connect (one group when they all feed each other). The groups
+    are joined per address (``CallPartitionJoin``): two calls share a region when any
+    layer connects them, so an input-independent op whose passes never meet cannot
+    split a module whose calls feed one another. Addresses whose joined calls stay
+    in one region are absent, which the caller reads back as the empty suffix.
 
     Parameters
     ----------
@@ -1432,27 +1434,24 @@ def _collapsed_module_rolling_suffix_map(trace: "Trace") -> dict[str, str]:
         Module address to face suffix beginning with ``":"``.
     """
 
-    best_groups: dict[str, tuple[tuple[int, ...], ...]] = {}
+    partitions = CallPartitionJoin()
     for layer_log in trace._layer_logs.values():
         if not isinstance(layer_log, Layer) or layer_log.num_passes <= 1:
             continue
-        groups = _call_groups_for_layer(layer_log)
-        if not groups:
-            # A layer with no split partition could never beat an incumbent
-            # (the rule is strictly-greater group count), so skip its addresses.
+        common_calls = _common_module_call_indices(layer_log)
+        if len(common_calls) != 1:
             continue
-        layer_addresses = {
+        groups = _call_groups_for_layer(layer_log) or (tuple(*common_calls.values()),)
+        for layer_address in {
             parsed[0]
             for op in layer_log.ops.values()
             for module_call in op.modules
             if (parsed := _module_address_and_call(module_call)) is not None
-        }
-        for layer_address in layer_addresses:
-            if len(groups) > len(best_groups.get(layer_address, ())):
-                best_groups[layer_address] = groups
+        }:
+            partitions.add(layer_address, groups)
     return {
         layer_address: f":{_format_call_groups(groups)}"
-        for layer_address, groups in best_groups.items()
+        for layer_address, groups in partitions.split_partitions().items()
     }
 
 

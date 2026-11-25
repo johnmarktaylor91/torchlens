@@ -566,8 +566,8 @@ torchlens/_visualization/_render_dot.py::_rank_layout_cost_inputs	61
 torchlens/_visualization/_render_dot.py::_resolve_collapse_request	96
 torchlens/_visualization/_render_dot.py::_resolve_forward_context	106
 torchlens/_visualization/_render_dot.py::draw	171
-torchlens/_visualization/_render_edges.py	1872
-torchlens/_visualization/_render_edges.py::_add_edges_for_node	531
+torchlens/_visualization/_render_edges.py	1834
+torchlens/_visualization/_render_edges.py::_add_edges_for_node	528
 torchlens/_visualization/_render_edges.py::_add_intervention_hook_nodes	65
 torchlens/_visualization/_render_entrypoints.py::render_backward_graph	264
 torchlens/_visualization/_render_entrypoints.py::render_combined_graph	239
@@ -580,7 +580,7 @@ torchlens/_visualization/_render_flow.py::_enumerate_base_rendered_node_emission
 torchlens/_visualization/_render_flow.py::_enumerate_run_fold_ellipsis_emissions	116
 torchlens/_visualization/_render_flow.py::_expand_edges_through_skipped	86
 torchlens/_visualization/_render_flow.py::_render_edge_occurrences	80
-torchlens/_visualization/_render_leaf.py	2111
+torchlens/_visualization/_render_leaf.py	2110
 torchlens/_visualization/_render_leaf.py::_add_grad_edge	61
 torchlens/_visualization/_render_leaf.py::_collapse_address_for_node	63
 torchlens/_visualization/_render_leaf.py::_same_layer_dependency_components	86
