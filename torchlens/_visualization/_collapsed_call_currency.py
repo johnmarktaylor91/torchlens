@@ -90,9 +90,10 @@ def pass_calls(layer: "Layer", address: str, passes: Sequence[int]) -> list[int]
         Module call index for each pass, in the given order.
     """
 
+    ops_by_pass = dict(layer.ops.items())  # 1-based pass keys; ops[k] is a 0-based position
     calls: list[int] = []
     for pass_index in passes:
-        call_index = _module_call_index(layer.ops[pass_index].modules, address)
+        call_index = _module_call_index(ops_by_pass[pass_index].modules, address)
         if call_index is not None:
             calls.append(call_index)
     return calls
