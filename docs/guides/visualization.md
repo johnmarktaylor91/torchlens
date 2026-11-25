@@ -182,6 +182,12 @@ A collapsed box reads like a node: the module's address and class, its output sh
 how many operations and buffer versions it hides (`4 ops + 6 buffers`), and its parameter count. The
 default, `depth=1000`, opens every module, as in [the first drawing](#your-first-drawing).
 
+With `rolled=True`, a box for a module called several times counts module calls: `@block (x3)`
+means three calls that feed one another. When the calls form separate regions that never feed each
+other, the title lists them instead, as in `@shared:1-2,3-5` (two separate loops). Arrows on the box
+are labelled in calls too, and a loop on the box means one call fed a later call; a loop inside one
+call stays inside the box.
+
 ## Collapsing large models
 
 `depth=` cuts the module tree at one level everywhere. `collapse=` instead decides module by

@@ -1103,3 +1103,154 @@ def test_render_loop_module_rolling_demos() -> None:
                 )
             else:  # svg
                 assert b"<svg" in blob, f"expected {artifact} to contain SVG markup"
+
+
+class _MaskedDecoder(nn.Module):
+    """Decoder layer that recomputes input-independent mask arithmetic on every call."""
+
+    def __init__(self, with_mask: bool) -> None:
+        """Initialize the projection; ``with_mask`` adds the per-call mask ops."""
+
+        super().__init__()
+        self.lin = nn.Linear(4, 4)
+        self.with_mask = with_mask
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Project, optionally add a fresh position mask, and keep a residual."""
+
+        h = self.lin(x)
+        if self.with_mask:
+            h = h + torch.arange(4).float().cumsum(0)
+        return torch.relu(h) + x
+
+
+class _LoopedDecoderPair(nn.Module):
+    """Two decoder layers looped three times; only the first recomputes a mask."""
+
+    def __init__(self) -> None:
+        """Initialize the looped pair."""
+
+        super().__init__()
+        self.layers = nn.ModuleList([_MaskedDecoder(True), _MaskedDecoder(False)])
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the pair three times in a loop."""
+
+        for _ in range(3):
+            x = self.layers[1](self.layers[0](x))
+        return x
+
+
+class _LoopingExperts(nn.Module):
+    """Experts module that accumulates its experts in an inner Python loop."""
+
+    def __init__(self) -> None:
+        """Initialize three stacked expert matrices."""
+
+        super().__init__()
+        self.w = nn.Parameter(torch.randn(3, 4, 4))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Sum the experts one loop iteration at a time."""
+
+        out = torch.zeros_like(x)
+        for index in range(3):
+            out = out + x @ self.w[index]
+        return out
+
+
+class _ExpertMlp(nn.Module):
+    """MLP wrapper that calls its looping experts child."""
+
+    def __init__(self) -> None:
+        """Initialize the experts child."""
+
+        super().__init__()
+        self.experts = _LoopingExperts()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Delegate to the experts."""
+
+        return self.experts(x)
+
+
+class _ExpertBlock(nn.Module):
+    """Block whose ``mlp.experts`` child loops internally."""
+
+    def __init__(self) -> None:
+        """Initialize the experts and output projection."""
+
+        super().__init__()
+        self.mlp = _ExpertMlp()
+        self.lin = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply the experts and projection with a residual."""
+
+        return self.lin(self.mlp(x)) + x
+
+
+class _ExpertStack(nn.Module):
+    """One expert block called once, then one called three times in a loop."""
+
+    def __init__(self) -> None:
+        """Initialize the two blocks."""
+
+        super().__init__()
+        self.layers = nn.ModuleList([_ExpertBlock(), _ExpertBlock()])
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Call block 0 once and block 1 three times."""
+
+        x = self.layers[0](x)
+        for _ in range(3):
+            x = self.layers[1](x)
+        return x
+
+
+def _named_self_edges(dot: str, name: str) -> list[str]:
+    """Return the attribute text of every DOT self-edge drawn on node ``name``."""
+
+    pattern = (
+        rf'(?m)^\s*"?{re.escape(name)}"?(?::\w+)? -> "?{re.escape(name)}"?(?::\w+)?\s*\[(.*)\]'
+    )
+    return re.findall(pattern, dot)
+
+
+def test_input_independent_op_does_not_split_looped_module_label(tmp_path: Path) -> None:
+    """A looped module whose calls feed each other reads ``(x3)`` even with mask ops inside.
+
+    The mask ops' passes never feed one another, so on their own they partition the
+    three calls into three regions; the module's other layers connect the calls, and
+    the module title must say so the same way for both looped layers.
+    """
+
+    dot = _render_dot(_trace(_LoopedDecoderPair()), tmp_path, "masked_pair", depth=1)
+
+    assert "@layers.0 (x3)" in dot
+    assert "@layers.1 (x3)" in dot
+    assert "@layers.0:" not in dot
+
+
+def test_collapsed_box_has_no_self_edge_or_frames_from_its_inner_loop(tmp_path: Path) -> None:
+    """An inner Python loop stays inside its collapsed box: no self-arc, no child frames."""
+
+    dot = _render_dot(_trace(_ExpertStack()), tmp_path, "expert_stack", depth=1)
+
+    assert _named_self_edges(dot, "layers.0") == []
+    assert "@layers.0.mlp" not in dot
+    assert "@layers.1.mlp" not in dot
+
+
+def test_collapsed_box_edge_labels_count_module_calls(tmp_path: Path) -> None:
+    """Pass labels on a looped collapsed box name module calls, never inner op passes.
+
+    The inner experts loop runs its ops nine times over three calls of ``layers.1``;
+    the box's edge labels must stay inside calls 1-3, and flow inside one call draws
+    no self-arc on the box.
+    """
+
+    dot = _render_dot(_trace(_ExpertStack()), tmp_path, "expert_stack_calls", depth=1)
+
+    assert _named_self_edges(dot, "layers.1") == []
+    assert set(re.findall(r"(?:In|Out) [0-9,-]+", dot)) == {"In 1", "In 2-3", "Out 1-2", "Out 3"}
