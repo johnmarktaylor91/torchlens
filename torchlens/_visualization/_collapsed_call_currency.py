@@ -14,12 +14,12 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .._data_classes.layer import Layer
 
-__all__ = [
+__all__ = (
     "CallPartitionJoin",
     "collapsed_endpoint_address",
     "end_label_indices",
     "pass_calls",
-]
+)
 
 
 def _module_call_index(module_calls: Iterable[str], address: str) -> int | None:
